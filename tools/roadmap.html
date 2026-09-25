@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>開発ロードマップ（ガント）｜LTE Study</title>
+  <link rel="stylesheet" href="../assets/style.css">
+  <style>
+    .rm-controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px 24px; }
+    .rm-controls .ctl h3 { font-size: .95rem; margin: 0 0 4px; }
+    .rm-controls .ctl p { margin: 2px 0 0; font-size: .82rem; color: var(--text-muted); line-height: 1.6; }
+    .rm-range { display: flex; align-items: center; gap: 10px; }
+    .rm-range input { flex: 1; accent-color: var(--accent); }
+    .rm-range output { font-family: var(--mono); font-weight: 700; min-width: 3.5em; text-align: right; }
+    .rm-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin: 16px 0; }
+    .rm-kpis .kpi { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 14px; }
+    .rm-kpis .v { font-size: 1.6rem; font-weight: 700; font-family: var(--mono); color: var(--accent); line-height: 1.3; }
+    .rm-kpis .k { font-size: .8rem; color: var(--text-muted); }
+    .gantt-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); -webkit-overflow-scrolling: touch; }
+    .gantt { position: relative; width: max-content; min-width: 100%; }
+    .g-row { display: flex; align-items: stretch; border-bottom: 1px solid var(--border); min-height: 38px; }
+    .g-row:last-child { border-bottom: 0; }
+    .g-label { position: sticky; left: 0; z-index: 2; flex: 0 0 132px; background: var(--surface); border-right: 1px solid var(--border); padding: 6px 8px; font-size: .82rem; line-height: 1.35; display: flex; align-items: center; }
+    .g-head .g-label { background: var(--surface-2); font-weight: 700; }
+    .g-track { position: relative; flex: 0 0 auto; }
+    .g-head .g-track { background: var(--surface-2); font-size: .75rem; color: var(--text-muted); }
+    .g-tick { position: absolute; top: 0; bottom: 0; border-left: 1px solid var(--border); }
+    .g-tick span { position: absolute; top: 8px; left: 3px; white-space: nowrap; font-family: var(--mono); }
+    .g-grid { position: absolute; top: 0; bottom: 0; border-left: 1px dashed var(--border); opacity: .7; }
+    .g-bar { position: absolute; top: 7px; height: 24px; border-radius: 6px; border: 0; padding: 0 6px; font-size: .75rem; font-weight: 600; color: var(--accent-text); cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; line-height: 24px; box-shadow: var(--shadow); }
+    .g-bar:hover { filter: brightness(1.08); }
+    .g-bar.is-active { outline: 3px solid var(--text); outline-offset: 1px; }
+    .g-bar .ext { position: absolute; top: 0; bottom: 0; right: 0; background: repeating-linear-gradient(45deg, transparent 0 4px, color-mix(in srgb, var(--surface) 45%, transparent) 4px 8px); }
+    .g-bar.ongoing { opacity: .6; }
+    .g-row.skipped .g-label { color: var(--text-muted); text-decoration: line-through; }
+    .g-skip { position: absolute; top: 10px; font-size: .75rem; color: var(--text-muted); white-space: nowrap; }
+    .g-legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: .8rem; color: var(--text-muted); margin: 8px 0 0; }
+    .g-legend i { display: inline-block; width: 22px; height: 12px; border-radius: 3px; vertical-align: -1px; margin-right: 4px; background: var(--c2); }
+    .g-legend i.ext { background: repeating-linear-gradient(45deg, var(--c2) 0 4px, color-mix(in srgb, var(--surface) 45%, var(--c2)) 4px 8px); }
+    .rm-detail { margin-top: 16px; }
+    .rm-detail .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 4px 24px; }
+    .rm-detail h3 { margin-top: 0; }
+    .rm-detail h4 { margin: .8em 0 .2em; font-size: .95rem; }
+    .rm-detail ul { margin: .2em 0; padding-left: 1.2em; }
+    .rm-detail .meta { display: flex; flex-wrap: wrap; gap: 6px; }
+    .rules td.num, .rules th.num { text-align: center; font-family: var(--mono); }
+  </style>
+</head>
+<body data-root="../" data-layout="wide">
+<div class="page">
+<main>
+  <header class="chapter-hero">
+    <div class="eyebrow">TOOL</div>
+    <h1>開発ロードマップ（ガント）</h1>
+    <p class="lead">LTEロボットの「要件定義 → EVT/DVT/PVT → 認証 → 量産 → 運用」の工程を、条件に合わせてガントチャートで試算します。バーをクリックすると、成果物・リスク・担当・ゲート基準が表示されます。</p>
+  </header>
+
+  <div class="callout warn"><span class="title">目安（要見積）</span><p>期間は一般的な開発の目安を単純なルールで足し引きしたものです。実際の日程は、試験所・認証代行・キャリア・工場の見積もりと予約状況で決まります。考え方は <a href="../chapters/12-roadmap.html">第12章 試作から量産までのロードマップ</a> を参照してください。</p></div>
+
+  <section class="card">
+    <div class="rm-controls">
+      <div class="ctl">
+        <h3>輸出先の国・地域数（日本以外）</h3>
+        <div class="rm-range"><input type="range" id="rm-countries" min="1" max="8" step="1" value="3" aria-label="輸出先の国・地域数"><output id="rm-countries-o">3</output></div>
+        <p>1か国増えるごとに、認証・フィールド試験などの期間が伸びます（書類対応・サンプル輸送・現地試験）。</p>
+      </div>
+      <div class="ctl">
+        <h3>中国を含む</h3>
+        <div class="chips"><button class="chip" id="rm-china" aria-pressed="false">中国向けも同時に出す</button></div>
+        <p>無線認証（SRRC）と網接続（CTA/NAL）の手続きが別で、現地試験が前提になりやすいため長めに見込みます。</p>
+      </div>
+      <div class="ctl">
+        <h3>キャリア認証</h3>
+        <div class="chips"><button class="chip" id="rm-carrier" aria-pressed="false">キャリア認証・GCF等あり</button></div>
+        <p>キャリアの相互接続試験・OTA要件などが必要な場合。フェーズが1つ増え、OTAも厳しくなります。</p>
+      </div>
+      <div class="ctl">
+        <h3>無線部の作り方</h3>
+        <div class="chips" role="group" aria-label="無線部の作り方"><button class="chip" data-mode="module" aria-pressed="true">モジュール採用</button><button class="chip" data-mode="chipdown" aria-pressed="false">チップダウン設計</button></div>
+        <p>チップダウンはRF設計・認証をすべて自社で行うため、設計・試作・認証が大幅に伸びます。</p>
+      </div>
+    </div>
+  </section>
+
+  <div class="rm-kpis" aria-live="polite">
+    <div class="kpi"><div class="k">量産開始までの合計</div><div class="v" id="k-months">–</div><div class="k" id="k-weeks"></div></div>
+    <div class="kpi"><div class="k">基準ケースからの増加</div><div class="v" id="k-delta">–</div><div class="k">基準：モジュール採用・1か国・中国なし・キャリア認証なし</div></div>
+    <div class="kpi"><div class="k">最も長いフェーズ</div><div class="v" id="k-long" style="font-size:1.15rem">–</div><div class="k" id="k-long-w"></div></div>
+  </div>
+
+  <h2>ガントチャート</h2>
+  <p class="small muted">横にスクロールできます。バー（またはフェーズ名）をクリック（タップ）すると下に詳細が出ます。斜線部分は、選んだ条件によって増えた期間です。</p>
+  <div class="gantt-wrap" id="gantt-wrap"><div class="gantt" id="gantt"></div></div>
+  <div class="g-legend"><span><i></i>基準の期間</span><span><i class="ext"></i>条件による増加分</span><span>縦の実線＝3か月ごと、点線＝1か月ごと</span></div>
+
+  <section class="card rm-detail" id="rm-detail" aria-live="polite"></section>
+
+  <h2>期間を調整するルール</h2>
+  <p>各フェーズの週数は、下の表の「基準」に、条件ごとの増分を足して計算します（0.5週単位で丸め）。開始週は、前のフェーズの終了週に「重なり（並行作業）」を考慮して決めています。たとえば法規認証は、DVTが終わる4週前から事前手続きを始める想定です。</p>
+  <div class="table-wrap"><table class="rules" id="rules">
+    <thead><tr><th>フェーズ</th><th class="num">基準（週）</th><th class="num">+1か国ごと</th><th class="num">中国を含む</th><th class="num">キャリア認証</th><th class="num">チップダウン</th><th>開始条件</th></tr></thead>
+    <tbody></tbody>
+  </table></div>
+  <ul class="small muted">
+    <li>「キャリア・GCF等」フェーズは、キャリア認証ありのときだけ実施します。</li>
+    <li>量産立上げは、PVT・法規認証・（あれば）キャリア認証がすべて終わってから始めます。</li>
+    <li>運用フェーズは終わりがないため、合計期間には含めていません。</li>
+  </ul>
+
+  <h2>関連ページ</h2>
+  <div class="card-grid">
+    <a class="card" href="../chapters/12-roadmap.html"><h3>第12章 ロードマップ</h3><p class="small muted">EVT/DVT/PVTの意味、よくある失敗、ゲート別チェックリスト</p></a>
+    <a class="card" href="../chapters/09-certification.html"><h3>第9章 規格と認証</h3><p class="small muted">GCF/PTCRB・電波法・キャリア認証の関係</p></a>
+    <a class="card" href="../chapters/10-asia.html"><h3>第10章 アジア各国</h3><p class="small muted">国別の認証とバンドの要点</p></a>
+    <a class="card" href="module-selector.html"><h3>LTEカテゴリ選定ウィザード</h3><p class="small muted">用途から推奨カテゴリを提示</p></a>
+  </div>
+</main>
+</div>
+<script src="../assets/data/roadmap.js"></script>
+<script src="../assets/app.js"></script>
+<script>
+(function () {
+  "use strict";
+  var R = window.LTE_ROADMAP, L = window.LTE;
+  if (!R || !L) return;
+  var esc = L.esc, store = L.store, root = L.root;
+  var KEY = "tools.roadmap";
+  var PX = 11;           // 1週あたりの横幅(px)
+  var saved = store.get(KEY, {}) || {};
+  var st = {
+    countries: saved.countries || 3,
+    china: !!saved.china,
+    carrier: !!saved.carrier,
+    chipdown: !!saved.chipdown,
+    sel: saved.sel || "cert"
+  };
+  var $ = function (id) { return document.getElementById(id); };
+  var base = R.plan({});
+  var cur = null;
+
+  function save() { store.set(KEY, st); }
+
+  function syncControls() {
+    $("rm-countries").value = st.countries;
+    $("rm-countries-o").textContent = st.countries + "か国";
+    $("rm-china").setAttribute("aria-pressed", String(st.china));
+    $("rm-carrier").setAttribute("aria-pressed", String(st.carrier));
+    document.querySelectorAll("[data-mode]").forEach(function (b) { b.setAttribute("aria-pressed", String((b.dataset.mode === "chipdown") === st.chipdown)); });
+  }
+
+  function fmtW(w) { return (Math.round(w * 2) / 2).toString().replace(/\.0$/, ""); }
+
+  function renderGantt() {
+    cur = R.plan(st);
+    var maxW = Math.ceil((cur.total + 12) / 4.345) * 4.345;
+    var width = Math.ceil(maxW * PX);
+    var g = $("gantt");
+    var html = '<div class="g-row g-head"><div class="g-label">フェーズ</div><div class="g-track" style="width:' + width + 'px">';
+    for (var m = 0; m * 4.345 <= maxW; m++) {
+      var x = Math.round(m * 4.345 * PX);
+      if (m % 3 === 0) html += '<div class="g-tick" style="left:' + x + 'px"><span>' + m + 'か月</span></div>';
+    }
+    html += "</div></div>";
+    var grid = "";
+    for (var mm = 1; mm * 4.345 <= maxW; mm++) {
+      grid += '<div class="' + (mm % 3 === 0 ? "g-tick" : "g-grid") + '" style="left:' + Math.round(mm * 4.345 * PX) + 'px"></div>';
+    }
+    cur.phases.forEach(function (p) {
+      var active = p.id === st.sel ? " is-active" : "";
+      html += '<div class="g-row' + (p.skipped ? " skipped" : "") + '"><div class="g-label"><a href="#rm-detail" data-sel="' + p.id + '" style="color:inherit;text-decoration:none">' + esc(p.name) + "</a></div>";
+      html += '<div class="g-track" style="width:' + width + 'px">' + grid;
+      if (p.skipped) {
+        html += '<span class="g-skip" style="left:' + Math.round(p.start * PX + 6) + 'px">（キャリア認証なしのため実施しない）</span>';
+      } else {
+        var w = Math.max(18, p.dur * PX);
+        var extW = Math.max(0, (p.dur - p.weeks) * PX);
+        html += '<button class="g-bar' + active + (p.ongoing ? " ongoing" : "") + '" data-sel="' + p.id + '" style="left:' + Math.round(p.start * PX) + "px;width:" + Math.round(w) + "px;background:var(" + p.color + ')" title="' + esc(p.name) + "：第" + fmtW(p.start) + "〜" + fmtW(p.end) + '週">' +
+          esc(p.short) + (p.ongoing ? " →" : " " + fmtW(p.dur) + "w") + (extW > 0 ? '<span class="ext" style="width:' + Math.round(extW) + 'px"></span>' : "") + "</button>";
+      }
+      html += "</div></div>";
+    });
+    g.innerHTML = html;
+    g.querySelectorAll("[data-sel]").forEach(function (el) {
+      el.addEventListener("click", function (e) { e.preventDefault(); st.sel = el.dataset.sel; save(); renderGantt(); renderDetail(); document.getElementById("rm-detail").scrollIntoView({ behavior: "smooth", block: "nearest" }); });
+    });
+
+    // KPI
+    $("k-months").textContent = "約" + cur.months.toFixed(1) + "か月";
+    $("k-weeks").textContent = fmtW(cur.total) + " 週（運用を除く）";
+    var d = cur.total - base.total;
+    $("k-delta").textContent = d > 0 ? "+" + (d / 4.345).toFixed(1) + "か月" : "±0";
+    var longest = cur.phases.filter(function (p) { return !p.skipped && !p.ongoing; }).sort(function (a, b) { return b.dur - a.dur; })[0];
+    $("k-long").textContent = longest.name;
+    $("k-long-w").textContent = fmtW(longest.dur) + " 週";
+  }
+
+  function li(arr) { return "<ul>" + arr.map(function (x) { return "<li>" + esc(x) + "</li>"; }).join("") + "</ul>"; }
+
+  function renderDetail() {
+    var p = cur.phases.filter(function (x) { return x.id === st.sel; })[0] || cur.phases[0];
+    var parts = [];
+    if (!p.ongoing) {
+      var a = p.adj;
+      if (a.perCountry && st.countries > 1) parts.push("国数 +" + fmtW(a.perCountry * (st.countries - 1)) + "週");
+      if (a.china && st.china) parts.push("中国 +" + fmtW(a.china) + "週");
+      if (a.carrier && st.carrier) parts.push("キャリア認証 +" + fmtW(a.carrier) + "週");
+      if (a.chipdown && st.chipdown) parts.push("チップダウン +" + fmtW(a.chipdown) + "週");
+    }
+    var when = p.skipped ? "今回の条件では実施しません" : p.ongoing ? "第" + fmtW(p.start) + "週（約" + (p.start / 4.345).toFixed(1) + "か月目）から継続" : "第" + fmtW(p.start) + "〜" + fmtW(p.end) + "週（約" + (p.start / 4.345).toFixed(1) + "〜" + (p.end / 4.345).toFixed(1) + "か月目）";
+    var cost = p.cost.max ? p.cost.min + "〜" + p.cost.max + " 万円（" + esc(p.cost.note) + "）" : esc(p.cost.note);
+    $("rm-detail").innerHTML =
+      "<h3>" + esc(p.name) + "</h3>" +
+      '<div class="meta"><span class="badge accent">' + esc(p.stage) + '</span><span class="badge">' + when + "</span>" +
+      (p.ongoing ? "" : '<span class="badge">この条件で ' + fmtW(p.dur) + " 週（一般的な幅 " + p.min + "〜" + p.max + " 週）</span>") +
+      (parts.length ? '<span class="badge warn">' + esc(parts.join(" / ")) + "</span>" : "") + "</div>" +
+      "<p>" + esc(p.summary) + "</p>" +
+      '<div class="cols">' +
+        "<div><h4>主な成果物</h4>" + li(p.deliverables) + "</div>" +
+        "<div><h4>ゲート基準（出口基準）</h4>" + li(p.gate) + "</div>" +
+        "<div><h4>主なリスク</h4>" + li(p.risks) + "</div>" +
+        "<div><h4>担当</h4><p>" + p.owners.map(function (o) { return '<span class="badge ok">' + esc(o) + "</span>"; }).join(" ") + "</p>" +
+        "<h4>外部費用の目安（要見積）</h4><p class=\"small\">" + cost + "</p>" +
+        "<h4>関連する章・ツール</h4><p>" + p.chapters.map(function (c) { return '<a href="' + root + c.file + '">' + esc(c.title) + "</a>"; }).join("　") + "</p></div>" +
+      "</div>" +
+      '<div class="callout robot"><span class="title">ロボットでの注意</span><p>' + esc(p.robot) + "</p></div>";
+  }
+
+  function renderRules() {
+    var name = {}; R.phases.forEach(function (p) { name[p.id] = p.short; });
+    var cell = function (v) { return v ? "+" + v : "—"; };
+    $("rules").querySelector("tbody").innerHTML = R.phases.map(function (p) {
+      var dep = p.deps.length ? p.deps.map(function (d) { return name[d.id] + "終了" + (d.lag < 0 ? "の" + (-d.lag) + "週前" : d.lag > 0 ? "の" + d.lag + "週後" : "後"); }).join("、") : "開始時";
+      return "<tr><td>" + esc(p.name) + (p.optional ? ' <span class="badge warn">条件付き</span>' : "") + '</td><td class="num">' + (p.ongoing ? "継続" : p.weeks) + '</td><td class="num">' + cell(p.adj.perCountry) + '</td><td class="num">' + cell(p.adj.china) + '</td><td class="num">' + cell(p.adj.carrier) + '</td><td class="num">' + cell(p.adj.chipdown) + "</td><td>" + esc(dep) + "</td></tr>";
+    }).join("");
+  }
+
+  function update() { save(); syncControls(); renderGantt(); renderDetail(); }
+
+  $("rm-countries").addEventListener("input", function (e) { st.countries = +e.target.value; update(); });
+  $("rm-china").addEventListener("click", function () { st.china = !st.china; update(); });
+  $("rm-carrier").addEventListener("click", function () { st.carrier = !st.carrier; update(); });
+  document.querySelectorAll("[data-mode]").forEach(function (b) { b.addEventListener("click", function () { st.chipdown = b.dataset.mode === "chipdown"; update(); }); });
+
+  renderRules();
+  update();
+})();
+</script>
+</body>
+</html>

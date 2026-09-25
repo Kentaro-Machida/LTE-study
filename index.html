@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LTE Study｜ロボット輸出のためのLTE入門</title>
+  <link rel="stylesheet" href="assets/style.css">
+  <style>
+    .overall { display: grid; grid-template-columns: 1fr auto; gap: 8px 16px; align-items: center; margin: 16px 0; }
+    .overall .progress { height: 10px; }
+    .how { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin: 16px 0; }
+    .how .card { box-shadow: none; }
+    .how .n { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--accent); color: var(--accent-text); font-weight: 700; font-size: .85rem; margin-right: 6px; }
+    .map-ch { font-family: var(--mono); font-size: 11px; font-weight: 700; }
+    .map-node rect { stroke-width: 1.5; }
+    .ch-card .quizrate { font-size: .75rem; margin-top: 8px; display: block; }
+    .reset-row { text-align: right; margin-top: 32px; }
+  </style>
+</head>
+<body data-root="" data-layout="wide">
+<div class="page">
+<main>
+  <section class="hero">
+    <h1>ロボット輸出のためのLTE入門</h1>
+    <p class="lead muted">LTEの仕組みから、必要なハードウェア、SIM、周波数バンド、各国の認証、試作から量産までの進め方まで。<br>日本からアジアへLTE搭載ロボットを出すために必要な知識を、図とクイズで順番に学びます。</p>
+    <div class="overall">
+      <div class="progress" aria-label="学習進捗"><span id="overall-bar" style="width:0"></span></div>
+      <span id="overall-txt" class="small muted"></span>
+    </div>
+  </section>
+
+  <h2>全体像：ロボットのデータはどう届くか</h2>
+  <p>ロボットからクラウドまで、データが通る道のりと、それぞれを扱う章です。<b>四角をクリックすると、その章の説明が出ます。</b></p>
+  <figure class="figure" data-hotspots>
+    <div class="hint">クリック（タップ）で解説と章へのリンク</div>
+    <svg viewBox="0 0 800 300" role="img" aria-label="ロボットからクラウドまでの通信経路">
+      <defs>
+        <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--text-muted)"/></marker>
+      </defs>
+      <!-- 電波 -->
+      <path d="M232 110 Q 290 80 348 110" class="line dash" marker-end="url(#arr)"/>
+      <text x="290" y="78" text-anchor="middle" class="t-small t-muted">電波（バンド）</text>
+      <line x1="470" y1="130" x2="520" y2="130" class="line" marker-end="url(#arr)"/>
+      <line x1="660" y1="130" x2="690" y2="130" class="line" marker-end="url(#arr)"/>
+
+      <!-- ロボット -->
+      <g class="map-node" data-hs="robot">
+        <rect x="20" y="30" width="212" height="210" rx="14" fill="color-mix(in srgb, var(--c1) 10%, var(--surface))" stroke="var(--c1)"/>
+        <text x="126" y="54" text-anchor="middle" font-weight="700">🤖 ロボット</text>
+      </g>
+      <g class="map-node" data-hs="host">
+        <rect x="36" y="68" width="84" height="46" rx="8" fill="var(--surface)" stroke="var(--c6)"/>
+        <text x="78" y="88" text-anchor="middle" font-size="12">ホストCPU</text>
+        <text x="78" y="104" text-anchor="middle" class="map-ch" fill="var(--accent)">08</text>
+      </g>
+      <g class="map-node" data-hs="module">
+        <rect x="132" y="68" width="88" height="46" rx="8" fill="var(--surface)" stroke="var(--c1)"/>
+        <text x="176" y="88" text-anchor="middle" font-size="12">LTEモジュール</text>
+        <text x="176" y="104" text-anchor="middle" class="map-ch" fill="var(--accent)">05・06</text>
+      </g>
+      <g class="map-node" data-hs="sim">
+        <rect x="36" y="126" width="84" height="46" rx="8" fill="var(--surface)" stroke="var(--c5)"/>
+        <text x="78" y="146" text-anchor="middle" font-size="12">SIM / eSIM</text>
+        <text x="78" y="162" text-anchor="middle" class="map-ch" fill="var(--accent)">07</text>
+      </g>
+      <g class="map-node" data-hs="antenna">
+        <rect x="132" y="126" width="88" height="46" rx="8" fill="var(--surface)" stroke="var(--c1)"/>
+        <text x="176" y="146" text-anchor="middle" font-size="12">アンテナ・電源</text>
+        <text x="176" y="162" text-anchor="middle" class="map-ch" fill="var(--accent)">06</text>
+      </g>
+      <g class="map-node" data-hs="cert">
+        <rect x="36" y="184" width="184" height="42" rx="8" fill="var(--surface)" stroke="var(--warn)" stroke-dasharray="4 3"/>
+        <text x="128" y="202" text-anchor="middle" font-size="12">認証ラベル・国別仕様</text>
+        <text x="128" y="218" text-anchor="middle" class="map-ch" fill="var(--accent)">09・10・11</text>
+      </g>
+
+      <!-- 基地局 -->
+      <g class="map-node" data-hs="enb">
+        <rect x="350" y="70" width="120" height="120" rx="14" fill="color-mix(in srgb, var(--c2) 12%, var(--surface))" stroke="var(--c2)"/>
+        <path d="M410 96 L400 134 M410 96 L420 134 M403 122 L417 122 M405 112 L415 112" stroke="var(--c2)" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+        <circle cx="410" cy="94" r="3" fill="var(--c2)"/>
+        <path d="M398 86 Q392 94 398 102 M422 86 Q428 94 422 102 M391 80 Q381 94 391 108 M429 80 Q439 94 429 108" stroke="var(--c2)" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+        <text x="410" y="152" text-anchor="middle" font-weight="700" font-size="13">基地局</text>
+        <text x="410" y="168" text-anchor="middle" font-size="11" class="t-muted">eNodeB</text>
+        <text x="410" y="182" text-anchor="middle" class="map-ch" fill="var(--accent)">01・03・04</text>
+      </g>
+      <!-- コア -->
+      <g class="map-node" data-hs="core">
+        <rect x="522" y="70" width="138" height="120" rx="14" fill="color-mix(in srgb, var(--c3) 12%, var(--surface))" stroke="var(--c3)"/>
+        <text x="591" y="110" text-anchor="middle" font-weight="700" font-size="13">コア網（EPC）</text>
+        <text x="591" y="130" text-anchor="middle" font-size="11" class="t-muted">認証・IP割当・課金</text>
+        <text x="591" y="160" text-anchor="middle" class="map-ch" fill="var(--accent)">02・03</text>
+      </g>
+      <!-- クラウド -->
+      <g class="map-node" data-hs="cloud">
+        <rect x="692" y="70" width="92" height="120" rx="14" fill="color-mix(in srgb, var(--c4) 12%, var(--surface))" stroke="var(--c4)"/>
+        <text x="738" y="115" text-anchor="middle" font-weight="700" font-size="13">☁ クラウド</text>
+        <text x="738" y="134" text-anchor="middle" font-size="11" class="t-muted">遠隔操作</text>
+        <text x="738" y="149" text-anchor="middle" font-size="11" class="t-muted">監視</text>
+        <text x="738" y="175" text-anchor="middle" class="map-ch" fill="var(--accent)">02・08</text>
+      </g>
+
+      <!-- 開発フロー帯 -->
+      <g class="map-node" data-hs="dev">
+        <rect x="20" y="256" width="764" height="36" rx="10" fill="var(--surface-2)" stroke="var(--border)"/>
+        <text x="402" y="279" text-anchor="middle" font-size="13">🛠 要件定義 → 試作(EVT) → 検証(DVT) → 認証 → 量産(PVT/MP) → 運用　<tspan class="map-ch" fill="var(--accent)">12</tspan></text>
+      </g>
+    </svg>
+    <div class="hs-panel"></div>
+    <template data-hs-content="robot"><h4>ロボット（端末 = UE）</h4><p>LTEの世界では、スマホもロボットも「UE（User Equipment：端末）」です。中身の部品は右の各ボックスをクリックしてください。</p></template>
+    <template data-hs-content="host"><h4>ホストCPU ＋ ソフトウェア</h4><p>ロボットの頭脳。LTEモジュールにATコマンドで指示を出し、接続を監視し、切れたら復旧させます。→ <a href="chapters/08-software.html">第8章 ソフトウェアと制御</a></p></template>
+    <template data-hs-content="module"><h4>LTEモジュール</h4><p>LTE通信を丸ごと担う小さな基板部品。どの「カテゴリ」（速度・省電力の種類）を選ぶか、どのバンドに対応するかで、使える国と用途が決まります。→ <a href="chapters/05-categories.html">第5章</a>・<a href="chapters/06-hardware.html">第6章</a></p></template>
+    <template data-hs-content="sim"><h4>SIM / eSIM</h4><p>「この端末は契約者です」と網に証明する鍵を持つICカード。物理SIM・基板に載るチップSIM・書換可能なeSIMがあり、輸出先での回線手配に直結します。→ <a href="chapters/07-sim.html">第7章</a></p></template>
+    <template data-hs-content="antenna"><h4>アンテナ・RF・電源</h4><p>通信品質の大半はアンテナ配置で決まります。送信時に瞬間2A級の電流が流れる電源設計も要注意。→ <a href="chapters/06-hardware.html">第6章 ハードウェア構成</a></p></template>
+    <template data-hs-content="cert"><h4>認証と国別仕様</h4><p>電波を出す機器は国ごとに認証が必要です（日本は技適）。どこまで部品を共通化できるかが、コストと開発期間を左右します。→ <a href="chapters/09-certification.html">第9章</a>・<a href="chapters/10-asia.html">第10章</a>・<a href="chapters/11-commonization.html">第11章</a></p></template>
+    <template data-hs-content="enb"><h4>基地局（eNodeB）</h4><p>携帯キャリアが設置する無線局。決まった周波数「バンド」で電波をやりとりします。国やキャリアで使うバンドが違うのが輸出時の大きな論点です。→ <a href="chapters/01-basics.html">第1章</a>・<a href="chapters/03-attach.html">第3章</a>・<a href="chapters/04-bands.html">第4章</a></p></template>
+    <template data-hs-content="core"><h4>コア網（EPC）</h4><p>SIMの認証、IPアドレスの割当、移動の追跡、インターネットへの出入口を担うキャリアの心臓部。→ <a href="chapters/02-network.html">第2章</a>・<a href="chapters/03-attach.html">第3章</a></p></template>
+    <template data-hs-content="cloud"><h4>クラウド / 自社サーバ</h4><p>遠隔操作や監視を行う側。LTEの端末は外から直接アクセスしにくいので、接続方式の設計が必要です。→ <a href="chapters/02-network.html">第2章</a>・<a href="chapters/08-software.html">第8章</a></p></template>
+    <template data-hs-content="dev"><h4>開発の進め方</h4><p>試作から量産までの工程、各段階でやるべきこと、よくある失敗。→ <a href="chapters/12-roadmap.html">第12章</a>・<a href="tools/roadmap.html">ロードマップツール</a></p></template>
+  </figure>
+
+  <h2>学び方</h2>
+  <div class="how">
+    <div class="card"><span class="n">1</span><b>章を順番に読む</b><p class="small muted">図はクリック・再生できます。1章あたり20〜30分が目安です。</p></div>
+    <div class="card"><span class="n">2</span><b>章末クイズで確認</b><p class="small muted">解説つき。結果はこのブラウザに保存され、下の章カードに正答率が出ます。</p></div>
+    <div class="card"><span class="n">3</span><b>ツールで自社の条件を当てはめる</b><p class="small muted">輸出先のバンド、カテゴリ選定、開発スケジュールを試算できます。</p></div>
+  </div>
+
+  <div id="parts"></div>
+
+  <h2>ツール</h2>
+  <div class="card-grid" id="tools"></div>
+
+  <div class="reset-row"><button class="btn" id="reset">学習記録をリセット</button></div>
+</main>
+</div>
+<script src="assets/data/quiz/ch01.js"></script>
+<script src="assets/data/quiz/ch02.js"></script>
+<script src="assets/data/quiz/ch03.js"></script>
+<script src="assets/data/quiz/chA1.js"></script>
+<script src="assets/data/quiz/ch04.js"></script>
+<script src="assets/data/quiz/ch05.js"></script>
+<script src="assets/data/quiz/ch06.js"></script>
+<script src="assets/data/quiz/ch07.js"></script>
+<script src="assets/data/quiz/ch08.js"></script>
+<script src="assets/data/quiz/ch09.js"></script>
+<script src="assets/data/quiz/ch10.js"></script>
+<script src="assets/data/quiz/ch11.js"></script>
+<script src="assets/data/quiz/ch12.js"></script>
+<script src="assets/app.js"></script>
+<script>
+(function () {
+  const { store, CHAPTERS, PARTS, TOOLS, EXTRA, esc } = window.LTE;
+  const done = store.get("done", {});
+  const results = store.get("quiz", {});
+  const quiz = window.QUIZ || [];
+
+  const nDone = CHAPTERS.filter((c) => done[c.id]).length;
+  document.getElementById("overall-bar").style.width = (100 * nDone / CHAPTERS.length) + "%";
+  document.getElementById("overall-txt").textContent = `${nDone} / ${CHAPTERS.length} 章 学習済み`;
+
+  const rate = (ch) => {
+    const qs = quiz.filter((q) => q.ch === ch);
+    const tried = qs.filter((q) => results[q.id]);
+    if (!tried.length) return "";
+    const ok = tried.filter((q) => results[q.id].ok).length;
+    return `クイズ ${ok}/${qs.length} 正解`;
+  };
+
+  const box = document.getElementById("parts");
+  box.innerHTML = PARTS.map((p) => `
+    <section class="part-block">
+      <h2><span class="badge accent">PART ${p.id}</span>${esc(p.title)}</h2>
+      <div class="card-grid">
+        ${CHAPTERS.filter((c) => c.part === p.id).map((c) => `
+          <a class="card ch-card ${done[c.id] ? "done" : ""}" href="${c.file}">
+            ${done[c.id] ? '<span class="state badge ok">✓ 学習済み</span>' : ""}
+            <span class="num">${c.appendix ? "APPENDIX " + c.num : "CHAPTER " + c.id}</span>
+            <h3>${esc(c.title)}</h3>
+            <p>${esc(c.desc)}</p>
+            ${rate(c.id) ? `<span class="quizrate badge">${rate(c.id)}</span>` : ""}
+          </a>`).join("")}
+      </div>
+    </section>`).join("");
+
+  document.getElementById("tools").innerHTML = TOOLS.concat(EXTRA.map((e) => ({ ...e, desc: e.file === "quiz.html" ? "全章からランダム出題。苦手な章がわかる" : "LTE・認証・SIMの用語を検索" })))
+    .map((t) => `<a class="card" href="${t.file}"><h3>${esc(t.title)}</h3><p class="small muted" style="margin:0">${esc(t.desc)}</p></a>`).join("");
+
+  const reset = document.getElementById("reset");
+  let armed = false;
+  reset.addEventListener("click", () => {
+    if (!armed) { armed = true; reset.textContent = "本当にリセットする（もう一度クリック）"; reset.classList.add("primary"); return; }
+    const theme = store.get("theme");
+    store.clear();
+    if (theme) store.set("theme", theme);
+    location.reload();
+  });
+})();
+</script>
+</body>
+</html>

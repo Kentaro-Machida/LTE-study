@@ -1,0 +1,609 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>無線通信の基礎｜LTE Study</title>
+  <link rel="stylesheet" href="../assets/style.css">
+  <style>
+    /* ---- 第1章ローカル: 対話ウィジェット用 ---- */
+    .w-ctrl { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin: 6px 0 10px; }
+    .w-ctrl label { font-size: .92rem; font-weight: 600; }
+    .w-ctrl input[type="range"] { flex: 1 1 220px; accent-color: var(--accent); min-width: 0; }
+    .w-big { font-family: var(--mono); font-size: 1.25rem; font-weight: 700; color: var(--accent); min-width: 6.5em; }
+    .w-svg { display: block; width: 100%; height: auto; margin: 0 auto; }
+    .w-narrow { max-width: 620px; }
+    .w-square { max-width: 340px; }
+    .readout { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin: 10px 0 4px; }
+    .readout > div { background: var(--surface-2); border-radius: var(--radius-sm); padding: 8px 12px; }
+    .readout .k { display: block; font-size: .78rem; color: var(--text-muted); }
+    .readout .v { font-family: var(--mono); font-weight: 700; font-size: 1.05rem; }
+    .meters { display: grid; gap: 6px; margin: 10px 0; }
+    .meter-row { display: grid; grid-template-columns: 11em minmax(0, 1fr) 3.5em; align-items: center; gap: 10px; font-size: .88rem; }
+    .meter-row .bar { height: 10px; background: var(--surface-2); border-radius: 999px; overflow: hidden; }
+    .meter-row .bar > span { display: block; height: 100%; border-radius: 999px; transition: width .3s; }
+    .meter-row .lv { font-size: .8rem; color: var(--text-muted); text-align: right; }
+    @media (max-width: 520px) { .meter-row { grid-template-columns: 8.5em minmax(0, 1fr) 3em; font-size: .8rem; } }
+    .use-box { background: var(--accent-soft); border-radius: var(--radius-sm); padding: 8px 12px; font-size: .9rem; }
+    svg .t-on { fill: var(--surface); font-weight: 700; }
+    svg .t-b { font-weight: 700; }
+    .car { animation: drive 2.6s linear infinite; }
+    @keyframes drive { from { transform: translateX(-30px); } to { transform: translateX(500px); } }
+    .amc-state { font-size: .92rem; padding: 8px 12px; border-radius: var(--radius-sm); background: var(--surface-2); margin-top: 8px; }
+    .legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: .82rem; color: var(--text-muted); margin-top: 6px; }
+    .legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -1px; margin-right: 4px; }
+  </style>
+</head>
+<body data-root="../" data-chapter="01">
+<div class="page">
+<main>
+  <header class="chapter-hero">
+    <div class="eyebrow">CHAPTER 01</div>
+    <h1>無線通信の基礎</h1>
+    <p class="lead">LTE の仕組みに入る前に、すべての無線通信に共通する「電波」「周波数」「帯域幅」「変調」の考え方を、動かせる図で体感します。Wi-Fi・Bluetooth・LTE・LPWA の違いと、2G/3G がなくなりつつある背景もここで押さえます。</p>
+    <div class="goals"><h2>この章のゴール</h2><ul>
+      <li>周波数と波長の関係、周波数によって「届きやすさ」と「速さ」がトレードオフになる理由を説明できる</li>
+      <li>帯域幅と通信速度の関係を、道路の車線にたとえて説明できる</li>
+      <li>QPSK / 16QAM / 64QAM の違いと、電波が弱いと速度が落ちる理由がわかる</li>
+      <li>免許帯と非免許帯の違い、Wi-Fi / Bluetooth / LTE / LPWA の使い分けがわかる</li>
+      <li>セルラーの世代（2G〜5G）と、ロボットが LTE 以降を前提にすべき理由がわかる</li>
+    </ul></div>
+  </header>
+
+  <!-- ============================================================ -->
+  <h2 id="s1">1. 電波とは何か</h2>
+  <p>スマートフォンも Wi-Fi ルーターも、ロボットに載せる LTE モジュールも、情報を<strong>電波</strong>に乗せて空間に送り出しています。電波は光やX線と同じ<strong>電磁波</strong>の仲間で、電気と磁気の振動が互いを生み出しながら、光の速さ（秒速約30万km）で空間を伝わっていきます。日本の電波法では、周波数が 3 THz（テラヘルツ）以下の電磁波を「電波」と定義しています。</p>
+  <p>イメージしやすいのは、池に石を投げたときの<strong>波紋</strong>です。石を投げた場所（送信アンテナ）から波が広がり、離れた場所に浮かぶ木の葉（受信アンテナ）が揺れることで「波が来た」とわかります。無線通信では、この波の<em>揺れ方</em>に細かな変化をつけることで、0 と 1 のデータを運んでいます。</p>
+  <p>電波を表す基本の数字は2つです。</p>
+  <ul>
+    <li><strong>周波数（f）</strong>：1秒間に何回振動するか。単位は Hz（ヘルツ）。LTE では MHz（100万Hz）や GHz（10億Hz）を使います。</li>
+    <li><strong>波長（λ、ラムダ）</strong>：波1回分の長さ。<code>波長 = 光速 ÷ 周波数</code> で、周波数が高いほど波長は短くなります。</li>
+  </ul>
+  <p>たとえば 2 GHz の電波は 3×10<sup>8</sup> ÷ 2×10<sup>9</sup> = 0.15 m、つまり約 15 cm です。この「波長」はアンテナの大きさに直結します。一般的なアンテナは波長の 1/4〜1/2 程度の長さで効率よく働くため、<strong>低い周波数ほどアンテナが大きくなる</strong>という物理的な制約が生まれます。</p>
+
+  <div class="callout robot"><span class="title">私たちのロボットでは</span>
+    <p>筐体が金属だと電波は中に入れず、外にも出られません（電子レンジの扉の網と同じ原理です）。LTE アンテナは「どの周波数を使うか」で必要な長さが決まるため、筐体設計の早い段階でアンテナの置き場所を確保しておくことが重要です。詳しくは <a href="06-hardware.html">第6章 ハードウェア構成</a> で扱います。</p>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="s2">2. 周波数と波長 ── 「届きやすさ」と「速さ」のトレードオフ</h2>
+  <p>周波数が変わると、電波の性質は大きく変わります。一般的な傾向は次のとおりです（あくまで傾向で、アンテナや環境によって例外はあります）。</p>
+  <ul>
+    <li><strong>低い周波数（〜1 GHz）</strong>：波長が長く、建物の陰へ<strong>回り込み（回折）</strong>やすい。同じ距離でも弱まりにくく、壁や窓も比較的通り抜けやすい。そのぶん、使える帯域幅（後述）が狭く、アンテナも大きくなります。LTE の 700〜900 MHz 帯は、屋内や郊外に強いことから<strong>「プラチナバンド」</strong>と呼ばれます。</li>
+    <li><strong>高い周波数（数 GHz〜）</strong>：まっすぐ進む性質（直進性）が強く、障害物の裏に回り込みにくい。コンクリートや人体でも弱まりやすい。その代わり、周波数の「空き地」が広く、<strong>広い帯域幅を確保して高速通信</strong>ができます。5G のミリ波（28 GHz 帯）はこの典型です。</li>
+  </ul>
+  <p>下のスライダーで周波数を動かし、波の細かさや傾向の変化を確かめてみましょう。</p>
+
+  <figure class="figure" id="freqWidget">
+    <div class="hint">スライダーを動かすか、下の代表的な周波数ボタンを押してください。波形の細かさ・波長・傾向メーターが変わります。</div>
+    <div class="w-ctrl">
+      <label for="fq">周波数</label>
+      <input type="range" id="fq" min="0" max="1000" step="1" value="500" aria-describedby="fqOut">
+      <output id="fqOut" class="w-big">2.0 GHz</output>
+    </div>
+    <div class="chips" id="fqPresets">
+      <button class="chip" data-f="700">700 MHz（LTE B28）</button>
+      <button class="chip" data-f="920">920 MHz（LPWA）</button>
+      <button class="chip" data-f="2100">2.1 GHz（LTE B1）</button>
+      <button class="chip" data-f="2440">2.4 GHz（Wi-Fi/BT）</button>
+      <button class="chip" data-f="3700">3.7 GHz（5G）</button>
+      <button class="chip" data-f="5500">5 GHz（Wi-Fi）</button>
+      <button class="chip" data-f="28000">28 GHz（5Gミリ波）</button>
+    </div>
+    <svg class="w-svg w-narrow" viewBox="0 0 480 140" role="img" aria-label="選んだ周波数の波形と、40cmのものさし">
+      <line x1="20" y1="60" x2="460" y2="60" class="line dash"/>
+      <path id="fqWave" d="" fill="none" stroke="var(--c1)" stroke-width="2.2"/>
+      <g id="fqBracket">
+        <line id="fqBrLine" x1="20" y1="14" x2="100" y2="14" stroke="var(--c4)" stroke-width="2"/>
+        <line id="fqBrL" x1="20" y1="8" x2="20" y2="20" stroke="var(--c4)" stroke-width="2"/>
+        <line id="fqBrR" x1="100" y1="8" x2="100" y2="20" stroke="var(--c4)" stroke-width="2"/>
+        <text id="fqBrT" x="60" y="34" text-anchor="middle" font-size="13" class="t-b">λ（1波長）</text>
+      </g>
+      <line x1="20" y1="112" x2="460" y2="112" stroke="var(--text-muted)" stroke-width="1.5"/>
+      <g font-size="12" class="t-muted" text-anchor="middle">
+        <line x1="20" y1="106" x2="20" y2="118" class="line"/><text x="20" y="133" class="t-muted">0</text>
+        <line x1="130" y1="106" x2="130" y2="118" class="line"/><text x="130" y="133" class="t-muted">10</text>
+        <line x1="240" y1="106" x2="240" y2="118" class="line"/><text x="240" y="133" class="t-muted">20</text>
+        <line x1="350" y1="106" x2="350" y2="118" class="line"/><text x="350" y="133" class="t-muted">30</text>
+        <line x1="460" y1="106" x2="460" y2="118" class="line"/><text x="448" y="133" class="t-muted">40 cm</text>
+      </g>
+    </svg>
+    <div class="readout">
+      <div><span class="k">波長 λ</span><span class="v" id="fqLambda">15 cm</span></div>
+      <div><span class="k">1/4 波長（アンテナ長の目安）</span><span class="v" id="fqQuarter">3.8 cm</span></div>
+    </div>
+    <div class="meters" id="fqMeters">
+      <div class="meter-row"><span>遠くまで届きやすさ</span><span class="bar"><span id="mReach" style="background:var(--c3)"></span></span><span class="lv" id="lReach"></span></div>
+      <div class="meter-row"><span>回り込み・壁の透過</span><span class="bar"><span id="mPen" style="background:var(--c2)"></span></span><span class="lv" id="lPen"></span></div>
+      <div class="meter-row"><span>広い帯域の確保（速さ）</span><span class="bar"><span id="mBw" style="background:var(--c4)"></span></span><span class="lv" id="lBw"></span></div>
+      <div class="meter-row"><span>アンテナの小ささ</span><span class="bar"><span id="mAnt" style="background:var(--c1)"></span></span><span class="lv" id="lAnt"></span></div>
+    </div>
+    <div class="use-box"><b>この周波数の主な用途：</b><span id="fqUse"></span></div>
+    <figcaption>波形は横幅 40 cm ぶんの空間に、その周波数の波が何回入るかを描いています。メーターは一般的な傾向を示す目安で、実際の到達距離は送信出力・アンテナ・地形・建物で大きく変わります。</figcaption>
+  </figure>
+
+  <p>周波数による差は、実際にはかなり大きなものです。電波は距離とともに広がって弱くなりますが（自由空間損失）、同じ大きさの受信アンテナで比べると、周波数が 2 倍になると受け取れる電力は約 1/4（約 6 dB 減）になります。加えて、壁・ガラス・樹木・人体による減衰も高い周波数ほど大きくなる傾向があります。</p>
+  <div class="callout tip"><span class="title">dB（デシベル）の読み方</span>
+    <p>無線の世界では電力の比を dB で表します。<b>+3 dB で約 2 倍、+10 dB で 10 倍、−10 dB で 1/10</b> と覚えておけば十分です。「6 dB 減る」は「電力が約 1/4 になる」という意味です。</p>
+  </div>
+
+  <div class="callout robot"><span class="title">私たちのロボットでは</span>
+    <p>屋内の倉庫・工場・地下駐車場などを走るロボットなら、低い周波数（プラチナバンド）に対応していることが「圏外になりにくさ」に直結します。輸出先の国でどの周波数が LTE に使われているかは国ごとに違うため、<a href="04-bands.html">第4章 周波数バンド</a> と <a href="../tools/band-checker.html">バンド共通化チェッカー</a> で確認します。</p>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="s3">3. 帯域幅と通信速度 ── 道路の車線のたとえ</h2>
+  <p>「周波数」が道路の<em>場所</em>だとすると、<strong>帯域幅（バンド幅）</strong>は道路の<em>幅</em>、つまり<strong>車線の数</strong>です。たとえば「1.7 GHz 帯で 20 MHz 幅」と言えば、1.7 GHz 付近の 20 MHz ぶんの周波数を通信に使えるということです。車線が多いほど同時にたくさんの車（データ）を流せるので、<strong>帯域幅にほぼ比例して最大速度が上がります</strong>。</p>
+  <p>LTE では、1つの搬送波（キャリア）の帯域幅を <b>1.4 / 3 / 5 / 10 / 15 / 20 MHz</b> の6種類から選べます。内部では周波数を 180 kHz ずつの<strong>リソースブロック（RB）</strong>という区画に分け、これを車線のように各端末へ割り当てます。20 MHz なら 100 RB、10 MHz なら 50 RB です。</p>
+  <p>もう一つの速度アップ手段が <strong>MIMO（マイモ、Multiple-Input Multiple-Output）</strong>です。送信側・受信側に複数のアンテナを使い、同じ周波数で別々のデータを同時に送ります。道路にたとえると<strong>「同じ道路を2階建てにする」</strong>ようなもので、2×2 MIMO なら理論上の速度は約 2 倍になります。LTE Cat-4 の下り最大 150 Mbps は「20 MHz × 2×2 MIMO × 64QAM」で実現されています。</p>
+
+  <figure class="figure" id="laneWidget">
+    <div class="hint">帯域幅と MIMO を切り替えると、道路の幅と「2階建て」の有無、理論ピーク速度が変わります。</div>
+    <div class="w-ctrl"><label>帯域幅</label>
+      <div class="chips" id="bwChips">
+        <button class="chip" data-bw="1.4">1.4 MHz</button><button class="chip" data-bw="3">3 MHz</button><button class="chip" data-bw="5">5 MHz</button><button class="chip" data-bw="10">10 MHz</button><button class="chip" data-bw="15">15 MHz</button><button class="chip" data-bw="20">20 MHz</button>
+      </div>
+    </div>
+    <div class="w-ctrl"><label>アンテナ</label>
+      <div class="chips" id="mimoChips">
+        <button class="chip" data-mimo="1">1×1（1階建て）</button><button class="chip" data-mimo="2">2×2 MIMO（2階建て）</button>
+      </div>
+    </div>
+    <svg class="w-svg w-narrow" id="laneSvg" viewBox="0 0 480 250" role="img" aria-label="帯域幅を道路の車線として表した図"></svg>
+    <div class="readout">
+      <div><span class="k">リソースブロック数</span><span class="v" id="rbOut">100 RB</span></div>
+      <div><span class="k">理論ピーク速度（下り・64QAM）</span><span class="v" id="rateOut">150 Mbps</span></div>
+    </div>
+    <figcaption>1車線 ≒ 1 MHz（約5 RB）として描いています。速度は 20 MHz・1レイヤーで約 75 Mbps を基準に RB 数へ比例させた目安で、実際には基地局の混雑、電波品質、制御用のオーバーヘッドで大きく下がります。</figcaption>
+  </figure>
+
+  <p>ここで大事なのは、<strong>「最大速度」は理想条件での上限にすぎない</strong>という点です。実際の速度は、(1) 基地局が同じ帯域を何台の端末で分け合っているか（道路の混雑）、(2) 電波の品質（次節の変調で決まる「1台の車に積める荷物の量」）で決まります。理論的な上限は、情報理論の<strong>シャノンの定理</strong> <code>C = B × log₂(1 + S/N)</code> で表されます。速度 C は帯域幅 B に比例し、信号と雑音の比 S/N（SN比）には対数でしか効かない、つまり<strong>速くするには帯域を広げるのが一番効く</strong>ということを示しています。</p>
+
+  <div class="callout robot"><span class="title">私たちのロボットでは</span>
+    <p>必要な速度は用途で決まります。状態データやコマンドのやり取りだけなら数十〜数百 kbps で足り、LTE-M や NB-IoT で十分です。遠隔操作用のカメラ映像（例：720p で 1〜3 Mbps 程度）を上りで送るなら、LTE Cat-1（上り最大 5 Mbps）以上が候補になります。<b>映像は「上り」</b>である点に注意してください。LTE は下りに比べて上りが遅い設計です。カテゴリの比較は <a href="05-categories.html">第5章</a> で行います。</p>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="s4">4. 変調 ── 1回の波にどれだけのビットを乗せるか</h2>
+  <p>電波そのものはただの波です。そこに 0 と 1 の情報を乗せる操作を<strong>変調</strong>と呼びます。LTE で使うのは、波の<strong>振幅（強さ）</strong>と<strong>位相（タイミングのずれ）</strong>の組み合わせで情報を表す <strong>QAM（直交振幅変調）</strong>系の方式です。</p>
+  <p>変調方式は、平面上の「点の配置図」＝<strong>コンステレーション（星座図）</strong>で表すとわかりやすくなります。送信機は、送りたいビット列に対応する点を1つ選んで送信します。点が多いほど1回（1シンボル）で運べるビット数が増えます。</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>変調方式</th><th>点の数</th><th>1シンボルのビット数</th><th>雑音への強さ</th><th>使われる場面</th></tr></thead>
+    <tbody>
+      <tr><td>QPSK</td><td>4</td><td>2</td><td><span class="badge ok">強い</span></td><td>セルの端、屋内の奥、制御信号</td></tr>
+      <tr><td>16QAM</td><td>16</td><td>4</td><td><span class="badge warn">中</span></td><td>そこそこ良い電波状態</td></tr>
+      <tr><td>64QAM</td><td>64</td><td>6</td><td><span class="badge bad">弱い</span></td><td>基地局の近く、見通しの良い場所</td></tr>
+      <tr><td>256QAM</td><td>256</td><td>8</td><td><span class="badge bad">とても弱い</span></td><td>LTE-Advanced 以降・5G の好条件時</td></tr>
+    </tbody>
+  </table></div>
+  <p>ところが、受信した点は雑音によって本来の位置からズレます。点の間隔が狭い 64QAM では、少しのズレで隣の点と見分けがつかなくなり、誤りが増えます。下の図で雑音（SN比）を変えてみてください。</p>
+
+  <figure class="figure" id="qamWidget">
+    <div class="hint">変調方式ボタンで点の配置を切り替え、スライダーで電波の良し悪し（SN比）を変えてみましょう。「自動（AMC）」では、SN比に応じて基地局が選びそうな方式に自動で切り替わります。</div>
+    <div class="chips" id="modChips">
+      <button class="chip" data-mod="4">QPSK</button><button class="chip" data-mod="16">16QAM</button><button class="chip" data-mod="64">64QAM</button><button class="chip" data-mod="auto">自動（AMC）</button>
+    </div>
+    <div class="w-ctrl">
+      <label for="snr">SN比</label>
+      <input type="range" id="snr" min="0" max="30" step="1" value="22">
+      <output id="snrOut" class="w-big">22 dB</output>
+    </div>
+    <svg class="w-svg w-square" id="qamSvg" viewBox="0 0 300 300" role="img" aria-label="コンステレーション図"></svg>
+    <div class="readout">
+      <div><span class="k">変調方式</span><span class="v" id="qamName">16QAM</span></div>
+      <div><span class="k">1シンボルのビット数</span><span class="v" id="qamBits">4</span></div>
+      <div><span class="k">判定誤り率（誤り訂正前）</span><span class="v" id="qamErr">0%</span></div>
+    </div>
+    <div class="amc-state" id="amcState"></div>
+    <div class="legend"><span><i style="background:var(--c1)"></i>本来の点</span><span><i style="background:var(--c4)"></i>受信した点（雑音でズレる）</span><span><i style="background:var(--bad)"></i>隣の点と誤判定された受信点</span></div>
+    <figcaption>雑音はランダムに発生させたシミュレーションです。実際の LTE は強力な誤り訂正符号（ターボ符号）と再送を組み合わせるため、この図より低い SN比でも各方式を使えます。</figcaption>
+  </figure>
+
+  <p>そこで LTE は<strong>適応変調・符号化（AMC：Adaptive Modulation and Coding）</strong>を行います。端末は数ミリ秒ごとに電波品質を <strong>CQI（Channel Quality Indicator）</strong>として基地局に報告し、基地局はそれを見て「今この端末には 64QAM で送れる」「電波が悪いので QPSK に落とそう」と変調方式と誤り訂正の強さ（符号化率）を選び直します。電波状態が悪くなると<strong>通信が途切れる代わりに、遅くなる</strong>のはこのためです。</p>
+  <p>電波の強さや品質を表す指標として、LTE では <strong>RSRP</strong>（基準信号の受信電力、例：−80 dBm なら強い、−110 dBm 以下は弱い）や <strong>SINR</strong>（信号対干渉雑音比）がよく使われます。これらはモジュールの AT コマンドで読み出せるので、<a href="08-software.html">第8章</a> で扱います。</p>
+
+  <div class="callout robot"><span class="title">私たちのロボットでは</span>
+    <p>ロボットが建物の奥や基地局から遠い場所に入ると、変調が QPSK まで落ちて速度が数分の一になります。映像の解像度やフレームレートを通信速度に合わせて自動で下げる仕組み（アダプティブビットレート）や、重要な制御コマンドを映像より優先する設計にしておくと、「遅くはなっても操作不能にはならない」ロボットにできます。</p>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="s5">5. 免許帯と非免許帯</h2>
+  <p>電波は有限な公共資源なので、各国は周波数ごとに「誰が・何に使ってよいか」を法律で決めています。大きく分けると2種類です。</p>
+  <div class="card-grid">
+    <div class="card"><h3>免許帯（ライセンスバンド）</h3>
+      <p>国から免許を受けた事業者だけが使える周波数です。携帯電話会社（キャリア）は周波数ごとに国の割当てを受け、他者が勝手に使うことはできません。そのため<strong>干渉が少なく、品質を管理しやすい</strong>のが特長です。LTE・5G の多くはここで運用されます。</p>
+      <p class="small muted">日本では、携帯電話の端末（陸上移動局）はキャリアがまとめて免許（包括免許）を受けているため、利用者が個別に免許を取る必要はありません。</p></div>
+    <div class="card"><h3>非免許帯（アンライセンスバンド）</h3>
+      <p>技術基準を満たした機器なら、誰でも免許なしで使える周波数です。代表は <strong>2.4 GHz 帯の ISM バンド</strong>（Industrial, Scientific and Medical：産業・科学・医療用）で、Wi-Fi・Bluetooth・電子レンジなどが同じ帯域を共用します。手軽な反面、<strong>混雑や干渉が起きやすく、品質は保証されません</strong>。</p>
+      <p class="small muted">「免許不要」でも無規制ではありません。日本では技適（技術基準適合証明など）を受けた機器である必要があり、送信出力にも上限があります。</p></div>
+  </div>
+
+  <figure class="figure" data-hotspots data-hs-default="sp-low">
+    <div class="hint">各行をクリック（タップ）すると、その周波数帯の解説が表示されます。横軸は対数目盛です。</div>
+    <svg class="w-svg w-narrow" viewBox="0 0 400 325" role="img" aria-label="主な無線システムの周波数マップ">
+      <g data-hs="sp-low"><rect x="2" y="25" width="396" height="30" rx="6" fill="var(--surface-2)"/><text x="10" y="45" font-size="13">LTE 低い帯域</text><rect x="186" y="31" width="17" height="18" rx="3" fill="var(--c2)"/></g>
+      <g data-hs="sp-920"><rect x="2" y="59" width="396" height="30" rx="6" fill="var(--surface-2)"/><text x="10" y="79" font-size="13">920MHz LPWA</text><rect x="199" y="65" width="4" height="18" rx="1" fill="var(--c4)"/></g>
+      <g data-hs="sp-mid"><rect x="2" y="93" width="396" height="30" rx="6" fill="var(--surface-2)"/><text x="10" y="113" font-size="13">LTE 中間帯域</text><rect x="224" y="99" width="35" height="18" rx="3" fill="var(--c2)"/></g>
+      <g data-hs="sp-ism"><rect x="2" y="127" width="396" height="30" rx="6" fill="var(--surface-2)"/><text x="10" y="147" font-size="13">2.4GHz ISM</text><rect x="252" y="133" width="4" height="18" rx="1" fill="var(--c4)"/></g>
+      <g data-hs="sp-5g"><rect x="2" y="161" width="396" height="30" rx="6" fill="var(--surface-2)"/><text x="10" y="181" font-size="13">5G Sub6</text><rect x="270" y="167" width="23" height="18" rx="3" fill="var(--c2)"/></g>
+      <g data-hs="sp-wifi5"><rect x="2" y="195" width="396" height="30" rx="6" fill="var(--surface-2)"/><text x="10" y="215" font-size="13">Wi-Fi 5/6GHz</text><rect x="294" y="201" width="18" height="18" rx="3" fill="var(--c4)"/></g>
+      <g data-hs="sp-mmw"><rect x="2" y="229" width="396" height="30" rx="6" fill="var(--surface-2)"/><text x="10" y="249" font-size="13">5G ミリ波</text><rect x="378" y="235" width="11" height="18" rx="3" fill="var(--c2)"/></g>
+      <g pointer-events="none" stroke="var(--border)" stroke-width="1" stroke-dasharray="3 3">
+        <line x1="205" y1="20" x2="205" y2="266"/><line x1="243" y1="20" x2="243" y2="266"/><line x1="293" y1="20" x2="293" y2="266"/><line x1="330" y1="20" x2="330" y2="266"/><line x1="368" y1="20" x2="368" y2="266"/>
+      </g>
+      <line x1="140" y1="268" x2="392" y2="268" stroke="var(--text-muted)" stroke-width="1.5"/>
+      <g font-size="12" text-anchor="middle">
+        <text x="168" y="284" class="t-muted">500M</text><text x="205" y="284" class="t-muted">1G</text><text x="243" y="284" class="t-muted">2G</text><text x="293" y="284" class="t-muted">5G</text><text x="330" y="284" class="t-muted">10G</text><text x="368" y="284" class="t-muted">20G</text>
+      </g>
+      <text x="392" y="300" font-size="12" text-anchor="end" class="t-muted">周波数（Hz）→</text>
+      <text x="140" y="14" font-size="12" class="t-muted">← 低い（届きやすい）　　高い（速い）→</text>
+      <rect x="10" y="306" width="12" height="12" rx="2" fill="var(--c2)"/><text x="27" y="317" font-size="12">免許帯（携帯電話）</text>
+      <rect x="160" y="306" width="12" height="12" rx="2" fill="var(--c4)"/><text x="177" y="317" font-size="12">非免許帯・免許不要局</text>
+    </svg>
+    <div class="hs-panel"></div>
+    <template data-hs-content="sp-low"><h4>LTE の低い帯域（約 700〜960 MHz）<span class="badge accent">免許帯</span></h4><p>「プラチナバンド」。日本では 700 MHz 帯（Band 28）、800 MHz 帯（Band 18/19/26）、900 MHz 帯（Band 8）などがあります。屋内や郊外まで届きやすく、IoT 機器にとって最も重要な帯域です。ただし国ごとに使うバンド番号が違い（例：中国・韓国・東南アジアでは Band 5 や Band 8、Band 28 など）、モジュール選定で必ず確認が必要です。</p></template>
+    <template data-hs-content="sp-920"><h4>920 MHz 帯（日本の LPWA・特定小電力）<span class="badge warn">免許不要</span></h4><p>日本では 920.5〜928.1 MHz 付近が LoRaWAN や Sigfox、Wi-SUN などの省電力広域通信（LPWA）に使われます。免許不要で km 単位まで届きますが、送信時間の制限（キャリアセンスや送信時間率）があり、速度は数 kbps 程度です。<b>国によってこの帯域の割当てが違う</b>（欧州は 868 MHz 帯、米国は 915 MHz 帯、アジアは国ごとに 920〜925 MHz 帯など）点に注意が必要です。</p></template>
+    <template data-hs-content="sp-mid"><h4>LTE の中間帯域（約 1.4〜2.7 GHz）<span class="badge accent">免許帯</span></h4><p>1.5 GHz 帯（Band 11/21）、1.7 GHz 帯（Band 3）、2 GHz 帯（Band 1）、2.5 GHz 帯（Band 41、TDD）など、LTE の容量を支える主力帯域です。Band 1 と Band 3 はアジアの多くの国で使われており、部品共通化の軸になります（<a href="11-commonization.html">第11章</a>）。</p></template>
+    <template data-hs-content="sp-ism"><h4>2.4 GHz ISM バンド（2.400〜2.4835 GHz）<span class="badge warn">免許不要</span></h4><p>Wi-Fi（2.4 GHz）、Bluetooth、電子レンジ（2.45 GHz）、一部のコードレス機器や産業機器が共用する、世界共通で使える数少ない帯域です。どの国でも使えるのが強みですが、オフィスや展示会場では非常に混雑し、干渉で通信が不安定になることがあります。</p></template>
+    <template data-hs-content="sp-5g"><h4>5G Sub6（約 3.3〜5 GHz）<span class="badge accent">免許帯</span></h4><p>6 GHz 未満（Sub-6）の 5G 用帯域で、日本では 3.7 GHz 帯・4.5 GHz 帯などが割り当てられています（5G では n77/n78/n79 と呼びます）。LTE より広い帯域幅（最大 100 MHz）を使えるため高速ですが、LTE の低い帯域ほどは遠くへ届きません。</p></template>
+    <template data-hs-content="sp-wifi5"><h4>Wi-Fi 5 GHz 帯 / 6 GHz 帯<span class="badge warn">免許不要</span></h4><p>5 GHz 帯（5.15〜5.725 GHz 付近）は 2.4 GHz より空いていて高速ですが、屋外での利用制限や、気象レーダーなどを避ける DFS（動的周波数選択）の仕組みがあります。6 GHz 帯（Wi-Fi 6E / 7）は国によって開放範囲が異なり、日本では 5.925〜6.425 GHz が使えます。</p></template>
+    <template data-hs-content="sp-mmw"><h4>5G ミリ波（約 24〜29.5 GHz）<span class="badge accent">免許帯</span></h4><p>日本では 28 GHz 帯（n257）が割り当てられています。数百 MHz の非常に広い帯域で Gbps 級の速度が出せますが、直進性が強く、人体や窓ガラスでも大きく減衰します。移動するロボットの常用回線としては現実的ではありません。</p></template>
+    <figcaption>主な帯域の位置関係（日本を中心とした概略）。棒の幅は対数目盛上の幅です。国ごとの詳細なバンド割当ては <a href="04-bands.html">第4章</a> と <a href="10-asia.html">第10章</a> を参照してください。</figcaption>
+  </figure>
+
+  <div class="callout warn"><span class="title">「非免許帯なら世界中で使える」わけではない</span>
+    <p>2.4 GHz 帯は世界共通ですが、5 GHz 帯・6 GHz 帯・920 MHz 帯は国によって使える範囲や条件が違います。さらに Wi-Fi / Bluetooth モジュールであっても、輸出先ごとに無線認証（日本の技適、韓国の KC、台湾の NCC、中国の SRRC など）が必要です。詳しくは <a href="09-certification.html">第9章</a> と <a href="10-asia.html">第10章</a> で扱います。</p>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="s6">6. Wi-Fi / Bluetooth / LTE / LPWA の比較</h2>
+  <p>ここまでの知識で、代表的な無線方式の違いを整理できます。ざっくり言えば、<strong>「距離」「速度」「消費電力」「インフラ（基地局やアクセスポイント）の要否」</strong>のどれを優先するかで選び方が決まります。</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>項目</th><th>Wi-Fi</th><th>Bluetooth (LE)</th><th>LTE（セルラー）</th><th>LPWA（LoRaWAN 等）</th></tr></thead>
+    <tbody>
+      <tr><th>主な周波数</th><td>2.4 / 5 / 6 GHz</td><td>2.4 GHz</td><td>700 MHz〜2.7 GHz ほか（国ごとに異なる）</td><td>920 MHz 帯（日本）ほか Sub-GHz</td></tr>
+      <tr><th>免許</th><td>不要</td><td>不要</td><td>必要（キャリアが保有）</td><td>不要（LoRa / Sigfox）<br><span class="small muted">LTE-M / NB-IoT は免許帯</span></td></tr>
+      <tr><th>到達距離の目安</th><td>数十 m（屋内）</td><td>数 m〜数十 m</td><td>基地局から数百 m〜数 km、エリア内なら全国</td><td>数 km〜十数 km（見通し）</td></tr>
+      <tr><th>速度の目安</th><td>数十 Mbps〜Gbps</td><td>〜2 Mbps</td><td>数百 kbps〜150 Mbps 以上（カテゴリ次第）</td><td>数百 bps〜数十 kbps</td></tr>
+      <tr><th>消費電力</th><td>中〜大</td><td><span class="badge ok">小</span></td><td>中〜大（LTE-M / NB-IoT は小）</td><td><span class="badge ok">極小</span></td></tr>
+      <tr><th>インフラ</th><td>自前で AP を設置</td><td>不要（1対1）</td><td>キャリア網を利用（自前不要）</td><td>ゲートウェイ設置 or 事業者網</td></tr>
+      <tr><th>月額費用</th><td>なし（回線は別）</td><td>なし</td><td>SIM の通信料が必要</td><td>小〜なし</td></tr>
+      <tr><th>ロボットでの向き・不向き</th><td>施設内で Wi-Fi が整っていれば有力。施設ごとに設定が必要で、エリア外に出ると切れる</td><td>スマホからの初期設定・近距離操作向き。遠隔監視には不向き</td><td><span class="badge accent">本命</span> 屋外・移動・施設をまたぐ遠隔監視に最適。国ごとのバンドと認証が課題</td><td>位置や状態の定期送信には最適。映像や遠隔操作は不可</td></tr>
+    </tbody>
+  </table></div>
+
+  <div data-tabs>
+    <div class="tab-list">
+      <button data-tab="sc1">屋外巡回ロボット</button>
+      <button data-tab="sc2">施設内搬送ロボット</button>
+      <button data-tab="sc3">低頻度の状態監視</button>
+    </div>
+    <div data-tab-panel="sc1">
+      <p><b>例：</b>公園・工事現場・農地を数 km 巡回し、カメラ映像と位置を送る。</p>
+      <p><b>おすすめ：</b>LTE（Cat-1 / Cat-4）＋ GNSS（衛星測位）。Wi-Fi は届かず、LPWA では映像を送れません。移動中に基地局が切り替わっても通信を続けられるのはセルラーの強みです（<a href="02-network.html">第2章</a> のハンドオーバー）。</p>
+    </div>
+    <div data-tab-panel="sc2">
+      <p><b>例：</b>工場や病院の中で荷物を運ぶ。施設側が Wi-Fi を用意している。</p>
+      <p><b>おすすめ：</b>Wi-Fi をメインに、LTE をバックアップや遠隔保守用に併用。施設の Wi-Fi は顧客ごとに設定やセキュリティポリシーが違い、導入時の手間になりがちです。「Wi-Fi が使えない現場でもメーカーが遠隔保守できる」ことは LTE を積む大きな理由になります。</p>
+    </div>
+    <div data-tab-panel="sc3">
+      <p><b>例：</b>設置型ロボットの稼働状況やバッテリー残量を1時間に1回送るだけ。</p>
+      <p><b>おすすめ：</b>LTE-M または NB-IoT（セルラーの省電力版）。免許帯でキャリアが運用するので品質が安定し、LoRaWAN のようなゲートウェイ設置も不要です。ただし NB-IoT は国によって提供状況が違い、ハンドオーバーにも制約があります（<a href="05-categories.html">第5章</a>）。</p>
+    </div>
+  </div>
+
+  <div class="callout robot"><span class="title">私たちのロボットでは</span>
+    <p>多くのロボットは「LTE で遠隔監視・保守」「Bluetooth でスマホから初期設定」「必要なら Wi-Fi で大容量データ（ログやソフト更新）」のように複数方式を組み合わせます。それぞれに輸出先の無線認証が必要になるため、<b>搭載する無線の種類を増やすほど認証のコストと期間も増える</b>ことを覚えておきましょう。</p>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 id="s7">7. セルラーの世代（1G〜5G）と 2G/3G の停波</h2>
+  <p>携帯電話の方式はおよそ10年ごとに世代（Generation）が進んできました。世代が進むたびに速度と周波数の使い方の効率が上がり、古い世代の電波は新しい世代に<strong>明け渡されて（停波・巻き取り）</strong>いきます。</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>世代</th><th>代表的な方式</th><th>特徴</th><th>速度の目安</th></tr></thead>
+    <tbody>
+      <tr><td>1G</td><td>アナログ方式</td><td>音声のみ。アナログ無線</td><td>—</td></tr>
+      <tr><td>2G</td><td>GSM、PDC（日本）、cdmaOne</td><td>デジタル化。メールや簡単なデータ通信</td><td>数〜数十 kbps</td></tr>
+      <tr><td>3G</td><td>W-CDMA（UMTS）、CDMA2000、TD-SCDMA</td><td>本格的なモバイルインターネット。HSPA で高速化</td><td>数百 kbps〜数十 Mbps</td></tr>
+      <tr><td>4G</td><td><b>LTE</b>、LTE-Advanced</td><td>全 IP 化（音声も VoLTE で IP）。OFDMA 方式</td><td>数十 Mbps〜1 Gbps 超</td></tr>
+      <tr><td>5G</td><td>NR（New Radio）</td><td>超高速・低遅延・多数同時接続。LTE と連携する NSA 方式もある</td><td>数百 Mbps〜数 Gbps</td></tr>
+    </tbody>
+  </table></div>
+  <p>LTE（Long Term Evolution）は国際標準化団体 <strong>3GPP</strong>（3rd Generation Partnership Project）が Release 8（2008年）で定めた方式で、日本では 2010 年 12 月に商用サービスが始まりました。当初は「3.9G」とも呼ばれましたが、現在は 4G として扱われます。IoT 向けの LTE-M・NB-IoT も LTE の仲間です。</p>
+
+  <figure class="figure" data-hotspots data-hs-default="g3">
+    <div class="hint">世代の行をクリックすると、日本とアジアでの提供・停波状況が表示されます。縦線は現在（2026年9月）です。</div>
+    <svg class="w-svg w-narrow" viewBox="0 0 400 250" role="img" aria-label="日本における移動通信の世代別サービス期間">
+      <g data-hs="g1"><rect x="2" y="18" width="396" height="30" rx="6" fill="var(--surface-2)"/><text x="10" y="38" font-size="13" class="t-b">1G</text><text x="36" y="38" font-size="12" class="t-muted">アナログ</text><rect x="110" y="23" width="100" height="20" rx="4" fill="var(--c6)"/><text x="160" y="37" font-size="12" text-anchor="middle" class="t-on">1979–1999</text></g>
+      <g data-hs="g2"><rect x="2" y="54" width="396" height="30" rx="6" fill="var(--surface-2)"/><text x="10" y="74" font-size="13" class="t-b">2G</text><text x="36" y="74" font-size="12" class="t-muted">PDC等</text><rect x="180" y="59" width="96" height="20" rx="4" fill="var(--c6)"/><text x="228" y="73" font-size="12" text-anchor="middle" class="t-on">1993–2012</text></g>
+      <g data-hs="g3"><rect x="2" y="90" width="396" height="30" rx="6" fill="var(--surface-2)"/><text x="10" y="110" font-size="13" class="t-b">3G</text><text x="36" y="110" font-size="12" class="t-muted">W-CDMA等</text><rect x="220" y="95" width="126" height="20" rx="4" fill="var(--c4)"/><text x="283" y="109" font-size="12" text-anchor="middle" class="t-on">2001–2026.3</text></g>
+      <g data-hs="g4"><rect x="2" y="126" width="396" height="30" rx="6" fill="var(--surface-2)"/><text x="10" y="146" font-size="13" class="t-b">4G</text><text x="36" y="146" font-size="12" class="t-muted">LTE</text><rect x="265" y="131" width="125" height="20" rx="4" fill="var(--c1)"/><text x="300" y="145" font-size="12" text-anchor="middle" class="t-on">2010–</text></g>
+      <g data-hs="g5"><rect x="2" y="162" width="396" height="30" rx="6" fill="var(--surface-2)"/><text x="10" y="182" font-size="13" class="t-b">5G</text><text x="36" y="182" font-size="12" class="t-muted">NR</text><rect x="316" y="167" width="74" height="20" rx="4" fill="var(--c3)"/><text x="336" y="181" font-size="12" text-anchor="middle" class="t-on">2020–</text></g>
+      <line x1="110" y1="206" x2="392" y2="206" stroke="var(--text-muted)" stroke-width="1.5"/>
+      <g font-size="12" text-anchor="middle">
+        <text x="115" y="222" class="t-muted">1980</text><text x="165" y="222" class="t-muted">1990</text><text x="215" y="222" class="t-muted">2000</text><text x="265" y="222" class="t-muted">2010</text><text x="315" y="222" class="t-muted">2020</text><text x="365" y="222" class="t-muted">2030</text>
+      </g>
+      <g pointer-events="none"><line x1="349" y1="12" x2="349" y2="206" stroke="var(--bad)" stroke-width="2" stroke-dasharray="4 3"/><text x="349" y="242" font-size="12" text-anchor="middle" fill="var(--bad)" style="fill:var(--bad)">今</text></g>
+    </svg>
+    <div class="hs-panel"></div>
+    <template data-hs-content="g1"><h4>1G（アナログ方式）</h4><p>日本では 1979 年に電電公社（現 NTT）が自動車電話として開始しました。音声をアナログのまま電波に乗せる方式で、盗聴されやすく、周波数の利用効率も低いものでした。1999 年ごろまでにデジタル方式へ移行して終了しています。</p></template>
+    <template data-hs-content="g2"><h4>2G（デジタル方式）</h4><p>日本独自の PDC 方式が 1993 年に始まり、世界的には欧州発の GSM が主流になりました。日本の 2G は 2012 年までにすべて終了しています（ソフトバンク 2010 年 3 月、ドコモ mova 2012 年 3 月）。<b>アジアの一部（インドなど）では 2G がまだ残っている国もありますが、ベトナムのように 2G の停波を進めている国もあり、新規設計で 2G を当てにするのは危険です。</b>韓国・台湾・シンガポールでは 2G はすでに終了しています。</p></template>
+    <template data-hs-content="g3"><h4>3G（W-CDMA / CDMA2000）</h4><p>日本では 2001 年にドコモ FOMA が世界初の W-CDMA 商用サービスとして開始。その後、au は 2022 年 3 月、ソフトバンクは 2024 年 4 月（石川県は 7 月）、<b>ドコモも 2026 年 3 月 31 日に 3G を終了</b>し、日本では 3G が使えなくなりました。台湾（2018 年末にデータ通信終了）、シンガポール（2024 年）なども停波済みで、ベトナムは 2028 年ごろまでに終了予定など、アジアでも「LTE 以降が前提」になりつつあります。国ごとの状況は変わるため、最新情報を確認してください。</p></template>
+    <template data-hs-content="g4"><h4>4G（LTE）</h4><p>日本では 2010 年 12 月にドコモ Xi として開始。音声も IP で運ぶ VoLTE が標準になり、3G 停波後は「VoLTE 非対応の端末は通話できない」状態になりました。IoT 向けの LTE Cat-1 / LTE-M / NB-IoT も含め、<b>今後 10 年以上は使われ続ける見込み</b>で、5G の NSA 方式も LTE を土台にしています。ロボットの通信方式として最も安心できる世代です。</p></template>
+    <template data-hs-content="g5"><h4>5G（NR）</h4><p>日本では 2020 年 3 月に商用化（韓国は 2019 年 4 月）。当初は LTE のコア網と基地局を土台にした NSA（ノンスタンドアロン）方式で始まり、5G 専用コアを使う SA（スタンドアロン）方式へ移行中です。IoT 向けには機能を絞った <b>5G RedCap</b> も登場していますが、モジュール価格と国ごとの提供状況はまだ LTE ほど成熟していません（<a href="05-categories.html">第5章</a>）。</p></template>
+    <figcaption>日本のサービス期間の概略（年は主要キャリアの開始・終了時期を丸めたもの）。アジア各国の停波状況は変わりやすいため、<a href="10-asia.html">第10章</a> と出典の一覧を確認してください。</figcaption>
+  </figure>
+
+  <div class="callout danger"><span class="title">3G フォールバックに頼る設計はもう通用しない</span>
+    <p>数年前の IoT 機器では「LTE がつながらなければ 3G/2G で通信する」マルチモードモジュールが一般的でした。しかし 3G/2G は各国で停波が進み、フォールバック先そのものが消えつつあります。また VoLTE 非対応の機器は、3G 停波後に音声通話・緊急通報ができなくなります。<b>新規設計のロボットは LTE（または LTE-M / NB-IoT / 5G）だけで要件を満たせるか</b>を前提に考えましょう。</p>
+  </div>
+
+  <div class="callout robot"><span class="title">私たちのロボットでは</span>
+    <p>ロボットは販売後 5〜10 年使われることが珍しくありません。量産時点で「まだ使えるから」と古い方式に頼ると、製品寿命の途中で通信できなくなるリスクがあります。LTE はこの点で当面安全ですが、将来の LTE 停波も視野に入れ、<b>モジュールを載せ替えられる基板設計</b>（M.2 や LGA のピン互換ファミリーの採用など）にしておくと安心です（<a href="06-hardware.html">第6章</a>、<a href="11-commonization.html">第11章</a>）。</p>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2>まとめ</h2>
+  <ul>
+    <li>電波は周波数（1秒間の振動数）と波長（1回の波の長さ）で表され、<code>波長 = 光速 ÷ 周波数</code>。波長はアンテナの大きさに直結する。</li>
+    <li><b>低い周波数は届きやすく回り込みやすい、高い周波数は広い帯域を取りやすく速い</b>。屋内や広域を移動するロボットにはプラチナバンド対応が効く。</li>
+    <li>速度は<b>帯域幅（車線の数）× MIMO（2階建て）× 変調（1台に積む量）</b>でほぼ決まり、実際には混雑と電波品質で下がる。</li>
+    <li>変調は QPSK → 16QAM → 64QAM と点が増えるほど速いが雑音に弱い。LTE は電波品質に応じて自動で切り替える（AMC）。</li>
+    <li>LTE は免許帯でキャリアが品質管理する。Wi-Fi / Bluetooth / LoRa は非免許帯で手軽だが干渉を受けやすい。どちらも輸出先ごとの無線認証は必要。</li>
+    <li>日本では 2G・3G ともに終了済み。アジアでも停波が進んでおり、<b>新規設計は LTE 以降を前提</b>にする。</li>
+  </ul>
+
+  <h2>用語</h2>
+  <dl class="terms">
+    <dt>周波数</dt><dd>電波が1秒間に振動する回数。単位 Hz。1 MHz = 100万 Hz、1 GHz = 10億 Hz。</dd>
+    <dt>波長（λ）</dt><dd>波1回分の長さ。光速 ÷ 周波数。アンテナの寸法の目安になる。</dd>
+    <dt>プラチナバンド</dt><dd>700〜900 MHz 帯など、届きやすく屋内に強い低い周波数帯の通称。</dd>
+    <dt>帯域幅</dt><dd>通信に使う周波数の幅。LTE は 1 キャリアあたり 1.4〜20 MHz。広いほど速い。</dd>
+    <dt>RB</dt><dd>Resource Block（リソースブロック）。LTE で周波数を 180 kHz ごとに区切った割当て単位。</dd>
+    <dt>MIMO</dt><dd>Multiple-Input Multiple-Output。複数アンテナで同じ周波数に複数のデータ流を重ねて速度を上げる技術。</dd>
+    <dt>dB / dBm</dt><dd>電力の比を対数で表す単位。+3 dB で約2倍、+10 dB で10倍。dBm は 1 mW を基準にした絶対値。</dd>
+    <dt>SN比 / SINR</dt><dd>信号と雑音（＋干渉）の電力比。大きいほど電波品質が良い。</dd>
+    <dt>変調</dt><dd>電波の振幅や位相を変えてデータを乗せる操作。</dd>
+    <dt>QPSK / QAM</dt><dd>位相や振幅の組み合わせで点を表す変調方式。QPSK は 2 ビット、16QAM は 4 ビット、64QAM は 6 ビット／シンボル。</dd>
+    <dt>AMC</dt><dd>Adaptive Modulation and Coding（適応変調・符号化）。電波品質に応じて変調と符号化率を自動で切り替える仕組み。</dd>
+    <dt>CQI</dt><dd>Channel Quality Indicator。端末が基地局へ報告する電波品質の指標。</dd>
+    <dt>RSRP</dt><dd>Reference Signal Received Power。LTE の基準信号の受信電力（dBm）。電波の強さの指標。</dd>
+    <dt>ISM バンド</dt><dd>Industrial, Scientific and Medical バンド。2.4 GHz 帯など、免許不要で共用される周波数帯。</dd>
+    <dt>LPWA</dt><dd>Low Power Wide Area。LoRaWAN、Sigfox、LTE-M、NB-IoT など、省電力で広域をカバーする低速通信の総称。</dd>
+    <dt>3GPP</dt><dd>3rd Generation Partnership Project。LTE・5G などの仕様を定める国際標準化団体。</dd>
+    <dt>停波</dt><dd>古い通信方式のサービスを終了し、電波の送信を止めること。周波数は新しい方式に再利用される。</dd>
+  </dl>
+
+  <h2>確認クイズ</h2>
+  <div class="quiz" data-quiz="01"></div>
+
+  <section class="sources"><h2>参考・出典</h2><ul>
+    <li><a href="https://www.tele.soumu.go.jp/">総務省 電波利用ホームページ</a>（電波の定義・周波数割当計画・技適制度）</li>
+    <li>3GPP <a href="https://www.3gpp.org/dynareport/36101.htm">TS 36.101</a>（UE の無線送受信特性・帯域幅）、<a href="https://www.3gpp.org/dynareport/36211.htm">TS 36.211</a>（物理チャネルと変調）、<a href="https://www.3gpp.org/dynareport/36213.htm">TS 36.213</a>（CQI と変調方式）</li>
+    <li><a href="https://www.docomo.ne.jp/info/3g_closed/">NTTドコモ「FOMA」および「iモード」サービス終了のご案内</a></li>
+    <li><a href="https://www.softbank.jp/biz/info/3g_closed/">ソフトバンク 3Gサービスの提供終了（2024年7月31日）</a>／<a href="https://www.itmedia.co.jp/mobile/articles/2403/13/news101.html">ITmedia Mobile：ソフトバンク3G終了、石川県のみ7月31日に再延期</a></li>
+    <li><a href="https://www.emnify.com/blog/global-2g-3g-phase-out">emnify: Global 2G/3G Phase-Out Timeline for IoT Devices</a></li>
+    <li><a href="https://www.teltonika-networks.com/newsroom/the-global-3g-sunset-and-its-effect-on-iot-connectivity">Teltonika Networks: The global 3G sunset and its effect on IoT connectivity</a></li>
+    <li><a href="https://insights.opensignal.com/2026/04/the-long-goodbye-why-is-3g-still-present-in-asia-pacific/dt">Opensignal: The long goodbye — why is 3G still present in Asia Pacific?（2026年4月）</a></li>
+    <li>C. E. Shannon, "A Mathematical Theory of Communication," Bell System Technical Journal, 1948（シャノンの定理）</li>
+  </ul><p>確認日: 2026-09</p></section>
+</main>
+</div>
+<script src="../assets/data/quiz/ch01.js"></script>
+<script src="../assets/app.js"></script>
+<script>
+(function () {
+  "use strict";
+  var NS = "http://www.w3.org/2000/svg";
+  function $(id) { return document.getElementById(id); }
+  function el(tag, attrs, parent) {
+    var e = document.createElementNS(NS, tag);
+    for (var k in attrs) e.setAttribute(k, attrs[k]);
+    if (parent) parent.appendChild(e);
+    return e;
+  }
+  function setChip(group, btn) {
+    group.querySelectorAll(".chip").forEach(function (b) { b.setAttribute("aria-pressed", String(b === btn)); });
+  }
+
+  /* ========== 1. 周波数スライダー ========== */
+  (function () {
+    var FMIN = 400, FMAX = 40000; // MHz
+    var slider = $("fq"); if (!slider) return;
+    var logR = Math.log10(FMAX / FMIN);
+    var toF = function (v) { return FMIN * Math.pow(10, (v / 1000) * logR); };
+    var toV = function (f) { return Math.round(1000 * Math.log10(f / FMIN) / logR); };
+    var PXCM = 11, X0 = 20, W = 440, CY = 60, AMP = 34;
+    function fmtF(f) { return f >= 1000 ? (f / 1000).toFixed(f >= 10000 ? 0 : 1) + " GHz" : Math.round(f) + " MHz"; }
+    function fmtL(cm) { return cm >= 10 ? cm.toFixed(0) + " cm" : cm >= 1 ? cm.toFixed(1) + " cm" : (cm * 10).toFixed(1) + " mm"; }
+    function lv(x) { return x > .8 ? "高" : x > .6 ? "やや高" : x > .4 ? "中" : x > .2 ? "やや低" : "低"; }
+    function use(f) {
+      if (f < 600) return "テレビ放送（UHF 470〜710 MHz 付近）、北米の LTE Band 71（600 MHz）など。";
+      if (f < 1000) return "LTE・5G のプラチナバンド（700〜900 MHz 帯）、日本の 920 MHz 帯 LPWA（LoRaWAN・Sigfox）。";
+      if (f < 2300) return "LTE・5G の主力ミッドバンド（1.5 / 1.7 / 2 GHz 帯）、GPS（1.575 GHz）。";
+      if (f < 2700) return "Wi-Fi（2.4 GHz）・Bluetooth・電子レンジ（2.45 GHz）、LTE Band 41（2.5 GHz、TDD）。";
+      if (f < 6000) return "5G Sub6（3.5 / 3.7 / 4.5 GHz 帯）、Wi-Fi 5 GHz 帯。";
+      if (f < 20000) return "Wi-Fi 6E / 7（6 GHz 帯）、衛星通信、業務用の固定無線。";
+      return "5G ミリ波（28 GHz 帯）、衛星通信。さらに上の 76〜81 GHz は車載レーダー。";
+    }
+    function bar(id, lid, x) { $(id).style.width = Math.round(8 + 92 * x) + "%"; $(lid).textContent = lv(x); }
+    function render() {
+      var f = toF(+slider.value);
+      var lamCm = 30000 / f; // λ[cm] = 3e10 cm/s / (f MHz * 1e6)
+      var lamPx = lamCm * PXCM;
+      $("fqOut").textContent = fmtF(f);
+      $("fqLambda").textContent = fmtL(lamCm);
+      $("fqQuarter").textContent = fmtL(lamCm / 4);
+      var step = Math.max(0.25, Math.min(2, lamPx / 24)), d = "";
+      for (var x = 0; x <= W + 0.001; x += step) {
+        var y = CY - AMP * Math.sin(2 * Math.PI * x / lamPx);
+        d += (x === 0 ? "M" : "L") + (X0 + x).toFixed(2) + " " + y.toFixed(2);
+      }
+      $("fqWave").setAttribute("d", d);
+      var br = Math.min(lamPx, W), xr = X0 + br;
+      $("fqBrLine").setAttribute("x2", xr); $("fqBrR").setAttribute("x1", xr); $("fqBrR").setAttribute("x2", xr);
+      $("fqBrR").style.visibility = lamPx > W ? "hidden" : "visible";
+      var tx = Math.max(X0 + br / 2, 60); $("fqBrT").setAttribute("x", Math.min(tx, 420));
+      $("fqBrT").textContent = lamPx > W ? "λ は 40 cm より長い →" : "λ（1波長）";
+      var t = +slider.value / 1000; // 0:低い 1:高い
+      bar("mReach", "lReach", 1 - t);
+      bar("mPen", "lPen", Math.max(0, 1 - t * 1.15));
+      bar("mBw", "lBw", t);
+      bar("mAnt", "lAnt", t);
+      $("fqUse").textContent = use(f);
+      document.querySelectorAll("#fqPresets .chip").forEach(function (b) {
+        b.setAttribute("aria-pressed", String(Math.abs(toV(+b.dataset.f) - +slider.value) <= 2));
+      });
+    }
+    slider.addEventListener("input", render);
+    document.querySelectorAll("#fqPresets .chip").forEach(function (b) {
+      b.addEventListener("click", function () { slider.value = toV(+b.dataset.f); render(); });
+    });
+    slider.value = toV(2100);
+    render();
+  })();
+
+  /* ========== 2. 帯域幅＝車線 ========== */
+  (function () {
+    var svg = $("laneSvg"); if (!svg) return;
+    var RB = { "1.4": 6, "3": 15, "5": 25, "10": 50, "15": 75, "20": 100 };
+    var LANES = { "1.4": 1, "3": 3, "5": 5, "10": 10, "15": 15, "20": 20 };
+    var st = { bw: "20", mimo: 1 };
+    var seed = 7;
+    function rnd() { seed = (seed * 16807) % 2147483647; return seed / 2147483647; }
+    function road(y0, lanes, label, color) {
+      var LH = 5, H = lanes * LH + 8;
+      el("rect", { x: 10, y: y0, width: 460, height: H, rx: 4, fill: "var(--surface-2)", stroke: "var(--border)" }, svg);
+      for (var i = 1; i < lanes; i++) {
+        el("line", { x1: 12, x2: 468, y1: y0 + 4 + i * LH, y2: y0 + 4 + i * LH, stroke: "var(--border)", "stroke-width": 0.8, "stroke-dasharray": "6 5" }, svg);
+      }
+      var g = el("g", {}, svg);
+      for (var j = 0; j < lanes; j++) {
+        for (var c = 0; c < 2; c++) {
+          var car = el("rect", { x: 0, y: y0 + 4 + j * LH + 1, width: 16, height: 3, rx: 1, fill: color, "class": "car" }, g);
+          car.style.animationDelay = (-rnd() * 2.6).toFixed(2) + "s";
+          car.style.animationDuration = (2.2 + rnd() * 0.8).toFixed(2) + "s";
+        }
+      }
+      var clip = el("clipPath", { id: "clip" + y0 }, svg);
+      el("rect", { x: 10, y: y0, width: 460, height: H }, clip);
+      g.setAttribute("clip-path", "url(#clip" + y0 + ")");
+      var t = el("text", { x: 14, y: y0 - 6, "font-size": 13, "class": "t-b" }, svg);
+      t.textContent = label;
+      return H;
+    }
+    function render() {
+      while (svg.firstChild) svg.removeChild(svg.firstChild);
+      seed = 7;
+      var lanes = LANES[st.bw], y = 22;
+      var h1 = road(y, lanes, "1階：帯域幅 " + st.bw + " MHz（" + lanes + " 車線）", "var(--c1)");
+      var hTot = y + h1;
+      if (st.mimo === 2) {
+        var y2 = y + h1 + 30;
+        var h2 = road(y2, lanes, "2階：MIMO で同じ周波数にもう1本", "var(--c2)");
+        hTot = y2 + h2;
+      }
+      svg.setAttribute("viewBox", "0 0 480 " + Math.max(80, hTot + 10));
+      $("rbOut").textContent = RB[st.bw] + " RB";
+      var rate = 75 * RB[st.bw] / 100 * st.mimo;
+      $("rateOut").textContent = "約 " + (rate < 10 ? rate.toFixed(1) : Math.round(rate)) + " Mbps";
+      document.querySelectorAll("#bwChips .chip").forEach(function (b) { b.setAttribute("aria-pressed", String(b.dataset.bw === st.bw)); });
+      document.querySelectorAll("#mimoChips .chip").forEach(function (b) { b.setAttribute("aria-pressed", String(+b.dataset.mimo === st.mimo)); });
+    }
+    document.querySelectorAll("#bwChips .chip").forEach(function (b) { b.addEventListener("click", function () { st.bw = b.dataset.bw; render(); }); });
+    document.querySelectorAll("#mimoChips .chip").forEach(function (b) { b.addEventListener("click", function () { st.mimo = +b.dataset.mimo; render(); }); });
+    render();
+  })();
+
+  /* ========== 3. コンステレーション ========== */
+  (function () {
+    var svg = $("qamSvg"); if (!svg) return;
+    var st = { mode: "16" };
+    var N = 360, C = 150, S = 88; // 中心・スケール（振幅1 → 88px）
+    function points(M) {
+      var L = Math.sqrt(M), k = Math.sqrt(2 * (M - 1) / 3), p = [];
+      for (var i = 0; i < L; i++) for (var j = 0; j < L; j++) p.push([(2 * i - L + 1) / k, (2 * j - L + 1) / k]);
+      return p;
+    }
+    function rng(s) { return function () { s = (s * 16807) % 2147483647; return s / 2147483647; }; }
+    function gauss(r) { var u = Math.max(1e-9, r()), v = r(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); }
+    function simulate(M, snrDb) {
+      var P = points(M), sig = Math.sqrt(1 / (2 * Math.pow(10, snrDb / 10))), r = rng(12345), out = [], err = 0;
+      for (var n = 0; n < N; n++) {
+        var idx = Math.floor(r() * P.length), p = P[idx];
+        var x = p[0] + sig * gauss(r), y = p[1] + sig * gauss(r);
+        var best = 0, bd = Infinity;
+        for (var q = 0; q < P.length; q++) { var dx = x - P[q][0], dy = y - P[q][1], d = dx * dx + dy * dy; if (d < bd) { bd = d; best = q; } }
+        var bad = best !== idx; if (bad) err++;
+        out.push([x, y, bad]);
+      }
+      return { P: P, rx: out, ser: err / N };
+    }
+    function autoPick(snr) {
+      // 誤り訂正前の判定誤り率がおおむね 5% 未満になる最上位の方式を選ぶ（教材用の単純化）
+      var list = [64, 16, 4];
+      for (var i = 0; i < list.length; i++) if (simulate(list[i], snr).ser < 0.05) return list[i];
+      return 4;
+    }
+    var NAME = { 4: "QPSK", 16: "16QAM", 64: "64QAM" }, BITS = { 4: 2, 16: 4, 64: 6 };
+    function render() {
+      var snr = +$("snr").value;
+      $("snrOut").textContent = snr + " dB";
+      var M = st.mode === "auto" ? autoPick(snr) : +st.mode;
+      var r = simulate(M, snr);
+      while (svg.firstChild) svg.removeChild(svg.firstChild);
+      el("rect", { x: 4, y: 4, width: 292, height: 292, rx: 8, fill: "var(--surface-2)" }, svg);
+      el("line", { x1: 12, y1: C, x2: 288, y2: C, "class": "line" }, svg);
+      el("line", { x1: C, y1: 12, x2: C, y2: 288, "class": "line" }, svg);
+      var t1 = el("text", { x: 284, y: C - 6, "font-size": 12, "text-anchor": "end", "class": "t-muted" }, svg); t1.textContent = "I（同相）";
+      var t2 = el("text", { x: C + 6, y: 24, "font-size": 12, "class": "t-muted" }, svg); t2.textContent = "Q（直交）";
+      if (M > 4) {
+        // 判定境界
+        var P = points(M), L = Math.sqrt(M), k = Math.sqrt(2 * (M - 1) / 3);
+        for (var b = 1; b < L; b++) {
+          var v = (2 * b - L) / k * S;
+          if (Math.abs(v) < 1e-6) continue;
+          el("line", { x1: C + v, y1: 12, x2: C + v, y2: 288, stroke: "var(--border)", "stroke-dasharray": "3 3" }, svg);
+          el("line", { x1: 12, y1: C + v, x2: 288, y2: C + v, stroke: "var(--border)", "stroke-dasharray": "3 3" }, svg);
+        }
+      }
+      var g = el("g", {}, svg);
+      r.rx.forEach(function (p) {
+        var x = C + p[0] * S, y = C - p[1] * S;
+        if (x < 6 || x > 294 || y < 6 || y > 294) return;
+        el("circle", { cx: x.toFixed(1), cy: y.toFixed(1), r: 1.8, fill: p[2] ? "var(--bad)" : "var(--c4)", opacity: p[2] ? 0.95 : 0.6 }, g);
+      });
+      r.P.forEach(function (p) {
+        el("circle", { cx: C + p[0] * S, cy: C - p[1] * S, r: M === 64 ? 3.2 : 4.5, fill: "var(--c1)", stroke: "var(--surface)", "stroke-width": 1.2 }, svg);
+      });
+      if (M === 4) {
+        var lab = { "1,1": "00", "-1,1": "01", "-1,-1": "11", "1,-1": "10" };
+        r.P.forEach(function (p) {
+          var key = (p[0] > 0 ? 1 : -1) + "," + (p[1] > 0 ? 1 : -1);
+          var t = el("text", { x: C + p[0] * S + (p[0] > 0 ? 10 : -10), y: C - p[1] * S - 10, "font-size": 13, "text-anchor": p[0] > 0 ? "start" : "end", "class": "t-b" }, svg);
+          t.textContent = lab[key];
+        });
+      }
+      $("qamName").textContent = NAME[M];
+      $("qamBits").textContent = BITS[M] + " ビット";
+      $("qamErr").textContent = (r.ser * 100).toFixed(r.ser > 0 && r.ser < 0.1 ? 1 : 0) + "%";
+      var msg;
+      if (st.mode === "auto") {
+        msg = "<b>自動（AMC）：</b>SN比 " + snr + " dB では <b>" + NAME[M] + "</b> を選択。" +
+          (M === 64 ? "電波が良いので 1 シンボルに 6 ビットを詰め込めます。" : M === 16 ? "64QAM では誤りが多すぎるため 16QAM に落としています。" : "電波が悪いので、速度を犠牲にして雑音に強い QPSK で通信を維持しています。");
+      } else if (r.ser >= 0.05) {
+        msg = "<b>誤りが多い状態です。</b>実際の LTE なら、ここで基地局がより下位の変調方式（または強い誤り訂正）に切り替えます。「自動（AMC）」を押して確かめてみましょう。";
+      } else {
+        msg = "<b>この SN比なら " + NAME[M] + " で安定して通信できます。</b>SN比を下げると、受信点が広がって隣の点の領域にはみ出していきます。";
+      }
+      $("amcState").innerHTML = msg;
+      document.querySelectorAll("#modChips .chip").forEach(function (b) { b.setAttribute("aria-pressed", String(b.dataset.mod === st.mode)); });
+    }
+    document.querySelectorAll("#modChips .chip").forEach(function (b) { b.addEventListener("click", function () { st.mode = b.dataset.mod; render(); }); });
+    $("snr").addEventListener("input", render);
+    render();
+  })();
+})();
+</script>
+</body>
+</html>

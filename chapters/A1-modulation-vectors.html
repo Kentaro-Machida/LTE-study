@@ -1,0 +1,876 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>付録A 変調をベクトル空間で理解する｜LTE Study</title>
+  <link rel="stylesheet" href="../assets/style.css">
+  <style>
+    /* 系列色（4系列）: dataviz validator で light/dark とも隣接ペア合格 */
+    :root { --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #4a3aa7; }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) { --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #9085e9; }
+    }
+    :root[data-theme="dark"] { --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #9085e9; }
+
+    .math { font-family: "Times New Roman", "Hiragino Mincho ProN", "Yu Mincho", serif; font-size: 1.15rem; text-align: center; margin: 14px 0; padding: 12px 10px; background: var(--surface-2); border-radius: 8px; overflow-x: auto; white-space: nowrap; line-height: 1.6; }
+    .math .v { font-style: italic; }
+    .math .note { display: block; font-family: var(--font); font-size: .8rem; color: var(--text-muted); white-space: normal; margin-top: 4px; }
+    .m { font-family: "Times New Roman", "Hiragino Mincho ProN", serif; font-style: italic; white-space: nowrap; }
+    .wgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; align-items: start; }
+    .wgrid svg { width: 100%; height: auto; display: block; }
+    .readout { display: grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap: 8px; margin-top: 10px; }
+    .readout div { background: var(--surface-2); border-radius: 8px; padding: 6px 10px; font-size: .8rem; color: var(--text-muted); line-height: 1.5; }
+    .readout b { display: block; font-family: var(--mono); font-size: 1.05rem; color: var(--text); }
+    .ctrl { display: grid; grid-template-columns: auto 1fr auto; gap: 6px 10px; align-items: center; font-size: .9rem; margin: 8px 0; }
+    .ctrl input[type=range] { width: 100%; accent-color: var(--accent); }
+    .ctrl output { font-family: var(--mono); min-width: 4.5em; text-align: right; }
+    .legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: .82rem; color: var(--text-muted); margin: 6px 0; }
+    .legend span::before { content: ""; display: inline-block; width: 16px; height: 0; border-top: 2px solid var(--sw); vertical-align: middle; margin-right: 6px; }
+    .legend span.dash::before { border-top-style: dashed; }
+    .legend span.dot::before { width: 9px; height: 9px; border: 0; border-radius: 50%; background: var(--sw); }
+    .chart-box { position: relative; }
+    .tt { position: absolute; pointer-events: none; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; box-shadow: var(--shadow); padding: 6px 10px; font-size: .8rem; line-height: 1.6; white-space: nowrap; z-index: 5; }
+    .tt i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+    .tt b { font-family: var(--mono); margin-left: 8px; }
+    .gram { display: grid; gap: 3px; font-family: var(--mono); font-size: .78rem; }
+    .gram div { padding: 6px 2px; text-align: center; border-radius: 4px; }
+    .gram .hd { color: var(--text-muted); background: none; }
+    .pt-hit { cursor: pointer; }
+    svg.drag { touch-action: none; cursor: crosshair; }
+  </style>
+</head>
+<body data-root="../" data-chapter="A1">
+<div class="page">
+<main>
+  <header class="chapter-hero">
+    <div class="eyebrow">APPENDIX A ／ PART I 付録</div>
+    <h1>変調をベクトル空間で理解する</h1>
+    <p class="lead"><a href="01-basics.html#s4">第1章 §4</a> では「点が多いほど1回の波で多くのビットを運べる」と説明しました。この付録では、その「点」の正体が<b>波形というベクトル</b>であることを示し、復調・雑音・誤り・OFDM までを線形代数の言葉（基底・内積・直交・射影・距離）で一気につなげます。</p>
+    <div class="goals"><h2>この付録のゴール</h2><ul>
+      <li>搬送波 <span class="m">A</span>cos(2π<span class="m">ft</span>+<span class="m">φ</span>) が、cos と −sin を基底とする<b>2次元ベクトル (I, Q)</b> で表せることを説明できる</li>
+      <li>受信機がやっている復調が、<b>内積による射影</b>（座標の読み取り）であることがわかる</li>
+      <li>雑音で誤る理由を「点と点の<b>距離</b>」で説明でき、点を4倍にすると約6dB必要になる理由がわかる</li>
+      <li>OFDM のサブキャリアが<b>互いに直交する基底</b>であり、LTE がたくさんの2次元空間を並べて使っていることがわかる</li>
+    </ul></div>
+  </header>
+
+  <div class="callout">
+    <span class="title">前提知識</span>
+    高校数学のベクトル（矢印・成分・内積）と三角関数がわかれば読めます。積分は「グラフの面積」として読めば十分です。数式が苦手な場合は、図を動かしながら読み進めてください。
+  </div>
+
+  <!-- ===================================================== -->
+  <h2 id="a1">1. なぜ「ベクトル」で考えるのか</h2>
+  <p>ベクトルとは、突き詰めると<b>「足し算」と「定数倍」ができるもの</b>のことです。矢印はその代表ですが、実は<b>波形（時間の関数）</b>も同じ性質を持っています。2つの波を足せば波になり、波を2倍すれば振幅2倍の波になります。つまり波形もベクトルとして扱えます。</p>
+  <p>ベクトルとして扱えると、線形代数の道具がそのまま使えます。通信で出てくる概念は、ほぼすべて次の表のように線形代数の言葉に言い換えられます。この付録は、この表を1行ずつ確かめていく構成です。</p>
+
+  <div class="table-wrap"><table>
+    <thead><tr><th>線形代数</th><th>通信での意味</th><th>節</th></tr></thead>
+    <tbody>
+      <tr><td>ベクトル</td><td>1シンボル分の波形（送りたい記号）</td><td class="center">§2</td></tr>
+      <tr><td>基底</td><td>cos 波と −sin 波（OFDMでは各サブキャリア）</td><td class="center">§2, §9</td></tr>
+      <tr><td>座標（成分）</td><td>I（同相成分）と Q（直交成分）</td><td class="center">§2</td></tr>
+      <tr><td>内積</td><td>2つの波形を掛けて積分した値（相関）</td><td class="center">§3</td></tr>
+      <tr><td>ノルムの2乗</td><td>シンボルのエネルギー（電力×時間）</td><td class="center">§3</td></tr>
+      <tr><td>直交</td><td>互いに干渉しない（混ざっても分離できる）</td><td class="center">§3, §9</td></tr>
+      <tr><td>射影</td><td>復調（受信波から I, Q を読み取る）</td><td class="center">§4</td></tr>
+      <tr><td>点の有限集合</td><td>変調方式（コンステレーション）</td><td class="center">§5</td></tr>
+      <tr><td>距離</td><td>誤りにくさ（点が離れているほど強い）</td><td class="center">§6, §7</td></tr>
+      <tr><td>次元</td><td>帯域幅×時間で決まる「送れる数の個数」</td><td class="center">§8</td></tr>
+    </tbody>
+  </table></div>
+
+  <!-- ===================================================== -->
+  <h2 id="a2">2. 2本の基底：cos と −sin</h2>
+  <p>LTE の電波は、周波数 <span class="m">f</span> の搬送波の<b>振幅 A と位相 φ</b> を1シンボル（LTEでは約67µs）ごとに変えて情報を運びます。三角関数の加法定理を使うと、この波は次のように<b>2つの決まった波の足し算</b>に分解できます。</p>
+  <div class="math">
+    <span class="v">A</span> cos(2π<span class="v">ft</span> + <span class="v">φ</span>) ＝ <span class="v">I</span> · cos(2π<span class="v">ft</span>) ＋ <span class="v">Q</span> · (−sin(2π<span class="v">ft</span>))
+    <span class="note">ただし I ＝ A cos φ、Q ＝ A sin φ。逆に A ＝ √(I² ＋ Q²)、φ ＝ atan2(Q, I)</span>
+  </div>
+  <p>右辺をよく見てください。<b>cos(2π<span class="m">ft</span>)</b> と <b>−sin(2π<span class="m">ft</span>)</b> はいつも同じ「決まった波」で、送る情報によって変わるのは係数の <span class="m">I</span> と <span class="m">Q</span> だけです。これは平面ベクトルを <span class="m">v</span> ＝ <span class="m">I</span>·<b>e</b>₁ ＋ <span class="m">Q</span>·<b>e</b>₂ と書くのとまったく同じ形です。</p>
+  <ul>
+    <li><b>基底</b>：<b>e</b>₁ ＝ cos 波、<b>e</b>₂ ＝ −sin 波</li>
+    <li><b>座標</b>：(<span class="m">I</span>, <span class="m">Q</span>)。I は In-phase（同相）、Q は Quadrature（直交、90°ずれた）の略です</li>
+    <li><b>振幅 A</b> ＝ ベクトルの長さ、<b>位相 φ</b> ＝ ベクトルの角度</li>
+  </ul>
+  <p>つまり<b>「どんな振幅・位相の波を送るか」＝「I/Q 平面上のどの点（矢印）を送るか」</b>です。下の図で確かめてみましょう。</p>
+
+  <figure class="figure" id="w-synth">
+    <div class="hint">左の平面をクリック／ドラッグするか、スライダーで I と Q を動かすと、右の波形が変わります。</div>
+    <div class="wgrid">
+      <svg class="drag" id="syn-plane" viewBox="0 0 300 300" role="img" aria-label="I/Q平面上のベクトル"></svg>
+      <div>
+        <svg id="syn-wave" viewBox="0 0 480 300" role="img" aria-label="合成された波形"></svg>
+        <div class="legend">
+          <span class="dash" style="--sw: var(--s1)">I · cos 成分</span>
+          <span class="dash" style="--sw: var(--s2)">Q · (−sin) 成分</span>
+          <span style="--sw: var(--text)">合計＝送信される波</span>
+        </div>
+      </div>
+    </div>
+    <div class="ctrl">
+      <label for="syn-i">I</label><input type="range" id="syn-i" min="-1.2" max="1.2" step="0.01" value="0.71"><output id="syn-i-o"></output>
+      <label for="syn-q">Q</label><input type="range" id="syn-q" min="-1.2" max="1.2" step="0.01" value="0.71"><output id="syn-q-o"></output>
+    </div>
+    <div class="btn-row" id="syn-presets">
+      <button class="btn" data-i="1" data-q="0">(1, 0) 純粋な cos</button>
+      <button class="btn" data-i="0" data-q="1">(0, 1) 90°進む</button>
+      <button class="btn" data-i="-1" data-q="0">(−1, 0) 反転</button>
+      <button class="btn" data-i="0.71" data-q="0.71">(0.71, 0.71) QPSKの1点</button>
+      <button class="btn" data-i="0.3" data-q="0">(0.3, 0) 小さい振幅</button>
+    </div>
+    <div class="readout">
+      <div>I（cos の量）<b id="syn-r-i"></b></div>
+      <div>Q（−sin の量）<b id="syn-r-q"></b></div>
+      <div>振幅 A ＝ 長さ<b id="syn-r-a"></b></div>
+      <div>位相 φ ＝ 角度<b id="syn-r-p"></b></div>
+    </div>
+    <figcaption>点を原点の周りに回すと、波の形は同じまま<b>左右にずれ</b>（位相）、原点から遠ざけると<b>背が高く</b>なります（振幅）。周波数は変わりません。</figcaption>
+  </figure>
+
+  <details class="more"><summary>もっと詳しく：複素数で書くと</summary>
+    <p>I/Q 平面は複素平面とみなせます。シンボルを複素数 <span class="m">s</span> ＝ <span class="m">I</span> ＋ <span class="m">jQ</span> とすると、送信波は</p>
+    <div class="math">Re{ (<span class="v">I</span> ＋ <span class="v">jQ</span>) · e<sup><span class="v">j</span>2π<span class="v">ft</span></sup> } ＝ <span class="v">I</span> cos(2π<span class="v">ft</span>) − <span class="v">Q</span> sin(2π<span class="v">ft</span>)</div>
+    <p>と書けます。通信の教科書や 3GPP の仕様書が変調シンボルを複素数で書くのはこのためです。複素数 <span class="m">s</span> の絶対値が振幅、偏角が位相です。モジュールの内部（ベースバンド処理）では、搬送波を取り除いたこの複素数 (I, Q) の列だけを計算しています。</p>
+  </details>
+
+  <!-- ===================================================== -->
+  <h2 id="a3">3. 内積と直交 ── 波形どうしの「角度」</h2>
+  <p>矢印の内積は「成分どうしを掛けて足す」でした。波形は無数の点（時刻）でできたベクトルなので、内積は<b>「各時刻で掛けて、全部足す」＝掛けて積分</b>になります。1シンボルの時間を <span class="m">T</span> とすると：</p>
+  <div class="math">
+    ⟨ <span class="v">x</span>, <span class="v">y</span> ⟩ ＝ (2/<span class="v">T</span>) ∫<sub>0</sub><sup><span class="v">T</span></sup> <span class="v">x</span>(<span class="v">t</span>) · <span class="v">y</span>(<span class="v">t</span>) d<span class="v">t</span>
+    <span class="note">係数 2/T は cos 波自身の内積がちょうど 1 になるように選んだ正規化です</span>
+  </div>
+  <p>この内積には矢印のときと同じ意味があります。</p>
+  <ul>
+    <li><b>⟨x, x⟩（ノルムの2乗）</b>は波の<b>エネルギー</b>に比例します。ベクトルが長い＝強い電波です。</li>
+    <li><b>⟨x, y⟩ ＝ 0 なら直交</b>。2つの波を足して送っても、受信側で完全に分けて取り出せます（§4）。</li>
+    <li>シンボル時間に搬送波がちょうど整数周期入っていれば、<b>⟨cos, cos⟩ ＝ 1、⟨−sin, −sin⟩ ＝ 1、⟨cos, −sin⟩ ＝ 0</b>。つまり cos と −sin は<b>正規直交基底</b>です。</li>
+  </ul>
+  <p>「掛けて積分」はグラフで見ると「掛け算した波の、上側の面積から下側の面積を引いたもの」です。cos × sin は上下の面積がきれいに打ち消し合うので 0 になります。</p>
+
+  <figure class="figure" id="w-inner">
+    <div class="hint">ボタンで波の組み合わせを変え、掛け算した波（下段）の面積の打ち消し合いを見てください。</div>
+    <div class="btn-row" id="inn-btns"></div>
+    <svg id="inn-svg" viewBox="0 0 480 300" role="img" aria-label="2つの波とその積"></svg>
+    <div class="legend">
+      <span style="--sw: var(--s1)">波 x(t)</span>
+      <span class="dash" style="--sw: var(--s2)">波 y(t)</span>
+      <span class="dot" style="--sw: color-mix(in srgb, var(--s1) 45%, transparent)">積が正の面積</span>
+      <span class="dot" style="--sw: color-mix(in srgb, var(--s2) 45%, transparent)">積が負の面積</span>
+    </div>
+    <div class="readout">
+      <div>内積 ⟨x, y⟩<b id="inn-val"></b></div>
+      <div style="grid-column: span 2">読み方<b id="inn-msg" style="font-family: var(--font); font-size: .9rem; font-weight: 600"></b></div>
+    </div>
+  </figure>
+
+  <!-- ===================================================== -->
+  <h2 id="a4">4. 復調＝射影 ── 受信機は「座標」を読み取っている</h2>
+  <p>正規直交基底があれば、ベクトル <span class="m">v</span> の座標は<b>基底との内積</b>で取り出せます（<span class="m">I</span> ＝ ⟨<span class="m">v</span>, <b>e</b>₁⟩）。これを<b>射影</b>と呼びます。受信機はまさにこれを回路（またはデジタル処理）で行っています。</p>
+  <div class="math">
+    <span class="v">I</span> ＝ ⟨ <span class="v">r</span>, cos ⟩、　<span class="v">Q</span> ＝ ⟨ <span class="v">r</span>, −sin ⟩
+    <span class="note">r(t)：受信した波。cos と −sin が直交しているので、I を読むときに Q の成分はちょうど 0 になって混ざらない</span>
+  </div>
+
+  <figure class="figure" data-hotspots data-hs-default="split">
+    <div class="hint">ブロックをクリックすると、そこで何をしているかが表示されます。</div>
+    <svg viewBox="0 0 360 440" role="img" aria-label="相関器による復調のブロック図" style="max-width: 420px; margin: 0 auto;">
+      <defs><marker id="ar4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--text-muted)"/></marker></defs>
+      <g class="line">
+        <line x1="180" y1="58" x2="180" y2="78"/>
+        <path d="M180 78 L90 78 L90 104" marker-end="url(#ar4)"/>
+        <path d="M180 78 L270 78 L270 104" marker-end="url(#ar4)"/>
+        <line x1="90" y1="148" x2="90" y2="176" marker-end="url(#ar4)"/>
+        <line x1="270" y1="148" x2="270" y2="176" marker-end="url(#ar4)"/>
+        <line x1="90" y1="226" x2="90" y2="256" marker-end="url(#ar4)"/>
+        <line x1="270" y1="226" x2="270" y2="256" marker-end="url(#ar4)"/>
+        <path d="M90 290 L90 316 L150 316" marker-end="url(#ar4)"/>
+        <path d="M270 290 L270 316 L210 316" marker-end="url(#ar4)"/>
+        <line x1="180" y1="346" x2="180" y2="376" marker-end="url(#ar4)"/>
+      </g>
+      <g data-hs="split">
+        <rect x="100" y="14" width="160" height="44" rx="10" fill="color-mix(in srgb, var(--c2) 14%, var(--surface))" stroke="var(--c2)" stroke-width="1.5"/>
+        <text x="180" y="41" text-anchor="middle" font-size="14" font-weight="700">受信波 r(t)</text>
+      </g>
+      <g data-hs="mix">
+        <circle cx="90" cy="126" r="22" fill="var(--surface)" stroke="var(--s1)" stroke-width="2"/>
+        <text x="90" y="131" text-anchor="middle" font-size="16" font-weight="700">×</text>
+        <text x="30" y="118" text-anchor="middle" font-size="12" class="t-muted">cos</text>
+        <circle cx="270" cy="126" r="22" fill="var(--surface)" stroke="var(--s2)" stroke-width="2"/>
+        <text x="270" y="131" text-anchor="middle" font-size="16" font-weight="700">×</text>
+        <text x="330" y="118" text-anchor="middle" font-size="12" class="t-muted">−sin</text>
+      </g>
+      <g data-hs="integ">
+        <rect x="50" y="178" width="80" height="48" rx="8" fill="var(--surface)" stroke="var(--border)" stroke-width="1.5"/>
+        <text x="90" y="207" text-anchor="middle" font-size="14">(2/T)∫dt</text>
+        <rect x="230" y="178" width="80" height="48" rx="8" fill="var(--surface)" stroke="var(--border)" stroke-width="1.5"/>
+        <text x="270" y="207" text-anchor="middle" font-size="14">(2/T)∫dt</text>
+      </g>
+      <g data-hs="iq">
+        <rect x="55" y="258" width="70" height="32" rx="16" fill="color-mix(in srgb, var(--s1) 16%, var(--surface))" stroke="var(--s1)" stroke-width="1.5"/>
+        <text x="90" y="279" text-anchor="middle" font-size="14" font-weight="700">I</text>
+        <rect x="235" y="258" width="70" height="32" rx="16" fill="color-mix(in srgb, var(--s2) 16%, var(--surface))" stroke="var(--s2)" stroke-width="1.5"/>
+        <text x="270" y="279" text-anchor="middle" font-size="14" font-weight="700">Q</text>
+      </g>
+      <g data-hs="decide">
+        <rect x="80" y="298" width="200" height="48" rx="10" fill="color-mix(in srgb, var(--c3) 14%, var(--surface))" stroke="var(--c3)" stroke-width="1.5"/>
+        <text x="180" y="319" text-anchor="middle" font-size="13" font-weight="700">判定：いちばん近い点は？</text>
+        <text x="180" y="336" text-anchor="middle" font-size="11" class="t-muted">コンステレーションと比較</text>
+      </g>
+      <g data-hs="bits">
+        <rect x="110" y="378" width="140" height="40" rx="10" fill="var(--surface-2)" stroke="var(--border)" stroke-width="1.5"/>
+        <text x="180" y="403" text-anchor="middle" font-size="14" font-family="var(--mono)">→ 1 0 1 1</text>
+      </g>
+    </svg>
+    <div class="hs-panel"></div>
+    <template data-hs-content="split"><h4>受信波 r(t)</h4><p>アンテナで受けた波。送信した I·cos − Q·sin に、伝搬による減衰・位相の回転と雑音が加わっています。これを2つの枝に分けて、それぞれの基底との内積を計算します。</p></template>
+    <template data-hs-content="mix"><h4>掛け算（ミキサ）</h4><p>受信波に、端末内の発振器で作った cos 波と −sin 波をそれぞれ掛けます。これが内積の「各時刻で掛ける」部分です。実際のモジュールでは、まずアナログ回路（ミキサ）で搬送波を取り除き、その後 AD 変換してデジタルで処理します。発振器の周波数・位相が送信側とずれていると基底がずれてしまうので、端末は基地局の同期信号に合わせて常に補正しています（第3章のセルサーチ）。</p></template>
+    <template data-hs-content="integ"><h4>積分（足し合わせ）</h4><p>1シンボル時間 T にわたって足し合わせると、内積の値＝座標が得られます。直交性のおかげで、I の枝では Q の成分がちょうど 0 に打ち消されます（§3 の図の「cos × (−sin)」）。デジタル処理では、サンプルの積和演算（FFT の一部）として実行されます。</p></template>
+    <template data-hs-content="iq"><h4>座標 (I, Q)</h4><p>2つの内積の結果が受信ベクトルの座標です。雑音がなければ送信した点そのものですが、実際には少しずれた位置になります（§6）。</p></template>
+    <template data-hs-content="decide"><h4>判定：最も近い点を選ぶ</h4><p>受信した座標から、コンステレーションの中で<b>ユークリッド距離が最も近い点</b>を「送られた点」と判定します。後で見るように、雑音がどの方向にも同じように広がる場合、これが最も誤りの少ない判定（最尤判定）になります。実際の LTE では、点を1つに決め打ちせず「各ビットが 0/1 である確からしさ（軟判定値）」を計算して誤り訂正（ターボ符号）に渡します。</p></template>
+    <template data-hs-content="bits"><h4>ビット列に戻す</h4><p>選んだ点に割り当てられたビット列を出力します。割り当てには<b>グレイ符号</b>（隣の点とは1ビットだけ違う）が使われます（§5）。</p></template>
+  </figure>
+
+  <!-- ===================================================== -->
+  <h2 id="a5">5. 変調方式＝ベクトルの有限集合（コンステレーション）</h2>
+  <p>送信側は I/Q 平面上に<b>あらかじめ決めた M 個の点</b>を用意しておき、送りたいビット列に応じて1点を選んで送ります。M 個から1つを選ぶ情報量は <b>log₂M ビット</b>です。この点の集合がコンステレーション（星座図）です。</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>方式</th><th class="center">点の数 M</th><th class="center">ビット/シンボル</th><th>点の並び方</th><th class="center">3GPP の正規化係数</th></tr></thead>
+    <tbody>
+      <tr><td>BPSK</td><td class="center">2</td><td class="center">1</td><td>I 軸上の ±1（1次元しか使わない）</td><td class="center">1/√2 ×(1+j)系</td></tr>
+      <tr><td>QPSK</td><td class="center">4</td><td class="center">2</td><td>I, Q それぞれ ±1</td><td class="center">1/√2</td></tr>
+      <tr><td>16QAM</td><td class="center">16</td><td class="center">4</td><td>I, Q それぞれ ±1, ±3</td><td class="center">1/√10</td></tr>
+      <tr><td>64QAM</td><td class="center">64</td><td class="center">6</td><td>I, Q それぞれ ±1, ±3, ±5, ±7</td><td class="center">1/√42</td></tr>
+      <tr><td>256QAM</td><td class="center">256</td><td class="center">8</td><td>I, Q それぞれ ±1 … ±15</td><td class="center">1/√170</td></tr>
+    </tbody>
+  </table></div>
+  <p>最後の列の <b>正規化係数</b>に注目してください。16QAM の点 (±1, ±3) の長さの2乗の平均は (1+9)/2 × 2 ＝ 10 なので、1/√10 を掛けると<b>平均エネルギー（ノルムの2乗の平均）がちょうど 1</b> になります。3GPP の仕様（TS 36.211）はどの方式でもこの正規化をしています。つまり<b>送信電力が同じなら、どの方式の点も「半径およそ1の範囲」に詰め込まれる</b>ということです。これが §7 の話の出発点になります。</p>
+
+  <figure class="figure" id="w-const">
+    <div class="hint">方式を切り替え、点をクリックすると、その点のビット列と実際の波形が表示されます。すべて平均エネルギー 1 に正規化してあります。</div>
+    <div class="btn-row" id="con-btns"></div>
+    <div class="wgrid">
+      <svg id="con-plane" viewBox="0 0 340 340" role="img" aria-label="コンステレーション"></svg>
+      <div>
+        <div class="readout" style="margin-top:0">
+          <div>点の数 M<b id="con-m"></b></div>
+          <div>ビット/シンボル<b id="con-b"></b></div>
+          <div>最小距離 d<sub>min</sub><b id="con-d"></b></div>
+          <div>選んだ点のビット<b id="con-bits"></b></div>
+          <div>座標 (I, Q)<b id="con-iq"></b></div>
+          <div>振幅・位相<b id="con-ap"></b></div>
+        </div>
+        <svg id="con-wave" viewBox="0 0 300 120" role="img" aria-label="選んだ点の1シンボル分の波形" style="margin-top:10px"></svg>
+        <p class="small muted" style="margin:4px 0 0">↑ 選んだ点の1シンボル分の波形（点線は振幅 1 の目安）</p>
+      </div>
+    </div>
+    <figcaption>数字は<b>グレイ符号</b>によるビットの割り当て例です。上下左右に隣り合う点どうしは必ず1ビットだけ違うので、雑音で隣の点に間違えてもビット誤りは1個で済みます。LTE の実際の割り当て表は TS 36.211 §7.1 で定義されています（考え方は同じ）。</figcaption>
+  </figure>
+
+  <!-- ===================================================== -->
+  <h2 id="a6">6. 雑音＝ランダムなベクトル、判定＝いちばん近い点</h2>
+  <p>受信した座標は、送信した点 <span class="m">s</span> に<b>雑音ベクトル</b> <span class="m">n</span> が足されたものになります。</p>
+  <div class="math"><span class="v">r</span> ＝ <span class="v">s</span> ＋ <span class="v">n</span>、　<span class="v">n</span> ＝ (<span class="v">n</span><sub>I</sub>, <span class="v">n</span><sub>Q</sub>)　（各成分は平均0・分散 σ² の正規分布）</div>
+  <p>熱雑音（AWGN：加法性白色ガウス雑音）には重要な性質があります。<b>どの基底で見ても同じ大きさで、どの方向にも偏らない</b>（等方的）のです。そのため受信点は送信点を中心に<b>丸く</b>ばらつきます。</p>
+  <p>丸いばらつきなら、ずれた点を「最も近い点」に戻すのが一番よい判定です。各点について「ここより近い」領域（ボロノイ領域）を描くと、QAM では碁盤の目になります。受信点が<b>自分の升目からはみ出したとき</b>だけ誤りになります。</p>
+
+  <figure class="figure" id="w-noise">
+    <div class="hint">SN比（Es/N0）を下げると雑音の雲が広がり、升目（点線＝判定境界）からはみ出した点が赤く表示されます。</div>
+    <div class="btn-row" id="noi-btns"></div>
+    <div class="ctrl">
+      <label for="noi-snr">Es/N0</label><input type="range" id="noi-snr" min="0" max="35" step="0.5" value="18"><output id="noi-snr-o"></output>
+    </div>
+    <div class="wgrid">
+      <svg id="noi-plane" viewBox="0 0 340 340" role="img" aria-label="雑音の加わった受信点"></svg>
+      <div>
+        <div class="legend">
+          <span class="dot" style="--sw: var(--text)">送信点（正しい位置）</span>
+          <span class="dot" style="--sw: color-mix(in srgb, var(--s1) 60%, transparent)">正しく判定された受信点</span>
+          <span class="dot" style="--sw: var(--bad)">隣の升目に入った受信点（誤り）</span>
+        </div>
+        <div class="readout">
+          <div>雑音の標準偏差 σ<b id="noi-sig"></b></div>
+          <div>余裕 (d<sub>min</sub>/2) ÷ σ<b id="noi-margin"></b></div>
+          <div>シンボル誤り率（実測）<b id="noi-ser"></b></div>
+          <div>シンボル誤り率（理論）<b id="noi-th"></b></div>
+          <div>ビット誤り率（実測）<b id="noi-ber"></b></div>
+        </div>
+        <div class="btn-row"><button class="btn" id="noi-re">もう一度サンプリング</button></div>
+        <p class="small muted">実測値は 2万シンボルの乱数シミュレーション。誤り訂正符号を使わない場合の値です。</p>
+      </div>
+    </div>
+    <figcaption>「余裕」は、点から判定境界までの距離（d<sub>min</sub>/2）が雑音の標準偏差の何倍あるかです。おおよそ <b>3倍で誤り率 0.1%台、4.5倍で 10⁻⁵ 程度</b>まで下がります。誤り率は距離で決まる、というのがこの図の要点です。</figcaption>
+  </figure>
+
+  <!-- ===================================================== -->
+  <h2 id="a7">7. 同じ電力で点を増やすと、点どうしが近づく</h2>
+  <p>§5 で見たとおり、送信電力（平均エネルギー <span class="m">E</span><sub>s</sub>）が同じなら、点は同じ広さの範囲に詰め込まれます。点を増やすほど点と点の間隔（最小距離 <span class="m">d</span><sub>min</sub>）は縮みます。正方形の M-QAM では次の式になります。</p>
+  <div class="math">
+    <span class="v">d</span><sub>min</sub>² ＝ 6 <span class="v">E</span><sub>s</sub> ／ (<span class="v">M</span> − 1)
+    <span class="note">QPSK：2Es、16QAM：0.4Es、64QAM：0.095Es、256QAM：0.024Es</span>
+  </div>
+  <p>点を4倍（＝ビットを2つ追加）にするたびに、<span class="m">M</span> − 1 がほぼ4倍になるので <span class="m">d</span><sub>min</sub>² はほぼ 1/4 になります。同じ誤り率を保つには雑音を1/4に（＝ SN比を4倍に）しなければなりません。<b>4倍 ≈ 6dB</b> です。これが「1シンボルに2ビット多く乗せるには、約6dB良い電波が要る」という法則の正体です。</p>
+
+  <figure class="figure" id="w-ser">
+    <div class="hint">グラフ上でポインタを動かすと、その SN比での各方式の誤り率が表示されます。</div>
+    <div class="legend" id="ser-legend"></div>
+    <div class="chart-box" id="ser-box"><svg id="ser-svg" role="img" aria-label="変調方式ごとのシンボル誤り率とSN比の関係"></svg><div class="tt" id="ser-tt" hidden></div></div>
+    <figcaption>AWGN 環境・誤り訂正なしの理論式による値（正方形 QAM の厳密式）。曲線どうしの間の数字は、誤り率 10⁻⁵ を得るのに必要な SN比の差です。</figcaption>
+    <details class="more"><summary>表で見る</summary>
+      <div class="table-wrap"><table id="ser-table"></table></div>
+    </details>
+  </figure>
+
+  <p>グラフから読み取れることをまとめます。</p>
+  <ul>
+    <li>QPSK → 16QAM → 64QAM → 256QAM と進むごとに、同じ誤り率に必要な SN比が<b>約 6〜7dB ずつ</b>増えます。</li>
+    <li>曲線は「崖」の形をしています。<b>崖より右（電波が良い）では誤りはほぼゼロ、崖の手前では急に誤りだらけ</b>になります。LTE の AMC（適応変調）は、今の SN比で崖の右側に収まる、いちばん点の多い方式を選ぶ仕組みです。</li>
+    <li>実際の LTE は誤り訂正符号を併用するため、グラフより 5〜10dB 程度低い SN比でも各方式を使えます。ただし「点を4倍にするたびに約6dB」という<b>傾きの関係は変わりません</b>。</li>
+  </ul>
+
+  <!-- ===================================================== -->
+  <h2 id="a8">8. 次元の数＝送れる数字の個数 ── シャノン限界とのつながり</h2>
+  <p>ここまでは1シンボル＝2次元（I と Q）の世界でした。では、1秒間にいくつの「次元」を使えるのでしょうか。標本化定理（ナイキスト）によると、<b>帯域幅 B の信号は、1秒あたり約 2B 個の実数（＝ B 個の複素数）で完全に表せます</b>。つまり帯域幅は「1秒あたりに使える次元の数」そのものです。第1章の「帯域幅＝道路の車線」のたとえは、ベクトル空間では<b>次元の数</b>のことだったのです。</p>
+  <p>LTE の 20MHz キャリアで具体的に計算してみます。</p>
+  <div class="table-wrap"><table>
+    <tbody>
+      <tr><th>サブキャリア数</th><td>1,200 本（15kHz 間隔 × 1,200 ＝ 18MHz。残りはガードバンド）</td></tr>
+      <tr><th>1ms あたりのシンボル数</th><td>14（通常サイクリックプレフィックスの場合）</td></tr>
+      <tr><th>1秒あたりの2次元空間の数</th><td>1,200 × 14 × 1,000 ＝ <b>1,680万個</b>（リソースエレメント）</td></tr>
+      <tr><th>64QAM で運べる生のビット</th><td>1,680万 × 6 ＝ 約 <b>100Mbps</b>（1レイヤあたり）</td></tr>
+      <tr><th>実際の最大値</th><td>参照信号・制御チャネル・誤り訂正の冗長分を引くと約 75Mbps。2×2 MIMO で2倍の約 150Mbps ＝ Cat-4 の下り最大値</td></tr>
+    </tbody>
+  </table></div>
+  <p>一方、1つの2次元空間に誤りなく詰め込める情報量には上限があります。これが<b>シャノン限界</b>です。</p>
+  <div class="math">
+    <span class="v">C</span> ＝ <span class="v">B</span> · log₂(1 ＋ SNR)　[bit/s]
+    <span class="note">1つの複素次元（＝1シンボル）あたり最大 log₂(1＋SNR) ビット</span>
+  </div>
+  <p>SNR が大きいとき、SN比が 2倍（3dB）になるごとに log₂(1＋SNR) は約 1 増えます。<b>「3dB で 1ビット」＝「6dB で 2ビット」</b>で、§7 の QAM の法則と同じ傾きです。QAM の曲線とシャノン限界の間には誤り訂正なしで約 9dB の差（ギャップ）がありますが、ターボ符号などの誤り訂正は、多数のシンボルをまとめて<b>高次元空間の中で点を賢く配置する</b>ことで、このギャップを 1〜2dB まで縮めています。</p>
+
+  <!-- ===================================================== -->
+  <h2 id="a9">9. OFDM ── 直交する基底をたくさん並べる</h2>
+  <p>LTE の下りは OFDM（直交周波数分割多重）です。これもベクトル空間で見ると単純です。§3 の図で「サブキャリア2 × サブキャリア3」の内積が 0 になったことを思い出してください。<b>シンボル時間 T にちょうど整数周期ずつ違う周波数の波どうしは、互いに直交</b>します。</p>
+  <p>LTE ではシンボル時間（有効部分）が約 66.7µs、その逆数の <b>15kHz 間隔</b>でサブキャリアを並べます。すると 1,200 本のサブキャリアはすべて互いに直交する基底になり、それぞれが独立した2次元空間（I/Q 平面）を持ちます。基地局は各平面に1つずつコンステレーションの点を置き、全部を足した波を送ります。受信側は各サブキャリアとの内積（実際には FFT で一括計算）でそれぞれの座標を取り出します。周波数の重なりがあっても混ざらないのは、直交しているからです。</p>
+
+  <figure class="figure" id="w-ofdm">
+    <div class="hint">スライダーで「受信側の周波数のずれ」を加えると、直交性が崩れて隣のサブキャリアに漏れ（干渉）が出ます。</div>
+    <div class="ctrl">
+      <label for="ofd-d">周波数ずれ δ</label><input type="range" id="ofd-d" min="0" max="0.5" step="0.005" value="0"><output id="ofd-d-o"></output>
+    </div>
+    <div class="wgrid">
+      <div>
+        <svg id="ofd-wave" viewBox="0 0 320 220" role="img" aria-label="4本のサブキャリアの波形"></svg>
+        <p class="small muted" style="margin:4px 0 0">1シンボル時間 T の中の4本のサブキャリア（k 周期ずつ）</p>
+      </div>
+      <div>
+        <div class="small" style="margin-bottom:6px"><b>内積の大きさ |⟨受信側の基底 k, 届いた波 m⟩|</b></div>
+        <div class="gram" id="ofd-gram"></div>
+        <p class="small muted" style="margin:6px 0 0">対角（k＝m）が自分の信号、それ以外は隣への漏れ。色が濃いほど値が大きい（0〜1）。</p>
+      </div>
+    </div>
+    <div class="readout">
+      <div>ずれの周波数（15kHz 間隔）<b id="ofd-hz"></b></div>
+      <div>2GHz 帯で同じドップラーになる速度<b id="ofd-v"></b></div>
+      <div>自分の信号の残り<b id="ofd-self"></b></div>
+      <div>隣への漏れ（最大）<b id="ofd-leak"></b></div>
+    </div>
+  </figure>
+
+  <div class="callout robot">
+    <span class="title">私たちのロボットでは</span>
+    <p>移動すると電波の周波数がわずかにずれます（ドップラー効果）。2GHz 帯・時速 6km の歩行速度ロボットなら約 11Hz、δ ≈ 0.0007 で、直交性への影響は無視できます。問題になるのは速度よりも<b>端末の発振器（水晶）の周波数誤差</b>で、モジュールは基地局の同期信号を使って常に補正しています。低温・高温で発振器がずれやすいため、屋外で使うロボットではモジュールの動作温度範囲の確認が欠かせません（第6章）。</p>
+  </div>
+
+  <!-- ===================================================== -->
+  <h2 id="a10">10. MIMO ── アンテナの数だけ空間を増やす</h2>
+  <p>アンテナを2本使う 2×2 MIMO では、送信も受信も2つの値の組（2次元の複素ベクトル）になります。電波の伝わり方は 2×2 の行列 <span class="m">H</span> で表せます。</p>
+  <div class="math"><span class="v">y</span> ＝ <span class="v">H</span> <span class="v">x</span> ＋ <span class="v">n</span>　（<span class="v">x</span>, <span class="v">y</span>, <span class="v">n</span> は2次元、<span class="v">H</span> は 2×2 行列）</div>
+  <p><span class="m">H</span> の2本の列ベクトルが「十分違う向き」を向いていれば（線形独立に近ければ）、受信側は逆行列のような処理で2つのデータを分離できます。これが同じ周波数・同じ時間で2倍のデータを送れる仕組みです。逆に、2本のアンテナが近すぎたり向きが揃いすぎたりして <span class="m">H</span> の列が似てしまうと、分離できず速度が上がりません。第6章でアンテナ間のアイソレーションや相関（ECC）が問題になるのはこのためです。</p>
+
+  <!-- ===================================================== -->
+  <h2 id="a11">11. ロボット開発者への示唆</h2>
+  <div class="card-grid">
+    <div class="card"><h3>3dB は「1ビット」</h3><p class="small">電波が良い領域では、SN比 3dB ≈ 1シンボルあたり1ビットです。アンテナケーブルの損失 3dB や、筐体による 3dB の減衰は、速度に直すと無視できない差になります（第6章のケーブル損失計算）。</p></div>
+    <div class="card"><h3>上りは電力に上限がある</h3><p class="small">端末の送信電力は約 23dBm（200mW）が上限で、基地局より桁違いに小さいため、上りの SN比は下りより悪くなりがちです。映像を送るロボットは上りの変調が上がりにくいことを前提に設計します（例：Cat-4 の上りは 16QAM まで）。</p></div>
+    <div class="card"><h3>「崖」を意識した設計</h3><p class="small">誤り率は SN比に対して崖のように変わります。電波の境界付近では速度が段階的に落ちるので、映像のビットレート適応と、制御コマンドの優先送信を組み合わせます（第1章・第8章）。</p></div>
+    <div class="card"><h3>ノイズは「距離」を食う</h3><p class="small">モーターや DC-DC コンバータのノイズは σ を大きくし、点どうしの余裕を直接減らします（デセンス）。受信感度の劣化 1dB は、判定の余裕が約 11% 減ることと同じです。</p></div>
+  </div>
+
+  <h2>まとめ</h2>
+  <ul>
+    <li>1シンボルの搬送波は、<b>cos と −sin を正規直交基底とする2次元ベクトル (I, Q)</b> である。振幅は長さ、位相は角度。</li>
+    <li>波形の<b>内積は「掛けて積分」</b>。ノルム²はエネルギー、内積 0 は直交（干渉しない）。</li>
+    <li>復調は<b>基底への射影</b>で座標を読み取り、<b>最も近い点</b>を選ぶこと。</li>
+    <li>電力一定で点を4倍にすると <b>d<sub>min</sub>² が約1/4 → 約6dB 余分に必要</b>。これが変調方式と電波品質の関係の正体。</li>
+    <li>帯域幅は<b>1秒あたりの次元数</b>。OFDM は直交するサブキャリアを並べて、2次元空間を1秒に1,680万個（20MHz）使っている。</li>
+  </ul>
+
+  <h2>用語</h2>
+  <dl class="terms">
+    <dt>基底</dt><dd>空間のすべてのベクトルを「係数×基本ベクトル」の和で表すための基本ベクトルの組。変調では cos 波と −sin 波。</dd>
+    <dt>I / Q</dt><dd>同相成分（In-phase）と直交成分（Quadrature）。シンボルの座標。</dd>
+    <dt>内積</dt><dd>波形どうしを掛けて積分した値。直交なら 0。</dd>
+    <dt>射影</dt><dd>基底との内積で座標を取り出す操作。受信機の復調（相関器）。</dd>
+    <dt>E<sub>s</sub>/N<sub>0</sub></dt><dd>1シンボルのエネルギーと雑音電力密度の比。1シンボルあたりの SN比。</dd>
+    <dt>d<sub>min</sub></dt><dd>コンステレーションの点どうしの最小距離。大きいほど雑音に強い。</dd>
+    <dt>AWGN</dt><dd>加法性白色ガウス雑音。どの方向にも同じ大きさで広がる雑音モデル。</dd>
+    <dt>グレイ符号</dt><dd>隣り合う点のビット列が1ビットだけ異なるようにする割り当て。</dd>
+    <dt>シャノン限界</dt><dd>C ＝ B log₂(1＋SNR)。誤りなく送れる情報速度の理論上限。</dd>
+    <dt>OFDM</dt><dd>互いに直交するサブキャリアを多数並べて同時に送る方式。LTE の下り。</dd>
+    <dt>リソースエレメント</dt><dd>LTE の最小単位（1サブキャリア × 1シンボル）。1つの2次元空間に1点を置く。</dd>
+  </dl>
+
+  <h2>確認クイズ</h2>
+  <div class="quiz" data-quiz="A1"></div>
+
+  <section class="sources"><h2>参考・出典</h2><ul>
+    <li><a href="https://portal.3gpp.org/desktopmodules/Specifications/SpecificationDetails.aspx?specificationId=2425">3GPP TS 36.211 E-UTRA; Physical channels and modulation（§7.1 変調マッパ：QPSK 1/√2、16QAM 1/√10、64QAM 1/√42、256QAM 1/√170 の正規化）</a></li>
+    <li><a href="https://web.stanford.edu/~dntse/wireless_book.html">D. Tse, P. Viswanath, <i>Fundamentals of Wireless Communication</i>（信号空間・AWGN・OFDM・MIMO、オンライン公開）</a></li>
+    <li><a href="https://ocw.mit.edu/courses/6-450-principles-of-digital-communications-i-fall-2006/">MIT OpenCourseWare 6.450 Principles of Digital Communications I（信号空間と内積による復調）</a></li>
+    <li><a href="https://people.math.harvard.edu/~ctm/home/text/others/shannon/entropy/entropy.pdf">C. E. Shannon, "A Mathematical Theory of Communication" (1948)</a></li>
+    <li>J. G. Proakis, M. Salehi, <i>Digital Communications</i>, 5th ed., McGraw-Hill（M-QAM の誤り率の式）</li>
+  </ul><p>確認日: 2026-09</p></section>
+</main>
+</div>
+<script src="../assets/data/quiz/chA1.js"></script>
+<script src="../assets/app.js"></script>
+<script>
+(function () {
+  "use strict";
+  const NS = "http://www.w3.org/2000/svg";
+  const TAU = Math.PI * 2;
+  const $ = (id) => document.getElementById(id);
+  function S(tag, attrs, parent) {
+    const el = document.createElementNS(NS, tag);
+    for (const k in attrs) el.setAttribute(k, attrs[k]);
+    if (parent) parent.append(el);
+    return el;
+  }
+  const clear = (el) => { while (el.firstChild) el.firstChild.remove(); };
+  const fmt = (x, d = 2) => (Math.abs(x) < 0.005 && d <= 2 ? 0 : x).toFixed(d);
+  const expFmt = (p) => {
+    if (p <= 0) return "0";
+    if (p >= 0.01) return (p * 100).toFixed(1) + "%";
+    const e = Math.floor(Math.log10(p)), m = p / Math.pow(10, e);
+    return m.toFixed(1) + "×10" + String(e).replace("-", "⁻").replace(/\d/g, (c) => "⁰¹²³⁴⁵⁶⁷⁸⁹"[c]);
+  };
+
+  // ---------- 数学ユーティリティ ----------
+  // erfc: Numerical Recipes erfcc（相対誤差 < 1.2e-7）
+  function erfc(x) {
+    const z = Math.abs(x), t = 1 / (1 + 0.5 * z);
+    const r = t * Math.exp(-z * z - 1.26551223 + t * (1.00002368 + t * (0.37409196 + t * (0.09678418 + t * (-0.18628806 + t * (0.27886807 + t * (-1.13520398 + t * (1.48851587 + t * (-0.82215223 + t * 0.17087277)))))))));
+    return x >= 0 ? r : 2 - r;
+  }
+  const Qf = (x) => 0.5 * erfc(x / Math.SQRT2);
+  // 正方形 M-QAM（M=4 は QPSK）のシンボル誤り率（AWGN・厳密式）
+  function serQAM(M, esn0) {
+    const L = Math.sqrt(M);
+    const p = 2 * (1 - 1 / L) * Qf(Math.sqrt(3 * esn0 / (M - 1)));
+    return 1 - (1 - p) * (1 - p);
+  }
+  function gauss() { let u = 0, v = 0; while (u === 0) u = Math.random(); v = Math.random(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(TAU * v); }
+  const gray = (i) => i ^ (i >> 1);
+  const bin = (x, n) => x.toString(2).padStart(n, "0");
+
+  // コンステレーション（平均エネルギー1に正規化）
+  function constellation(M) {
+    if (M === 2) return { M, L: 1, norm: 1, levels: [-1, 1], pts: [{ i: -1, q: 0, bits: "0" }, { i: 1, q: 0, bits: "1" }], dmin: 2 };
+    const L = Math.sqrt(M), k = Math.log2(L);
+    const levels = []; for (let a = 0; a < L; a++) levels.push(2 * a - (L - 1));
+    const norm = Math.sqrt(2 * (M - 1) / 3); // √(平均エネルギー): QPSK √2, 16QAM √10, 64QAM √42, 256QAM √170
+    const pts = [];
+    for (let a = 0; a < L; a++) for (let b = 0; b < L; b++) {
+      pts.push({ i: levels[a] / norm, q: levels[b] / norm, ai: a, bq: b, bits: bin(gray(a), k) + bin(gray(b), k) });
+    }
+    return { M, L, k, norm, levels, pts, dmin: 2 / norm };
+  }
+
+  // =====================================================
+  // 図1: I/Q 合成器
+  // =====================================================
+  (function synth() {
+    const plane = $("syn-plane"), wave = $("syn-wave");
+    const si = $("syn-i"), sq = $("syn-q");
+    const C = 150, R = 105;
+    // 平面の静的部分
+    S("circle", { cx: C, cy: C, r: R, fill: "none", stroke: "var(--border)", "stroke-dasharray": "4 4" }, plane);
+    S("line", { x1: 16, y1: C, x2: 284, y2: C, stroke: "var(--text-muted)", "stroke-width": 1.2 }, plane);
+    S("line", { x1: C, y1: 16, x2: C, y2: 284, stroke: "var(--text-muted)", "stroke-width": 1.2 }, plane);
+    [[C + R, C + 16, "1"], [C - R, C + 16, "−1"], [C + 8, C - R + 4, "1"], [C + 8, C + R + 4, "−1"]].forEach(([x, y, t]) => { const e = S("text", { x, y, "font-size": 11, class: "t-muted", "text-anchor": "middle" }, plane); e.textContent = t; });
+    const lx = S("text", { x: 282, y: C - 8, "font-size": 12, "text-anchor": "end", fill: "var(--s1)", "font-weight": 700 }, plane); lx.textContent = "I（cos）";
+    const ly = S("text", { x: C + 8, y: 26, "font-size": 12, fill: "var(--s2)", "font-weight": 700 }, plane); ly.textContent = "Q（−sin）";
+    const defs = S("defs", {}, plane);
+    const mk = S("marker", { id: "syn-ar", viewBox: "0 0 10 10", refX: 8, refY: 5, markerWidth: 6, markerHeight: 6, orient: "auto" }, defs);
+    S("path", { d: "M0,0 L10,5 L0,10 z", fill: "var(--accent)" }, mk);
+    const projI = S("line", { stroke: "var(--s1)", "stroke-width": 1.5, "stroke-dasharray": "4 3" }, plane);
+    const projQ = S("line", { stroke: "var(--s2)", "stroke-width": 1.5, "stroke-dasharray": "4 3" }, plane);
+    const arc = S("path", { fill: "none", stroke: "var(--text-muted)", "stroke-width": 1 }, plane);
+    const vec = S("line", { x1: C, y1: C, stroke: "var(--accent)", "stroke-width": 2.5, "marker-end": "url(#syn-ar)" }, plane);
+    const dot = S("circle", { r: 8, fill: "var(--accent)", stroke: "var(--surface)", "stroke-width": 2 }, plane);
+
+    // 波形の静的部分
+    const W0 = 36, W1 = 470, Y0 = 150, AMP = 78;
+    S("line", { x1: W0, y1: Y0, x2: W1, y2: Y0, stroke: "var(--text-muted)", "stroke-width": 1 }, wave);
+    S("line", { x1: W0, y1: 20, x2: W0, y2: 280, stroke: "var(--text-muted)", "stroke-width": 1 }, wave);
+    [[Y0 - AMP, "+1"], [Y0 + AMP, "−1"]].forEach(([y, t]) => { S("line", { x1: W0 - 4, y1: y, x2: W0, y2: y, stroke: "var(--text-muted)" }, wave); const e = S("text", { x: W0 - 6, y: y + 4, "font-size": 11, "text-anchor": "end", class: "t-muted" }, wave); e.textContent = t; });
+    const tl = S("text", { x: W1, y: Y0 + 16, "font-size": 11, "text-anchor": "end", class: "t-muted" }, wave); tl.textContent = "時間 →（2周期分）";
+    const ampHi = S("line", { x1: W0, x2: W1, stroke: "var(--text-muted)", "stroke-dasharray": "2 4" }, wave);
+    const ampLo = S("line", { x1: W0, x2: W1, stroke: "var(--text-muted)", "stroke-dasharray": "2 4" }, wave);
+    const ampT = S("text", { x: W1, "font-size": 11, "text-anchor": "end", class: "t-muted" }, wave);
+    const pI = S("path", { fill: "none", stroke: "var(--s1)", "stroke-width": 1.6, "stroke-dasharray": "5 4" }, wave);
+    const pQ = S("path", { fill: "none", stroke: "var(--s2)", "stroke-width": 1.6, "stroke-dasharray": "5 4" }, wave);
+    const pS = S("path", { fill: "none", stroke: "var(--text)", "stroke-width": 2.5 }, wave);
+
+    const path = (fn) => { let d = ""; for (let n = 0; n <= 240; n++) { const u = n / 240, x = W0 + u * (W1 - W0), y = Y0 - AMP * fn(u * 2); d += (n ? "L" : "M") + x.toFixed(1) + " " + y.toFixed(1); } return d; };
+    function draw() {
+      const I = +si.value, Q = +sq.value;
+      const A = Math.hypot(I, Q), ph = Math.atan2(Q, I);
+      const px = C + I * R, py = C - Q * R;
+      vec.setAttribute("x2", px); vec.setAttribute("y2", py);
+      vec.style.display = A < 0.05 ? "none" : "";
+      dot.setAttribute("cx", px); dot.setAttribute("cy", py);
+      projI.setAttribute("x1", px); projI.setAttribute("y1", py); projI.setAttribute("x2", px); projI.setAttribute("y2", C);
+      projQ.setAttribute("x1", px); projQ.setAttribute("y1", py); projQ.setAttribute("x2", C); projQ.setAttribute("y2", py);
+      const ar = 24;
+      if (A > 0.15) { const large = Math.abs(ph) > Math.PI ? 1 : 0, sweep = ph > 0 ? 0 : 1; arc.setAttribute("d", `M${C + ar} ${C} A${ar} ${ar} 0 ${large} ${sweep} ${C + ar * Math.cos(ph)} ${C - ar * Math.sin(ph)}`); } else arc.setAttribute("d", "");
+      pI.setAttribute("d", path((c) => I * Math.cos(TAU * c)));
+      pQ.setAttribute("d", path((c) => -Q * Math.sin(TAU * c)));
+      pS.setAttribute("d", path((c) => A * Math.cos(TAU * c + ph)));
+      [ampHi, ampLo].forEach((l, j) => { const y = Y0 + (j ? 1 : -1) * AMP * A; l.setAttribute("y1", y); l.setAttribute("y2", y); });
+      ampT.setAttribute("y", Y0 - AMP * A - 5); ampT.textContent = A > 0.1 ? "振幅 A" : "";
+      $("syn-i-o").textContent = fmt(I); $("syn-q-o").textContent = fmt(Q);
+      $("syn-r-i").textContent = fmt(I); $("syn-r-q").textContent = fmt(Q);
+      $("syn-r-a").textContent = fmt(A);
+      $("syn-r-p").textContent = A < 0.01 ? "—" : Math.round(ph * 180 / Math.PI) + "°";
+    }
+    [si, sq].forEach((e) => e.addEventListener("input", draw));
+    $("syn-presets").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => { si.value = b.dataset.i; sq.value = b.dataset.q; draw(); }));
+    // ドラッグ操作
+    let dragging = false;
+    const setFromEvent = (e) => {
+      const m = plane.getScreenCTM(); if (!m) return;
+      const p = new DOMPoint(e.clientX, e.clientY).matrixTransform(m.inverse());
+      const clamp = (v) => Math.max(-1.2, Math.min(1.2, v));
+      si.value = clamp((p.x - C) / R).toFixed(2); sq.value = clamp((C - p.y) / R).toFixed(2); draw();
+    };
+    plane.addEventListener("pointerdown", (e) => { dragging = true; plane.setPointerCapture(e.pointerId); setFromEvent(e); });
+    plane.addEventListener("pointermove", (e) => { if (dragging) setFromEvent(e); });
+    plane.addEventListener("pointerup", () => { dragging = false; });
+    draw();
+  })();
+
+  // =====================================================
+  // 図2: 内積の可視化
+  // =====================================================
+  (function inner() {
+    const svg = $("inn-svg");
+    const PAIRS = [
+      { id: "cc", label: "cos × cos", x: (t) => Math.cos(TAU * 2 * t), y: (t) => Math.cos(TAU * 2 * t), msg: "同じ基底どうし。長さ（ノルム）の2乗＝ 1。積はずっと正で、面積がそのまま残ります。" },
+      { id: "cs", label: "cos × (−sin)", x: (t) => Math.cos(TAU * 2 * t), y: (t) => -Math.sin(TAU * 2 * t), msg: "直交。正と負の面積がちょうど打ち消し合って 0。I と Q は混ざりません。" },
+      { id: "c45", label: "cos × 45°ずれた cos", x: (t) => Math.cos(TAU * 2 * t), y: (t) => Math.cos(TAU * 2 * t + Math.PI / 4), msg: "角度 45° のベクトルどうし。内積は cos45° ≈ 0.71。位相のずれ＝ベクトルの角度です。" },
+      { id: "k23", label: "サブキャリア 2 × 3", x: (t) => Math.cos(TAU * 2 * t), y: (t) => Math.cos(TAU * 3 * t), msg: "周波数が違っても、T の中にちょうど整数周期ずつなら直交（0）。これが OFDM の原理です（§9）。" },
+      { id: "k225", label: "サブキャリア 2 × 2.5", x: (t) => Math.cos(TAU * 2 * t), y: (t) => Math.cos(TAU * 2.5 * t), msg: "周期が半端だと打ち消しきれず 0 になりません。サブキャリア間隔がずれると干渉が起きます。" },
+    ];
+    let cur = PAIRS[0];
+    const btns = $("inn-btns");
+    PAIRS.forEach((p) => { const b = document.createElement("button"); b.className = "btn"; b.textContent = p.label; b.addEventListener("click", () => { cur = p; draw(); }); btns.append(b); p.btn = b; });
+    const X0 = 40, X1 = 470, TOP = 75, BOT = 222, A1 = 45, A2 = 58, N = 400;
+    const xs = (u) => X0 + u * (X1 - X0);
+    function draw() {
+      clear(svg);
+      PAIRS.forEach((p) => p.btn.classList.toggle("primary", p === cur));
+      [[TOP, "x(t) と y(t)"], [BOT, "x(t) × y(t)"]].forEach(([y, t]) => {
+        S("line", { x1: X0, y1: y, x2: X1, y2: y, stroke: "var(--text-muted)", "stroke-width": 1 }, svg);
+        const e = S("text", { x: X0, y: y - (y === TOP ? A1 + 8 : A2 + 8), "font-size": 12, class: "t-muted" }, svg); e.textContent = t;
+      });
+      const e0 = S("text", { x: X0, y: 296, "font-size": 11, class: "t-muted" }, svg); e0.textContent = "0";
+      const e1 = S("text", { x: X1, y: 296, "font-size": 11, "text-anchor": "end", class: "t-muted" }, svg); e1.textContent = "T（1シンボル）";
+      // 積の面積（正・負）
+      let pos = `M${X0} ${BOT}`, neg = `M${X0} ${BOT}`, sum = 0;
+      for (let n = 0; n <= N; n++) {
+        const u = n / N, v = cur.x(u) * cur.y(u);
+        if (n < N) sum += v;
+        pos += `L${xs(u).toFixed(1)} ${(BOT - A2 * Math.max(v, 0)).toFixed(1)}`;
+        neg += `L${xs(u).toFixed(1)} ${(BOT - A2 * Math.min(v, 0)).toFixed(1)}`;
+      }
+      pos += `L${X1} ${BOT}Z`; neg += `L${X1} ${BOT}Z`;
+      S("path", { d: pos, fill: "color-mix(in srgb, var(--s1) 40%, transparent)" }, svg);
+      S("path", { d: neg, fill: "color-mix(in srgb, var(--s2) 40%, transparent)" }, svg);
+      const line = (fn, amp, y0) => { let d = ""; for (let n = 0; n <= N; n++) { const u = n / N; d += (n ? "L" : "M") + xs(u).toFixed(1) + " " + (y0 - amp * fn(u)).toFixed(1); } return d; };
+      S("path", { d: line((u) => cur.x(u) * cur.y(u), A2, BOT), fill: "none", stroke: "var(--text)", "stroke-width": 1.5 }, svg);
+      S("path", { d: line(cur.x, A1, TOP), fill: "none", stroke: "var(--s1)", "stroke-width": 2 }, svg);
+      S("path", { d: line(cur.y, A1, TOP), fill: "none", stroke: "var(--s2)", "stroke-width": 2, "stroke-dasharray": "5 4" }, svg);
+      const val = 2 * sum / N;
+      $("inn-val").textContent = fmt(val, 3).replace("-0.000", "0.000");
+      $("inn-msg").textContent = cur.msg;
+    }
+    draw();
+  })();
+
+  // =====================================================
+  // 図3: コンステレーション探索
+  // =====================================================
+  (function constExplorer() {
+    const plane = $("con-plane"), wave = $("con-wave");
+    const SCHEMES = [["BPSK", 2], ["QPSK", 4], ["16QAM", 16], ["64QAM", 64], ["256QAM", 256]];
+    const C = 170, R = 125;
+    let M = 16, sel = null;
+    const btns = $("con-btns");
+    SCHEMES.forEach(([n, m]) => { const b = document.createElement("button"); b.className = "btn"; b.textContent = n; b.dataset.m = m; b.addEventListener("click", () => { M = m; sel = null; draw(); }); btns.append(b); });
+    function axes(svg) {
+      S("circle", { cx: C, cy: C, r: R, fill: "none", stroke: "var(--border)", "stroke-dasharray": "4 4" }, svg);
+      S("line", { x1: 14, y1: C, x2: 326, y2: C, stroke: "var(--text-muted)", "stroke-width": 1 }, svg);
+      S("line", { x1: C, y1: 14, x2: C, y2: 326, stroke: "var(--text-muted)", "stroke-width": 1 }, svg);
+      const a = S("text", { x: 324, y: C - 6, "font-size": 12, "text-anchor": "end", class: "t-muted" }, svg); a.textContent = "I";
+      const b = S("text", { x: C + 6, y: 24, "font-size": 12, class: "t-muted" }, svg); b.textContent = "Q";
+      const c = S("text", { x: C + R * 0.72, y: C - R * 0.72 - 6, "font-size": 10, class: "t-muted" }, svg); c.textContent = "半径 1";
+    }
+    function drawWave(p) {
+      clear(wave);
+      const X0 = 8, X1 = 292, Y0 = 60, AMP = 40;
+      S("line", { x1: X0, y1: Y0, x2: X1, y2: Y0, stroke: "var(--text-muted)" }, wave);
+      [Y0 - AMP, Y0 + AMP].forEach((y) => S("line", { x1: X0, y1: y, x2: X1, y2: y, stroke: "var(--border)", "stroke-dasharray": "3 4" }, wave));
+      if (!p) { const t = S("text", { x: 150, y: Y0 - 8, "text-anchor": "middle", "font-size": 12, class: "t-muted" }, wave); t.textContent = "点をクリックしてください"; return; }
+      const A = Math.hypot(p.i, p.q), ph = Math.atan2(p.q, p.i);
+      let d = ""; for (let n = 0; n <= 200; n++) { const u = n / 200; d += (n ? "L" : "M") + (X0 + u * (X1 - X0)).toFixed(1) + " " + (Y0 - AMP * A * Math.cos(TAU * 2 * u + ph)).toFixed(1); }
+      S("path", { d, fill: "none", stroke: "var(--accent)", "stroke-width": 2.2 }, wave);
+    }
+    function draw() {
+      btns.querySelectorAll("button").forEach((b) => b.classList.toggle("primary", +b.dataset.m === M));
+      const con = constellation(M);
+      clear(plane); axes(plane);
+      const r = { 2: 9, 4: 9, 16: 7, 64: 5, 256: 3 }[M];
+      const hitR = Math.max(r + 3, Math.min(10, con.dmin * R / 2));
+      con.pts.forEach((p) => {
+        const x = C + p.i * R, y = C - p.q * R;
+        const g = S("g", { class: "pt-hit", tabindex: 0, role: "button", "aria-label": `点 ${p.bits}` }, plane);
+        S("circle", { cx: x, cy: y, r: hitR, fill: "transparent" }, g);
+        const on = sel && sel.bits === p.bits;
+        S("circle", { cx: x, cy: y, r: on ? r + 3 : r, fill: on ? "var(--accent)" : "var(--s1)", stroke: "var(--surface)", "stroke-width": 1.5 }, g);
+        if (M <= 16) { const t = S("text", { x, y: y + r + 13, "text-anchor": "middle", "font-size": 11, "font-family": "var(--mono)", class: on ? "" : "t-muted" }, g); t.textContent = p.bits; }
+        const pick = () => { sel = p; draw(); };
+        g.addEventListener("click", pick);
+        g.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(); } });
+      });
+      if (sel) {
+        S("line", { x1: C, y1: C, x2: C + sel.i * R, y2: C - sel.q * R, stroke: "var(--accent)", "stroke-width": 1.5, "stroke-dasharray": "4 3" }, plane);
+      }
+      // d_min の図示（最初の2点）
+      if (M >= 4) {
+        const p0 = con.pts[0], p1 = con.pts[1];
+        const x0 = C + p0.i * R, y0 = C - p0.q * R, y1 = C - p1.q * R;
+        S("line", { x1: x0 - 12, y1: y0, x2: x0 - 12, y2: y1, stroke: "var(--c3)", "stroke-width": 2 }, plane);
+        const t = S("text", { x: x0 - 16, y: (y0 + y1) / 2 + 4, "text-anchor": "end", "font-size": 11, fill: "var(--c3)", "font-weight": 700 }, plane); t.textContent = "d";
+      }
+      $("con-m").textContent = M;
+      $("con-b").textContent = Math.log2(M);
+      $("con-d").textContent = con.dmin.toFixed(3);
+      $("con-bits").textContent = sel ? sel.bits : "—";
+      $("con-iq").textContent = sel ? `(${fmt(sel.i)}, ${fmt(sel.q)})` : "—";
+      $("con-ap").textContent = sel ? `${fmt(Math.hypot(sel.i, sel.q))}, ${Math.round(Math.atan2(sel.q, sel.i) * 180 / Math.PI)}°` : "—";
+      drawWave(sel);
+    }
+    draw();
+  })();
+
+  // =====================================================
+  // 図4: 雑音と判定
+  // =====================================================
+  (function noise() {
+    const plane = $("noi-plane"), snr = $("noi-snr");
+    const SCHEMES = [["QPSK", 4], ["16QAM", 16], ["64QAM", 64], ["256QAM", 256]];
+    const C = 170, R = 125;
+    let M = 16;
+    const btns = $("noi-btns");
+    SCHEMES.forEach(([n, m]) => { const b = document.createElement("button"); b.className = "btn"; b.textContent = n; b.dataset.m = m; b.addEventListener("click", () => { M = m; draw(); }); btns.append(b); });
+    function simulate(con, sigma, n) {
+      const L = con.L, k = con.k;
+      let se = 0, be = 0; const samples = [];
+      const dec = (v) => Math.max(0, Math.min(L - 1, Math.round((v * con.norm + (L - 1)) / 2)));
+      for (let s = 0; s < n; s++) {
+        const a = (Math.random() * L) | 0, b = (Math.random() * L) | 0;
+        const ri = con.levels[a] / con.norm + sigma * gauss(), rq = con.levels[b] / con.norm + sigma * gauss();
+        const da = dec(ri), db = dec(rq);
+        const err = da !== a || db !== b;
+        if (err) { se++; const x = (gray(a) ^ gray(da)) | ((gray(b) ^ gray(db)) << k); be += x.toString(2).replace(/0/g, "").length; }
+        if (s < 900) samples.push([ri, rq, err]);
+      }
+      return { ser: se / n, ber: be / (n * 2 * k), samples };
+    }
+    function draw() {
+      btns.querySelectorAll("button").forEach((b) => b.classList.toggle("primary", +b.dataset.m === M));
+      const db = +snr.value, esn0 = Math.pow(10, db / 10);
+      const sigma = Math.sqrt(1 / esn0 / 2); // Es=1, N0=1/esn0, 1次元あたり分散 N0/2
+      const con = constellation(M);
+      const sim = simulate(con, sigma, 20000);
+      clear(plane);
+      S("rect", { x: 0, y: 0, width: 340, height: 340, fill: "transparent" }, plane);
+      // 判定境界
+      for (let a = 0; a < con.L - 1; a++) {
+        const v = (con.levels[a] + 1) / con.norm;
+        S("line", { x1: C + v * R, y1: 8, x2: C + v * R, y2: 332, stroke: "var(--text-muted)", "stroke-width": 1, "stroke-dasharray": "3 4", opacity: 0.8 }, plane);
+        S("line", { x1: 8, y1: C - v * R, x2: 332, y2: C - v * R, stroke: "var(--text-muted)", "stroke-width": 1, "stroke-dasharray": "3 4", opacity: 0.8 }, plane);
+      }
+      const clip = (v) => Math.max(4, Math.min(336, v));
+      sim.samples.forEach(([ri, rq, err]) => { if (!err) S("circle", { cx: clip(C + ri * R), cy: clip(C - rq * R), r: 1.8, fill: "var(--s1)", opacity: 0.45 }, plane); });
+      sim.samples.forEach(([ri, rq, err]) => { if (err) S("circle", { cx: clip(C + ri * R), cy: clip(C - rq * R), r: 2.4, fill: "var(--bad)" }, plane); });
+      const pr = { 4: 4.5, 16: 3.5, 64: 2.6, 256: 1.6 }[M];
+      con.pts.forEach((p) => S("circle", { cx: C + p.i * R, cy: C - p.q * R, r: pr, fill: "var(--text)", stroke: "var(--surface)", "stroke-width": 1 }, plane));
+      $("noi-snr-o").textContent = db.toFixed(1) + " dB";
+      $("noi-sig").textContent = sigma.toFixed(3);
+      $("noi-margin").textContent = (con.dmin / 2 / sigma).toFixed(2) + " 倍";
+      $("noi-ser").textContent = sim.ser === 0 ? "0（2万中）" : expFmt(sim.ser);
+      $("noi-th").textContent = expFmt(serQAM(M, esn0));
+      $("noi-ber").textContent = sim.ber === 0 ? "0" : expFmt(sim.ber);
+    }
+    snr.addEventListener("input", draw);
+    $("noi-re").addEventListener("click", draw);
+    draw();
+  })();
+
+  // =====================================================
+  // 図5: シンボル誤り率曲線（ピクセル幅で描画）
+  // =====================================================
+  (function serChart() {
+    const box = $("ser-box"), svg = $("ser-svg"), tt = $("ser-tt");
+    const SERIES = [
+      { name: "QPSK", M: 4, color: "var(--s1)" },
+      { name: "16QAM", M: 16, color: "var(--s2)" },
+      { name: "64QAM", M: 64, color: "var(--s3)" },
+      { name: "256QAM", M: 256, color: "var(--s4)" },
+    ];
+    const XMAX = 36, YMIN = -6;
+    const ser = (s, db) => serQAM(s.M, Math.pow(10, db / 10));
+    // SER = target となる SN比（二分法）
+    const need = (s, target) => { let lo = -5, hi = 50; for (let i = 0; i < 60; i++) { const m = (lo + hi) / 2; if (ser(s, m) > target) lo = m; else hi = m; } return (lo + hi) / 2; };
+    $("ser-legend").innerHTML = SERIES.map((s) => `<span style="--sw:${s.color}">${s.name}（${Math.log2(s.M)}ビット）</span>`).join("");
+    // 表ビュー
+    const rows = [0, 5, 10, 15, 20, 25, 30, 35];
+    $("ser-table").innerHTML = `<thead><tr><th>方式</th><th class="center">d<sub>min</sub>²/E<sub>s</sub></th><th class="center">10⁻³ に必要</th><th class="center">10⁻⁵ に必要</th>${rows.map((r) => `<th class="center">${r}dB</th>`).join("")}</tr></thead><tbody>` +
+      SERIES.map((s) => `<tr><td>${s.name}</td><td class="center">${(6 / (s.M - 1)).toFixed(3)}</td><td class="center">${need(s, 1e-3).toFixed(1)} dB</td><td class="center">${need(s, 1e-5).toFixed(1)} dB</td>${rows.map((r) => `<td class="center">${ser(s, r) < 1e-9 ? "&lt;10⁻⁹" : expFmt(ser(s, r))}</td>`).join("")}</tr>`).join("") + `</tbody>`;
+
+    let geom = null;
+    function render() {
+      const W = Math.max(300, box.clientWidth), H = Math.round(Math.min(380, Math.max(280, W * 0.55)));
+      const m = { l: 52, r: 14, t: 14, b: 44 };
+      svg.setAttribute("viewBox", `0 0 ${W} ${H}`); svg.setAttribute("width", W); svg.setAttribute("height", H);
+      clear(svg);
+      const x = (db) => m.l + (db / XMAX) * (W - m.l - m.r);
+      const y = (p) => m.t + (Math.log10(Math.max(p, 1e-12)) / YMIN) * (H - m.t - m.b);
+      geom = { W, H, m, x, y };
+      // グリッド
+      for (let e = 0; e >= YMIN; e--) {
+        S("line", { x1: m.l, y1: y(Math.pow(10, e)), x2: W - m.r, y2: y(Math.pow(10, e)), stroke: "var(--border)", "stroke-width": 1 }, svg);
+        const t = S("text", { x: m.l - 6, y: y(Math.pow(10, e)) + 4, "text-anchor": "end", "font-size": 11, class: "t-muted" }, svg);
+        t.textContent = e === 0 ? "1" : "10" + String(e).replace("-", "⁻").replace(/\d/g, (c) => "⁰¹²³⁴⁵⁶⁷⁸⁹"[c]);
+      }
+      const step = W < 480 ? 10 : 5;
+      for (let d = 0; d <= XMAX; d += step) { const t = S("text", { x: x(d), y: H - m.b + 16, "text-anchor": "middle", "font-size": 11, class: "t-muted" }, svg); t.textContent = d; }
+      S("line", { x1: m.l, y1: H - m.b, x2: W - m.r, y2: H - m.b, stroke: "var(--text-muted)", "stroke-width": 1 }, svg);
+      const xt = S("text", { x: (m.l + W - m.r) / 2, y: H - 8, "text-anchor": "middle", "font-size": 12, class: "t-muted" }, svg); xt.textContent = "Es/N0（1シンボルあたりの SN比）[dB] →";
+      const yt = S("text", { x: 12, y: (m.t + H - m.b) / 2, "text-anchor": "middle", "font-size": 12, class: "t-muted", transform: `rotate(-90 12 ${(m.t + H - m.b) / 2})` }, svg); yt.textContent = "シンボル誤り率";
+      // 曲線
+      const clipId = "ser-clip";
+      const defs = S("defs", {}, svg); const cp = S("clipPath", { id: clipId }, defs); S("rect", { x: m.l, y: m.t - 2, width: W - m.l - m.r, height: H - m.t - m.b + 2 }, cp);
+      const g = S("g", { "clip-path": `url(#${clipId})` }, svg);
+      SERIES.forEach((s) => {
+        let d = ""; for (let db = 0; db <= XMAX; db += 0.1) { const p = ser(s, db); if (p < 1e-7) break; d += (d ? "L" : "M") + x(db).toFixed(1) + " " + y(p).toFixed(1); }
+        S("path", { d, fill: "none", stroke: s.color, "stroke-width": 2, "stroke-linejoin": "round" }, g);
+      });
+      // 直接ラベル（曲線の下端の右）＋ 10⁻⁵ での差
+      const at5 = SERIES.map((s) => need(s, 1e-5));
+      SERIES.forEach((s, i) => {
+        const bx = x(need(s, 10 ** -5.8));
+        const gl = S("g", {}, svg);
+        S("circle", { cx: bx + 8, cy: H - m.b - 12, r: 4, fill: s.color }, gl);
+        const t = S("text", { x: bx + 15, y: H - m.b - 8, "font-size": 11, "font-weight": 600 }, gl); t.textContent = s.name;
+        if (i > 0) {
+          const yy = y(1e-5), x0 = x(at5[i - 1]), x1 = x(at5[i]);
+          S("line", { x1: x0, y1: yy, x2: x1, y2: yy, stroke: "var(--text-muted)", "stroke-width": 1, "stroke-dasharray": "2 3" }, svg);
+          const tt2 = S("text", { x: (x0 + x1) / 2, y: yy - 6, "text-anchor": "middle", "font-size": 11, class: "t-muted" }, svg);
+          tt2.textContent = "+" + (at5[i] - at5[i - 1]).toFixed(1) + "dB";
+        }
+      });
+      // ホバー層
+      const cross = S("line", { y1: m.t, y2: H - m.b, stroke: "var(--text-muted)", "stroke-width": 1, visibility: "hidden" }, svg);
+      const dots = SERIES.map((s) => S("circle", { r: 4.5, fill: s.color, stroke: "var(--surface)", "stroke-width": 2, visibility: "hidden" }, svg));
+      const hit = S("rect", { x: m.l, y: m.t, width: W - m.l - m.r, height: H - m.t - m.b, fill: "transparent" }, svg);
+      const move = (e) => {
+        const r = svg.getBoundingClientRect();
+        const px = (e.clientX - r.left) * (W / r.width);
+        const db = Math.max(0, Math.min(XMAX, Math.round(((px - m.l) / (W - m.l - m.r)) * XMAX * 2) / 2));
+        const cx = x(db);
+        cross.setAttribute("x1", cx); cross.setAttribute("x2", cx); cross.setAttribute("visibility", "visible");
+        let html = `<div><b style="margin:0">${db.toFixed(1)} dB</b> のとき</div>`;
+        SERIES.forEach((s, i) => {
+          const p = ser(s, db);
+          const vis = p >= 1e-6;
+          dots[i].setAttribute("visibility", vis ? "visible" : "hidden");
+          if (vis) { dots[i].setAttribute("cx", cx); dots[i].setAttribute("cy", y(p)); }
+          html += `<div><i style="background:${s.color}"></i>${s.name}<b>${p < 1e-9 ? "&lt;10⁻⁹" : expFmt(p)}</b></div>`;
+        });
+        tt.innerHTML = html; tt.hidden = false;
+        const bw = box.clientWidth, left = (cx / W) * r.width;
+        tt.style.left = (left + 14 + 170 > bw ? left - 14 - tt.offsetWidth : left + 14) + "px";
+        tt.style.top = "10px";
+      };
+      hit.addEventListener("pointermove", move);
+      hit.addEventListener("pointerdown", move);
+      hit.addEventListener("pointerleave", () => { tt.hidden = true; cross.setAttribute("visibility", "hidden"); dots.forEach((d) => d.setAttribute("visibility", "hidden")); });
+    }
+    render();
+    let rt; window.addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(render, 120); });
+  })();
+
+  // =====================================================
+  // 図6: OFDM の直交性
+  // =====================================================
+  (function ofdm() {
+    const wave = $("ofd-wave"), gram = $("ofd-gram"), sl = $("ofd-d");
+    const K = [1, 2, 3, 4], COLORS = ["var(--s1)", "var(--s2)", "var(--s3)", "var(--s4)"];
+    const sinc = (x) => (Math.abs(x) < 1e-9 ? 1 : Math.sin(Math.PI * x) / (Math.PI * x));
+    function draw() {
+      const d = +sl.value;
+      clear(wave);
+      const X0 = 34, X1 = 312, H = 44, AMP = 17;
+      K.forEach((k, j) => {
+        const y0 = 28 + j * H;
+        S("line", { x1: X0, y1: y0, x2: X1, y2: y0, stroke: "var(--border)" }, wave);
+        const t = S("text", { x: 4, y: y0 + 4, "font-size": 11, "font-family": "var(--mono)" }, wave); t.textContent = "k=" + k;
+        let p = ""; for (let n = 0; n <= 200; n++) { const u = n / 200; p += (n ? "L" : "M") + (X0 + u * (X1 - X0)).toFixed(1) + " " + (y0 - AMP * Math.cos(TAU * (k + d) * u)).toFixed(1); }
+        S("path", { d: p, fill: "none", stroke: COLORS[j], "stroke-width": 1.8 }, wave);
+      });
+      S("line", { x1: X1, y1: 8, x2: X1, y2: 200, stroke: "var(--text-muted)", "stroke-dasharray": "3 3" }, wave);
+      const tT = S("text", { x: X1, y: 214, "font-size": 11, "text-anchor": "end", class: "t-muted" }, wave); tT.textContent = "T";
+      // グラム行列 |sinc(m − k + δ)|
+      gram.style.gridTemplateColumns = `auto repeat(${K.length}, 1fr)`;
+      let html = `<div class="hd"></div>` + K.map((m) => `<div class="hd">m=${m}</div>`).join("");
+      let leak = 0;
+      K.forEach((k) => {
+        html += `<div class="hd">k=${k}</div>`;
+        K.forEach((m) => {
+          const v = Math.abs(sinc(m - k + d));
+          if (m !== k) leak = Math.max(leak, v);
+          html += `<div style="background: color-mix(in srgb, var(--accent) ${Math.round(v * 85)}%, var(--surface-2)); color: ${v > 0.55 ? "var(--accent-text)" : "var(--text)"}">${v.toFixed(2)}</div>`;
+        });
+      });
+      gram.innerHTML = html;
+      $("ofd-d-o").textContent = d.toFixed(3);
+      const hz = d * 15000;
+      $("ofd-hz").textContent = hz < 1000 ? Math.round(hz) + " Hz" : (hz / 1000).toFixed(2) + " kHz";
+      const v = hz * 3e8 / 2e9 * 3.6; // km/h
+      $("ofd-v").textContent = d === 0 ? "—" : (v < 10000 ? "時速 " + Math.round(v).toLocaleString() + " km" : "現実にはない速度");
+      $("ofd-self").textContent = Math.round(sinc(d) ** 2 * 100) + "%（電力）";
+      $("ofd-leak").textContent = d === 0 ? "0（完全に直交）" : leak.toFixed(2) + "（振幅）";
+    }
+    sl.addEventListener("input", draw);
+    draw();
+  })();
+})();
+</script>
+</body>
+</html>

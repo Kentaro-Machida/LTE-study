@@ -1,0 +1,526 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>試作から量産までのロードマップ｜LTE Study</title>
+  <link rel="stylesheet" href="../assets/style.css">
+  <style>
+    /* ---- 第12章ページ内スタイル（CSS変数のみ使用） ---- */
+    .tl-figure svg { max-width: 560px; margin: 0 auto; }
+    .tl-figure .tl-bar { transition: opacity .3s; }
+    .tl-figure .step ul { margin: .3em 0; padding-left: 1.2em; }
+    .tl-figure .step .meta { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 8px; }
+    .tl-figure .step .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 4px 20px; }
+    .tl-figure .step h5 { margin: .6em 0 0; font-size: .92rem; }
+    .gate-flow { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 16px 0; }
+    .gate-flow .g { background: var(--surface); border: 1px solid var(--border); border-top: 4px solid var(--c6); border-radius: var(--radius-sm); padding: 10px 12px; font-size: .9rem; line-height: 1.6; }
+    .gate-flow .g b { display: block; font-size: 1.05rem; }
+    .gate-flow .g.evt { border-top-color: var(--c2); }
+    .gate-flow .g.dvt { border-top-color: var(--c3); }
+    .gate-flow .g.pvt { border-top-color: var(--c4); }
+    .gate-flow .g.mp { border-top-color: var(--c1); }
+    .calc { display: grid; gap: 12px; }
+    .calc label { display: grid; grid-template-columns: minmax(0, 11em) 1fr minmax(0, 6.5em); gap: 10px; align-items: center; font-size: .92rem; }
+    .calc input[type="range"] { width: 100%; accent-color: var(--accent); }
+    .calc output { font-family: var(--mono); text-align: right; }
+    @media (max-width: 560px) { .calc label { grid-template-columns: 1fr minmax(0, 6.5em); } .calc label input { grid-column: 1 / -1; grid-row: 2; } }
+    .calc-result { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin-top: 12px; }
+    .calc-result .kpi { background: var(--surface-2); border-radius: var(--radius-sm); padding: 10px 12px; }
+    .calc-result .kpi .v { font-size: 1.5rem; font-weight: 700; font-family: var(--mono); color: var(--accent); }
+    .calc-result .kpi .k { font-size: .8rem; color: var(--text-muted); }
+    .split-hs { display: grid; gap: 14px; }
+    @media (min-width: 760px) { .split-hs { grid-template-columns: minmax(0, 400px) minmax(0, 1fr); align-items: start; } .split-hs .hs-panel { margin-top: 0; } }
+    .split-hs svg { width: 100%; height: auto; display: block; max-width: 420px; margin: 0 auto; }
+    .fail-grid .card { display: flex; flex-direction: column; gap: 4px; }
+    .fail-grid .card h3 { font-size: 1rem; margin: 2px 0; }
+    .fail-grid .card p { margin: .2em 0; font-size: .9rem; line-height: 1.65; }
+    .fail-grid .card .lbl { font-weight: 700; color: var(--text-muted); font-size: .8rem; margin-right: 4px; }
+    .fail-grid .card[hidden] { display: none; }
+    .cost-table td.num, .cost-table th.num { text-align: right; font-family: var(--mono); white-space: nowrap; }
+    .cost-table tfoot td { font-weight: 700; background: var(--surface-2); }
+  </style>
+</head>
+<body data-root="../" data-chapter="12">
+<div class="page">
+<main>
+  <header class="chapter-hero">
+    <div class="eyebrow">CHAPTER 12</div>
+    <h1>試作から量産までのロードマップ</h1>
+    <p class="lead">LTEを載せたロボットを「試作1台」から「アジア各国へ量産出荷」までもっていくには、どんな順番で、何を確かめ、誰が動くのか。これまでの章の知識を1本の工程表につなげます。</p>
+    <div class="goals"><h2>この章のゴール</h2><ul>
+      <li>EVT / DVT / PVT / MP という開発ゲートの意味と、「出口基準（exit criteria）」の考え方を説明できる</li>
+      <li>要件定義から運用までの各フェーズで、LTE特有に何を確認すべきかがわかる</li>
+      <li>アンテナ・電源・認証・EOLなど、よくある失敗を先回りして計画に入れられる</li>
+      <li>期間と費用のおおよその幅を知り、見積もりや社内説明の叩き台を作れる</li>
+    </ul></div>
+  </header>
+
+  <h2>1. なぜ「段階（ゲート）」を踏むのか</h2>
+  <p>ハードウェア開発は、ソフトウェアのように「直してすぐ配布」ができません。基板を1枚作り直すと数週間、金型を直すと1〜2か月、認証を取り直すと数か月かかります。そこで業界では、試作を何回かに分け、<strong>各段階の終わりに「次へ進んでよいか」を判定する関門（ゲート）</strong>を置くのが一般的です。代表的な名前が次の4つです。</p>
+
+  <div class="gate-flow">
+    <div class="g evt"><b>EVT</b>Engineering Validation Test（技術検証試作）。<br>「設計の考え方は正しいか？」</div>
+    <div class="g dvt"><b>DVT</b>Design Validation Test（設計検証試作）。<br>「製品として要件を満たすか？」</div>
+    <div class="g pvt"><b>PVT</b>Production Validation Test（量産検証試作）。<br>「工場で同じ品質で作れるか？」</div>
+    <div class="g mp"><b>MP</b>Mass Production（量産）。<br>「出荷し、運用し続けられるか？」</div>
+  </div>
+
+  <p>料理にたとえると、EVTは「レシピ通りに作ってみて味の方向性を確かめる試食」、DVTは「本番と同じ食材・器で、お客様の要望（辛さ、量、アレルギー表示）をすべて満たすか確かめる試食」、PVTは「セントラルキッチンで100食作っても同じ味になるかの確認」、MPは「全店舗での販売開始」です。</p>
+
+  <p>それぞれの段階の終わりには<strong>出口基準（exit criteria）</strong>を置きます。これは「この条件を満たしたら次に進む」という<strong>合格ラインを、段階が始まる前に数値で決めておく</strong>ものです。たとえば「全対象バンドでTIS（受信感度）がキャリア要件を満たす」「量産治具で直行率95%以上」などです。基準があいまいだと、「だいたい動くから次へ」と進んでしまい、後の段階で大きな手戻りになります。逆に、出口基準を満たさないまま次の段階に進む場合は、<strong>未達項目・リスク・対策期限を記録した上で意識的に判断</strong>します（条件付き通過）。</p>
+
+  <div class="table-wrap"><table>
+    <thead><tr><th>段階</th><th>目的</th><th>台数の目安</th><th>作り方</th><th>LTEまわりで見ること</th></tr></thead>
+    <tbody>
+      <tr><td><b>EVT</b></td><td>設計・部品選定が正しいか</td><td>数台〜数十台</td><td>試作基板、3Dプリント等の仮筐体</td><td>起動・アタッチ・通信、RF導通試験、アンテナ効率・VSWR、ピーク電流</td></tr>
+      <tr><td><b>DVT</b></td><td>全要件を満たす設計を確定</td><td>数十〜百台程度</td><td>量産に近い部品・筐体（簡易型や初回金型）</td><td>OTA（TRP/TIS）、EMC/RF事前試験、環境試験、ソフト機能完成、認証サンプル</td></tr>
+      <tr><td><b>PVT</b></td><td>量産工程の安定性</td><td>数百台程度</td><td>量産工場・量産治具・量産部品</td><td>書込み・RF最終検査工程、歩留まり、IMEI等の紐付け、出荷時回線状態</td></tr>
+      <tr><td><b>MP</b></td><td>継続生産と出荷・運用</td><td>計画数量</td><td>量産ライン</td><td>検査データの監視、FOTA、回線管理、PCN/EOL対応</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="callout robot"><span class="title">私たちのロボットの場合</span>
+    <p>量産プラットフォームがない＝「過去の実績設計を流用できない」ということです。そのためEVTの前に<strong>評価ボード（EVB）での実網検証</strong>をはさみ、モジュールやアンテナの当たりをつけてから基板を起こすのがおすすめです。また、台数がまだ少ない場合は、DVTとPVTを1回にまとめる（「DVT兼PVT」）会社もありますが、そのぶん認証サンプルの版と量産品の版がずれない管理が大切になります。</p>
+  </div>
+
+  <h2>2. 全体フローをステップで見る</h2>
+  <p>下の図は、LTEモジュールを採用し、輸出先1か国・キャリア認証なしの<strong>基準ケース</strong>での工程表です（全体で約1年）。バーが重なっている部分は、前の工程が終わりきる前に次を並行で始めていることを表します。点線のバー（キャリア認証）は、採用キャリアが求める場合だけ発生する条件付きのフェーズです。「次へ」を押すと、各フェーズで何をして、何を満たせば次へ進めるか（ゲート基準）が表示されます。</p>
+
+  <figure class="figure tl-figure" data-stepper data-interval="4500" id="tl-stepper">
+    <div class="hint">「次へ ▶」や番号ボタンでフェーズを切り替えます。濃く表示されたバーが、現在までに進んだフェーズです。</div>
+    <svg id="tl-svg" viewBox="0 0 440 420" role="img" aria-label="開発フェーズのタイムライン"></svg>
+    <div class="stepper-controls-slot"></div>
+    <div id="tl-steps"></div>
+    <figcaption>期間はすべて目安（要見積）です。条件を変えたときの期間は <a href="../tools/roadmap.html">開発ロードマップ（ガント）ツール</a> で試算できます。</figcaption>
+  </figure>
+
+  <h2>3. 企画〜設計：最初の3か月が後の1年を決める</h2>
+
+  <h3>3-1. 要件定義：数字で決める</h3>
+  <p>最初にやるべきことは、「どの国で」「何に使い」「どれだけ通信し」「どれだけ電力を使ってよく」「いくらで作るか」を<strong>数字で</strong>決めることです。特に通信量は、カテゴリ選定（第5章）と回線料金の両方を左右します。ロボットの遠隔操作映像は、1本のHD映像でも上り（ロボット→クラウド）に数Mbpsが必要で、テレメトリ（位置・バッテリー残量・エラー情報など）だけなら数kbps〜数十kbpsで足ります。桁が3つも違うのです。</p>
+  <p>下の計算機で、映像のビットレートと送信時間を変えると、1台あたりの月間データ量がわかります。月数GBを超えると、IoT向けの安価な回線プランでは足りないことが多くなります。</p>
+
+  <figure class="figure">
+    <div class="hint">スライダーを動かすと、月間データ量と必要な上り帯域の目安が変わります。</div>
+    <div class="calc" id="calc">
+      <label>映像ビットレート<input type="range" id="c-rate" min="0" max="8" step="0.5" value="2"><output id="o-rate"></output></label>
+      <label>映像を送る時間/日<input type="range" id="c-hours" min="0" max="24" step="0.5" value="2"><output id="o-hours"></output></label>
+      <label>テレメトリ（常時）<input type="range" id="c-tele" min="0" max="100" step="1" value="10"><output id="o-tele"></output></label>
+      <label>稼働日数/月<input type="range" id="c-days" min="1" max="31" step="1" value="30"><output id="o-days"></output></label>
+      <label>台数<input type="range" id="c-units" min="1" max="1000" step="1" value="100"><output id="o-units"></output></label>
+    </div>
+    <div class="calc-result">
+      <div class="kpi"><div class="k">1台あたり月間データ量</div><div class="v" id="r-month">–</div></div>
+      <div class="kpi"><div class="k">全台数の月間合計</div><div class="v" id="r-fleet">–</div></div>
+      <div class="kpi"><div class="k">必要な上り実効帯域（余裕1.5倍）</div><div class="v" id="r-ul">–</div></div>
+    </div>
+    <p class="small" id="r-comment" aria-live="polite"></p>
+    <figcaption>計算式：データ量 = ビットレート × 秒数 ÷ 8。プロトコルのオーバーヘッドや再送は含めていないため、実際は1〜2割ほど多くなることがあります。</figcaption>
+  </figure>
+
+  <div class="table-wrap"><table>
+    <thead><tr><th>要件項目</th><th>決めること（例）</th><th>影響する後工程</th></tr></thead>
+    <tbody>
+      <tr><td>対象国・地域</td><td>日本＋台湾・韓国を先行、中国・インドは第2弾 など優先順位つき</td><td>バンド、モジュール型番、SKU数、認証（第4・10・11章）</td></tr>
+      <tr><td>用途・通信量</td><td>遠隔操作映像の有無、上り帯域、遅延、月間データ量</td><td>カテゴリ（第5章）、回線プラン（第7章）</td></tr>
+      <tr><td>移動性</td><td>屋内のみ／屋外走行、最高速度</td><td>ハンドオーバー、LTE-M/NB-IoTの可否</td></tr>
+      <tr><td>電源・消費電力</td><td>バッテリー容量、待機時の許容電流、ピーク電流の余裕</td><td>電源設計、省電力機能（PSM/eDRX）</td></tr>
+      <tr><td>コスト・数量</td><td>目標BOM、年間数量、製品寿命（何年使うか）</td><td>モジュール選定、EOL対策、チップダウン判断</td></tr>
+      <tr><td>音声・将来性</td><td>通話機能の要否、5G移行の時期</td><td>VoLTE対応、5G RedCap検討</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>3-2. 方式・カテゴリ・モジュール選定</h3>
+  <p>要件が決まったら、第5章のカテゴリ比較と第11章の共通化戦略を使って、<strong>カテゴリ → 対応バンド → モジュール型番 → SKU構成</strong>の順に絞り込みます。モジュールを選ぶときは、性能と価格だけでなく、次の3点を必ず確認します。</p>
+  <ul>
+    <li><strong>取得済みの認証</strong>：技適（工事設計認証）、輸出先各国の無線認証、GCF/PTCRB、キャリア認証。認証済みモジュールを使うと、製品側の試験を大幅に減らせることがあります。</li>
+    <li><strong>供給期間とEOL方針</strong>：EOL（End of Life、生産終了）の予告期間や、PCN（Product Change Notification、仕様・部品変更通知）の出し方。ロボットは長く売る製品なので重要です。</li>
+    <li><strong>同じフットプリント（外形・ピン配置）の兄弟機種</strong>：地域違い（中国向け・グローバル向けなど）や上位カテゴリの機種と、基板を共通にできるか。</li>
+  </ul>
+  <p>迷ったら <a href="../tools/module-selector.html">LTEカテゴリ選定ウィザード</a> と <a href="../tools/band-checker.html">バンド共通化チェッカー</a> で当たりをつけましょう。</p>
+
+  <h3>3-3. 評価ボード（EVB）で実網検証・電流測定</h3>
+  <p>EVB（Evaluation Board、評価ボード）は、モジュールメーカーが用意している「モジュール＋電源＋SIMスロット＋アンテナ端子」だけの試験用基板です。自社基板を作る前に、これを実際の回線（実網）につなぎ、次のことを確かめます。</p>
+  <ul>
+    <li>電源ONからアタッチ（第3章）して通信できるまでの時間、実網での上り速度・遅延</li>
+    <li><strong>送信時のピーク電流</strong>。LTEは送信の瞬間に大きな電流が流れます。モジュールのハードウェア設計ガイドには、電源が瞬時に供給すべき電流（2G対応品では2A程度を求める例が多い）や推奨コンデンサが書かれているので、それを実測で確認します。</li>
+    <li>ロボットのメインCPUとの接続（USB・UART・PCIe）、ドライバ、ATコマンド（第8章）、切断時の自動再接続</li>
+    <li>モジュールFWのFOTA（Firmware Over-The-Air、無線でのFW更新）手順</li>
+  </ul>
+  <div class="callout warn"><span class="title">電流は「平均」ではなく「波形」で見る</span>
+    <p>テスターの平均電流だけでは、数ミリ秒のピークを見逃します。電源アナライザや電流プローブ＋オシロスコープで波形を記録し、その値を電源設計に渡しましょう。ロボットではモーターの起動電流と送信ピークが重なった瞬間に電圧が下がり、モジュールやCPUが再起動することがあります。</p>
+  </div>
+
+  <h3>3-4. 回路・基板・アンテナ設計</h3>
+  <p>第6章で学んだ部品を、実際の基板と筐体に落とし込みます。LTEで特に重要なのは次の3つです。</p>
+  <ol>
+    <li><strong>RF配線とGND</strong>：モジュールのアンテナ端子からコネクタまでを50Ωの伝送線路で最短に。途中にアンテナ整合回路（π型の部品配置）の場所を空けておくと、後でチューニングできます。</li>
+    <li><strong>電源</strong>：ピーク電流に耐えるDC-DC容量とバルクコンデンサ。モーター系とは電源系統を分け、GNDの戻り経路を意識します。</li>
+    <li><strong>アンテナ配置</strong>：金属フレーム、モーター、バッテリー、ケーブル束からできるだけ離し、筐体の外側・上部に。<strong>筐体設計（機構）と同時に決める</strong>ことが最重要です。アンテナメーカーに早い段階で相談すると、筐体試作に合わせてチューニングしてもらえます。</li>
+  </ol>
+
+  <h2>4. EVT〜DVT：電波と信頼性を固める</h2>
+
+  <h3>4-1. EVT：基本動作・RF導通試験・アンテナ受動測定</h3>
+  <p>EVT試作機ができたら、まず「電源が入る・OSが起動する・アタッチできる・通信できる・FW更新できる」を確認します。その上で、LTEの性能を<strong>2つに分けて</strong>評価します。</p>
+  <ul>
+    <li><strong>RF導通試験（conducted test）</strong>：アンテナを外し、モジュールのRF端子を同軸ケーブルで無線機テスター（基地局のふりをする測定器）に直接つなぎます。送信電力や受信感度がモジュールの仕様どおり出ているかを見ることで、<strong>基板の配線・電源・ノイズの問題</strong>を切り分けられます。</li>
+    <li><strong>アンテナ受動測定（passive test）</strong>：モジュールは動かさず、アンテナ単体を測定器（ネットワークアナライザや電波暗室）で測ります。代表的な指標は<strong>VSWR</strong>（Voltage Standing Wave Ratio、電圧定在波比：アンテナで跳ね返される電波の割合。1に近いほど良く、2〜3以下を目安にすることが多い）と<strong>放射効率</strong>（入れた電力のうち何%が電波として出ていくか）です。低い周波数帯（700〜900MHz帯）は小型筐体で効率を出しにくい傾向があります。</li>
+  </ul>
+  <p>導通では良いのに、製品として電波が弱い → アンテナか筐体の問題。導通の段階で悪い → 基板か電源の問題。このように<strong>原因を切り分けられる順番で測る</strong>のがコツです。</p>
+
+  <h3>4-2. OTA測定：TRPとTIS</h3>
+  <p>OTA（Over-The-Air）測定は、製品を丸ごと<strong>電波暗室</strong>（壁が電波吸収体で覆われ、反射がない部屋）に入れて、実際に電波をやりとりしながら測る試験です。2つの代表指標があります。</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>指標</th><th>意味</th><th>たとえ</th><th>悪いと…</th></tr></thead>
+    <tbody>
+      <tr><td><b>TRP</b>（Total Radiated Power、総放射電力）</td><td>全方向に放射される送信電力の合計</td><td>声の大きさ</td><td>上り速度が出ない、セル端で切れる</td></tr>
+      <tr><td><b>TIS</b>（Total Isotropic Sensitivity、全方向平均受信感度）</td><td>全方向から見て、どこまで弱い電波を受けられるか</td><td>耳の良さ</td><td>建物内・地下でつながらない</td></tr>
+    </tbody>
+  </table></div>
+  <p>TISは、アンテナ性能だけでなく<strong>製品内部のノイズ</strong>（CPU、DC-DC、カメラ、モーター駆動回路など）で劣化します。これを「デセンス（desense、感度抑圧）」と呼び、ロボットのように電子部品が多い製品ではよく起こります。米国CTIAのOTA試験計画のように業界標準の測定方法があり、キャリアによっては製品のTRP/TISに合格ラインを定めています（キャリア認証の一部）。キャリア要件がない場合も、社内目標としてモジュールEVB＋標準アンテナの値から大きく劣化しないことを基準にしておくと安心です。</p>
+
+  <h3>4-3. DVT：EMC/RF事前試験・環境試験・ソフト完成</h3>
+  <p>DVTでは、量産に近い部品と筐体で「製品としてすべての要件を満たすか」を確認します。LTEロボットで行う主な試験は次の通りです。</p>
+  <ul>
+    <li><strong>EMC事前試験（プリスキャン）</strong>：EMC（Electromagnetic Compatibility、電磁両立性）は「他の機器を邪魔する不要な電波を出さない（エミッション）」「周りの電波で誤動作しない（イミュニティ）」の2面。本試験の前に社内や試験所で事前確認します。</li>
+    <li><strong>RF事前試験</strong>：スプリアス（不要発射）や送信電力など、各国の無線認証で見られる項目の予備確認。</li>
+    <li><strong>環境試験</strong>：高温・低温・湿度・振動・落下・防塵防水。高温でモジュールが熱保護に入り送信電力を落とす、走行振動でアンテナケーブルのコネクタが抜ける、などがロボットの典型例です。</li>
+    <li><strong>ソフト機能完成</strong>：圏外からの復帰、ローミング時のネットワーク選択、FOTAの失敗時ロールバック、通信ログの取得。</li>
+  </ul>
+  <p>DVTの出口基準は「<strong>全要件を満たす構成が1つに決まった</strong>」ことです。ここで決まった構成が認証サンプルになるため、DVT以降の設計変更は認証のやり直しにつながる可能性があります。</p>
+
+  <h2>5. 認証とフィールド試験：国ごとに並行して進める</h2>
+  <p>認証の中身は第9章・第10章で詳しく扱いました。ここではロードマップ上の<strong>段取り</strong>に絞って整理します。</p>
+
+  <div data-tabs>
+    <div class="tab-list"><button data-tab="jp">日本（技適）</button><button data-tab="asia">輸出先各国</button><button data-tab="carrier">キャリア・GCF</button><button data-tab="field">フィールド試験</button></div>
+    <div data-tab-panel="jp">
+      <p>工事設計認証（技適）を取得済みのLTEモジュールを、認証条件（アンテナ利得など）の範囲内で組み込む場合、製品として改めて認証を取らずに、<strong>モジュールの技適番号を製品で確認できるよう表示</strong>する方法が一般的です。ただしアンテナを認証条件外のものに変える、モジュールの設定を変えるといった場合は別途認証が必要になることがあります。モジュールメーカーに「認証時のアンテナ条件」を必ず確認します。</p>
+    </div>
+    <div data-tab-panel="asia">
+      <p>中国（SRRCの無線型式認可、CTAの網接続許可など）、韓国（KC）、台湾（NCC）、インド（WPCやTECなど）、東南アジア各国（各国の電気通信当局）で、それぞれ試験・書類・現地代理人の要否が異なります。<strong>国ごとに並行して進めることで全体期間を短縮</strong>できますが、国数が増えるほど書類の差し戻しやサンプル輸送の手間は増えます。</p>
+      <p>特に中国は、無線（SRRC）と網接続（CTA、NALとも呼ばれる）の手続きが分かれ、現地試験が前提になることが多く、<strong>数か月単位</strong>で見込むのが安全です。中国向けに別モジュール（中国のバンド・ネットワークに最適化した機種）を使う場合は、SKUが増えるぶん設計・試作・検査の工数も増えます（第11章）。</p>
+    </div>
+    <div data-tab-panel="carrier">
+      <p>キャリア認証は、「そのキャリアのネットワークに接続してよい端末か」を確認する手続きです。相互接続試験（IOT、Interoperability Test）や、キャリアが定めるOTA要件などがあります。GCF（Global Certification Forum）やPTCRB（北米）の認証は、3GPP規格への適合を業界で確認する仕組みで、キャリアが前提条件として求めることがあります。</p>
+      <p>認証済みモジュールを使えば多くの項目を流用できますが、<strong>承認されたモジュールFWの版数</strong>を量産でも固定する必要がある点に注意します。チップダウン設計（モジュールを使わずチップを直接載せる）の場合は、これらをすべて自社製品として取得する必要があり、期間・費用ともに大きく増えます。</p>
+    </div>
+    <div data-tab-panel="field">
+      <p>実験室の試験に合格しても、現地の電波環境でうまく動くとは限りません。<strong>実際の国で、実際にロボットが働く場所</strong>（倉庫の奥、工場の金属棚の間、地下、エレベーター付近など）を走らせ、電波強度（RSRP/RSRQ）、速度、切断回数、ハンドオーバーの成否を記録します。ローミングSIMを使う場合は、どの現地キャリアにつながるか、データが流れるか（APN、ローミング契約）も確認します。</p>
+      <p>注意点として、<strong>その国の認証を取っていない無線機を現地で動かすことは原則できません</strong>。現地で認証済みのモジュールを使う、試験用の許可制度を使う、現地パートナーの試験施設で行うなど、合法的な方法を事前に確認してください（日本にも、条件を満たす機器を届出により最長180日使える「技適未取得機器を用いた実験等の特例制度」がありますが、対象となる無線方式は限られています）。</p>
+    </div>
+  </div>
+
+  <div class="callout robot"><span class="title">私たちのロボットの場合</span>
+    <p>「日本で開発 → 日本で技適確認 → 台湾・韓国で認証とフィールド試験 → 中国・インドは第2弾」のように、<strong>国を波に分けて出す</strong>計画にすると、最初の出荷を早めつつ、後続国の要件を反映しやすくなります。ただし、後続国向けのバンドやSKUは要件定義の時点で決めておかないと、基板の作り直しになります。</p>
+  </div>
+
+  <h2>6. PVT〜量産：工場で「同じもの」を作り続ける</h2>
+  <p>PVTでは、<strong>量産工場・量産治具・量産部品</strong>で数百台規模を作り、工程と検査が安定しているか、歩留まり（良品率）が目標に届くかを確かめます。出口基準は「量産条件で歩留まり目標を達成し、不良の原因と対策がすべてクローズしていること」です。LTE製品の量産ラインには、通信機器ならではの工程があります。下の図で各工程をクリックしてみてください。</p>
+
+  <figure class="figure" data-hotspots data-hs-default="smt">
+    <div class="hint">工程の箱をクリック（タップ）すると、その工程で行うことと注意点が表示されます。</div>
+    <div class="split-hs">
+      <svg viewBox="0 0 400 470" role="img" aria-label="LTE製品の量産工程">
+        <defs><marker id="ar12" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--text-muted)"/></marker></defs>
+        <g class="line">
+          <line x1="200" y1="50" x2="200" y2="62" marker-end="url(#ar12)"/>
+          <line x1="200" y1="108" x2="200" y2="120" marker-end="url(#ar12)"/>
+          <line x1="200" y1="166" x2="200" y2="178" marker-end="url(#ar12)"/>
+          <line x1="200" y1="224" x2="200" y2="236" marker-end="url(#ar12)"/>
+          <line x1="200" y1="282" x2="200" y2="294" marker-end="url(#ar12)"/>
+          <line x1="200" y1="340" x2="200" y2="352" marker-end="url(#ar12)"/>
+          <line x1="200" y1="398" x2="200" y2="410" marker-end="url(#ar12)"/>
+        </g>
+        <g data-hs="smt"><rect x="40" y="6" width="320" height="44" rx="8" fill="var(--c6)" fill-opacity=".18" stroke="var(--c6)"/><text x="200" y="26" text-anchor="middle" font-size="14" font-weight="700">① 基板実装（SMT）</text><text x="200" y="43" text-anchor="middle" font-size="12" class="t-muted">モジュール・部品のはんだ付け</text></g>
+        <g data-hs="flash"><rect x="40" y="64" width="320" height="44" rx="8" fill="var(--c1)" fill-opacity=".18" stroke="var(--c1)"/><text x="200" y="84" text-anchor="middle" font-size="14" font-weight="700">② FW書込み</text><text x="200" y="101" text-anchor="middle" font-size="12" class="t-muted">ホストFW・モジュールFW版数確認</text></g>
+        <g data-hs="fct"><rect x="40" y="122" width="320" height="44" rx="8" fill="var(--c1)" fill-opacity=".18" stroke="var(--c1)"/><text x="200" y="142" text-anchor="middle" font-size="14" font-weight="700">③ 基板検査（ICT/FCT）</text><text x="200" y="159" text-anchor="middle" font-size="12" class="t-muted">電源・通信インタフェースの確認</text></g>
+        <g data-hs="id"><rect x="40" y="180" width="320" height="44" rx="8" fill="var(--c5)" fill-opacity=".18" stroke="var(--c5)"/><text x="200" y="200" text-anchor="middle" font-size="14" font-weight="700">④ ID紐付け</text><text x="200" y="217" text-anchor="middle" font-size="12" class="t-muted">IMEI・シリアル・MACを記録</text></g>
+        <g data-hs="assy"><rect x="40" y="238" width="320" height="44" rx="8" fill="var(--c6)" fill-opacity=".18" stroke="var(--c6)"/><text x="200" y="258" text-anchor="middle" font-size="14" font-weight="700">⑤ 組立</text><text x="200" y="275" text-anchor="middle" font-size="12" class="t-muted">アンテナ・ケーブル・筐体</text></g>
+        <g data-hs="rf"><rect x="40" y="296" width="320" height="44" rx="8" fill="var(--c2)" fill-opacity=".18" stroke="var(--c2)"/><text x="200" y="316" text-anchor="middle" font-size="14" font-weight="700">⑥ RF最終検査</text><text x="200" y="333" text-anchor="middle" font-size="12" class="t-muted">シールドボックス＋無線機テスター</text></g>
+        <g data-hs="sim"><rect x="40" y="354" width="320" height="44" rx="8" fill="var(--c5)" fill-opacity=".18" stroke="var(--c5)"/><text x="200" y="374" text-anchor="middle" font-size="14" font-weight="700">⑦ SIM/eSIMプロビジョニング</text><text x="200" y="391" text-anchor="middle" font-size="12" class="t-muted">ICCID/EID登録・プロファイル</text></g>
+        <g data-hs="ship"><rect x="40" y="412" width="320" height="44" rx="8" fill="var(--c3)" fill-opacity=".18" stroke="var(--c3)"/><text x="200" y="432" text-anchor="middle" font-size="14" font-weight="700">⑧ 出荷検査・梱包</text><text x="200" y="449" text-anchor="middle" font-size="12" class="t-muted">回線状態・ラベル・各国表示</text></g>
+      </svg>
+      <div class="hs-panel"></div>
+    </div>
+    <template data-hs-content="smt"><h4>① 基板実装（SMT）</h4><p>SMT（Surface Mount Technology、表面実装）で、LTEモジュールを含む部品を基板にはんだ付けします。LGA（底面に電極が並ぶ形）のモジュールは、はんだの状態を目視できないため、X線検査を入れることがあります。モジュールは湿気を嫌う部品なので、開封後の保管時間や乾燥（ベーキング）の条件をメーカー指示どおりに守ります。</p></template>
+    <template data-hs-content="flash"><h4>② FW書込み</h4><p>ロボットのホストCPUにFWを書き込み、LTEモジュールのFW版数を読み出して確認します。モジュールFWは出荷時に書き込まれていることが多いですが、<strong>キャリアや認証で承認された版数と一致しているか</strong>を必ずチェックし、違えば更新します。版数が混在すると、認証条件を外れたり、現場で挙動が違ったりします。</p></template>
+    <template data-hs-content="fct"><h4>③ 基板検査（ICT/FCT）</h4><p>ICT（In-Circuit Test、部品の実装確認）とFCT（Functional Test、機能検査）で、電源電圧、USB/UARTでのモジュール応答（ATコマンドに応答するか）、SIMの認識などを確かめます。ここで不良を見つけると、組立後より修理が格段に楽です。</p></template>
+    <template data-hs-content="id"><h4>④ ID紐付け</h4><p>IMEI（International Mobile Equipment Identity、端末識別番号）はモジュールメーカーが書き込み済みのことが多く、製品側ではそれを読み出して、<strong>製品シリアル番号・基板番号・Wi-Fi/BluetoothのMACアドレス</strong>と紐付けてデータベースに記録します。チップダウン設計では、GSMAからTAC（型式割当コード、IMEIの先頭8桁）を取得し、IMEIを自社で書き込む必要があります。紐付けの誤りは、回線管理やリコール時の追跡で大問題になります。</p></template>
+    <template data-hs-content="assy"><h4>⑤ 組立</h4><p>アンテナ、同軸ケーブル、筐体を組み付けます。ケーブルの取り回しや固定位置がばらつくと、アンテナ性能がばらつきます。作業標準書に写真付きで経路を定め、コネクタの嵌合（はめ込み）確認を工程に入れます。</p></template>
+    <template data-hs-content="rf"><h4>⑥ RF最終検査</h4><p>完成品（または半完成品）を<strong>シールドボックス</strong>（外の電波を遮る箱）に入れ、<strong>無線機テスター</strong>（例：Rohde &amp; Schwarz のCMWシリーズ、Anritsu製の測定器など、基地局の役を演じる装置）とつないで、送信電力・受信感度・周波数誤差などを数十秒〜数分で簡易確認します。すべてのバンドを測る時間はないので、代表バンド・代表チャネルに絞ります。</p><p>合否のしきい値は、<strong>ゴールデンサンプル</strong>（特性がよくわかった基準品）を毎日測って治具のずれを補正しながら決めます。基準が甘いとアンテナケーブル外れを見逃し、厳しすぎると良品を捨てることになります。</p></template>
+    <template data-hs-content="sim"><h4>⑦ SIM/eSIMプロビジョニング</h4><p>物理SIMやチップSIMを使う場合は、ICCID（SIMの番号）を読み出して製品と紐付けます。eSIMの場合はEID（eUICCの識別番号）を記録し、出荷先の国・キャリアに応じたプロファイルを工場で入れるか、現地で遠隔から入れるか（第7章）を決めておきます。</p></template>
+    <template data-hs-content="ship"><h4>⑧ 出荷検査・梱包</h4><p>最後に、<strong>出荷時の回線状態</strong>を確認します。工場で開通したまま出荷すると、倉庫に眠っている間も基本料金がかかることがあります。「休止状態で出荷し、顧客先で初回接続したら課金開始」などの運用を回線事業者と決めておきます。各国の認証ラベル・表示、マニュアルの記載も確認します。</p></template>
+    <figcaption>工程の順番や検査項目は工場・製品によって変わります。ここではLTE製品に特有の工程を強調しています。</figcaption>
+  </figure>
+
+  <h2>7. 運用：出荷してからが本番</h2>
+  <p>通信機器は、出荷した後も「つながり続ける」ための仕事が続きます。ロボットは5〜10年使われることもあるため、<strong>通信の寿命が製品の寿命より短くならないか</strong>を常に監視します。</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>運用テーマ</th><th>やること</th><th>放っておくと</th></tr></thead>
+    <tbody>
+      <tr><td>FOTA</td><td>ホストFWとモジュールFWの遠隔更新。段階配信（まず数%に配って様子を見る）、失敗時のロールバック</td><td>脆弱性やキャリア側の変更に追従できない</td></tr>
+      <tr><td>回線管理</td><td>開通・休止・解約、通信量の監視、異常な通信（暴走・盗難）の検知</td><td>想定外の通信料、盗難SIMの悪用</td></tr>
+      <tr><td>EOL/PCN対応</td><td>モジュールメーカーからの通知を受けて、影響評価・最終購入（ラストバイ）・代替品の評価と再認証</td><td>ある日突然部品が買えず生産停止</td></tr>
+      <tr><td>証明書更新</td><td>クラウド接続用のサーバ証明書・クライアント証明書・ルート証明書の期限管理</td><td>期限切れで全台がクラウドに接続できない</td></tr>
+      <tr><td>停波・周波数再編</td><td>各国キャリアの2G/3G停波や、LTE周波数の5Gへの転用の予定を監視</td><td>フォールバック先がなくなり通信不能</td></tr>
+    </tbody>
+  </table></div>
+  <p>停波は現実の問題です。日本ではNTTドコモの3G（FOMA）が2026年3月31日に終了し、各社の3Gは終了しました。アジア各国でも2G/3Gの停波が進んでいます。<strong>LTE専用（または4G/5G）のモジュールを選び、2G/3Gへのフォールバックを前提にしない</strong>設計が基本です。</p>
+
+  <h2>8. よくある失敗と先回りの対策</h2>
+  <p>LTE機器の開発で「あるある」な失敗を集めました。フェーズのボタンで絞り込めます。どれも、<strong>前の工程で少し手間をかければ防げる</strong>ものばかりです。</p>
+
+  <div class="chips" id="fail-filter" role="group" aria-label="フェーズで絞り込み">
+    <button class="chip" aria-pressed="true" data-f="all">すべて</button>
+    <button class="chip" aria-pressed="false" data-f="plan">企画・選定</button>
+    <button class="chip" aria-pressed="false" data-f="design">設計・EVT</button>
+    <button class="chip" aria-pressed="false" data-f="cert">DVT・認証</button>
+    <button class="chip" aria-pressed="false" data-f="mp">量産・運用</button>
+  </div>
+  <div class="card-grid fail-grid" id="fail-grid">
+    <div class="card" data-f="design"><span><span class="badge bad">設計・EVT</span></span><h3>アンテナ配置を後回し → OTA不合格</h3><p><span class="lbl">症状</span>筐体完成後の暗室測定でTRP/TISが大幅に不足。</p><p><span class="lbl">原因</span>空いた場所にアンテナを置いたら、金属フレームやモーターの真横だった。</p><p><span class="lbl">対策</span>筐体設計の初期からアンテナ領域を確保し、アンテナメーカーと共同でEVT前に仮測定。</p></div>
+    <div class="card" data-f="design"><span><span class="badge bad">設計・EVT</span></span><h3>ピーク電流で再起動</h3><p><span class="lbl">症状</span>電波の弱い場所や走行中だけ、モジュールやCPUがリセットされる。</p><p><span class="lbl">原因</span>送信電力が上がったときのピーク電流とモーター起動が重なり電圧低下。</p><p><span class="lbl">対策</span>EVBで波形を実測、電源系統の分離・バルクコンデンサ・電圧監視ログを入れる。</p></div>
+    <div class="card" data-f="design"><span><span class="badge bad">設計・EVT</span></span><h3>ノイズで受信感度が劣化（デセンス）</h3><p><span class="lbl">症状</span>導通試験は良いのに、組み上げるとTISが悪い。</p><p><span class="lbl">原因</span>カメラ・DC-DC・モータードライバの高調波がLTEの受信帯域に入る。</p><p><span class="lbl">対策</span>EVTでノイズ源を1つずつ止めて比較、シールド・配線・スイッチング周波数を調整。</p></div>
+    <div class="card" data-f="cert"><span><span class="badge warn">DVT・認証</span></span><h3>認証スケジュールの遅れ</h3><p><span class="lbl">症状</span>量産品は完成したのに、輸出先の認証が下りず出荷できない。</p><p><span class="lbl">原因</span>試験所の予約・書類差戻し・サンプル輸送を見込んでいなかった。DVT後に設計変更して再試験。</p><p><span class="lbl">対策</span>要件定義の段階で認証代行と国別スケジュールを作り、DVTサンプルの版を凍結。</p></div>
+    <div class="card" data-f="plan"><span><span class="badge accent">企画・選定</span></span><h3>中国向け別SKUを計画していなかった</h3><p><span class="lbl">症状</span>グローバル向けモジュールでは中国の網接続手続きや対応が合わず、急遽別モジュールに。</p><p><span class="lbl">原因</span>「まずは日本と東南アジア」で進め、中国の要件を後回しにした。</p><p><span class="lbl">対策</span>同一フットプリントの中国向け兄弟機種があるモジュールを選び、SKU・検査・認証を最初から計画。</p></div>
+    <div class="card" data-f="mp"><span><span class="badge ok">量産・運用</span></span><h3>モジュールのEOL</h3><p><span class="lbl">症状</span>発売2年でモジュールの生産終了通知。代替品は認証の取り直し。</p><p><span class="lbl">原因</span>選定時に供給期間・EOL方針を確認していなかった。</p><p><span class="lbl">対策</span>長期供給プログラムのある機種を選ぶ。PCN/EOL通知の受信窓口を決め、ピン互換の後継機種を把握。</p></div>
+    <div class="card" data-f="cert"><span><span class="badge warn">DVT・認証</span></span><h3>モジュールFW版数のずれ</h3><p><span class="lbl">症状</span>キャリア承認時と量産品でFW版数が違い、再試験を求められた。</p><p><span class="lbl">原因</span>工場任せでモジュールを調達し、ロットごとにFWが異なった。</p><p><span class="lbl">対策</span>承認版数を購買仕様に明記し、FW書込み工程で版数を読み出して照合。</p></div>
+    <div class="card" data-f="cert"><span><span class="badge warn">DVT・認証</span></span><h3>現地の屋内で電波が弱い</h3><p><span class="lbl">症状</span>顧客の倉庫の奥で映像が止まる。ローミング先でデータが流れない。</p><p><span class="lbl">原因</span>フィールド試験を都市部の屋外だけで済ませた。APN・ローミング契約の確認漏れ。</p><p><span class="lbl">対策</span>実際の稼働場所で走行試験。映像のビットレートを電波状況に応じて下げる仕組みも用意。</p></div>
+    <div class="card" data-f="mp"><span><span class="badge ok">量産・運用</span></span><h3>出荷前から回線料金が発生</h3><p><span class="lbl">症状</span>倉庫在庫の数百台分の回線費が毎月請求される。</p><p><span class="lbl">原因</span>工場の検査で開通したSIMをそのまま出荷。</p><p><span class="lbl">対策</span>検査用SIMと出荷用SIMを分ける、または休止状態で出荷し初回接続で課金開始にする。</p></div>
+    <div class="card" data-f="plan"><span><span class="badge accent">企画・選定</span></span><h3>2G/3Gフォールバック前提の設計</h3><p><span class="lbl">症状</span>停波後、LTEが弱い場所で通信不能になった。</p><p><span class="lbl">原因</span>古い通信方式に頼るモジュール・設計のまま出荷した。</p><p><span class="lbl">対策</span>LTE専用（または4G/5G）モジュールを選び、各国の停波予定を運用で監視。</p></div>
+  </div>
+
+  <h2>9. ゲートごとのチェックリスト</h2>
+  <p>各ゲートの出口基準を、チェックリストにしました。チェック状態はこのブラウザに保存されるので、実際のプロジェクトの進捗確認にも使えます（項目は叩き台なので、自社の要件に合わせて数値を決めてください）。</p>
+
+  <div data-tabs>
+    <div class="tab-list"><button data-tab="g0">要件・選定</button><button data-tab="g1">EVT</button><button data-tab="g2">DVT</button><button data-tab="g3">PVT</button><button data-tab="g4">量産・運用</button></div>
+    <div data-tab-panel="g0"><ul data-checklist="ch12-gate-plan">
+      <li>対象国・地域と優先順位（第1弾・第2弾）が合意されている</li>
+      <li>上り帯域・遅延・月間データ量が数値で決まっている</li>
+      <li>電源方式・待機電流・ピーク電流の許容値が決まっている</li>
+      <li>全対象国の必要バンドをカバーするSKU構成が決まっている</li>
+      <li>モジュールの取得済み認証（技適・各国・キャリア）を確認した</li>
+      <li>モジュールの供給期間・EOL/PCNの通知方法を確認した</li>
+      <li>EVBで実網通信・ピーク電流波形を確認した</li>
+    </ul></div>
+    <div data-tab-panel="g1"><ul data-checklist="ch12-gate-evt">
+      <li>起動・アタッチ・通信・再接続・FOTAが一通り動く</li>
+      <li>RF導通試験で送信電力・受信感度がモジュール仕様どおり</li>
+      <li>アンテナのVSWR・放射効率が目標値（または見込みあり）</li>
+      <li>送信ピーク＋モーター起動時の電源電圧が規定内</li>
+      <li>ノイズ源を止めた比較でデセンスの有無を確認した</li>
+      <li>重大不具合の対策方針と次の試作への反映内容が決まった</li>
+    </ul></div>
+    <div data-tab-panel="g2"><ul data-checklist="ch12-gate-dvt">
+      <li>全対象バンドでTRP/TISが目標（キャリア要件）を満たす</li>
+      <li>ロボットの代表姿勢・アーム位置でOTA劣化が許容範囲</li>
+      <li>EMC/RF事前試験で本試験に通る見込みがある</li>
+      <li>温度・振動・落下・防水の環境試験で重大不具合がない</li>
+      <li>ソフト機能（圏外復帰・ローミング・FOTAロールバック）完成</li>
+      <li>認証サンプルの版（HW・ホストFW・モジュールFW）を凍結した</li>
+      <li>フィールド試験の計画（国・場所・合法的な実施方法）ができている</li>
+    </ul></div>
+    <div data-tab-panel="g3"><ul data-checklist="ch12-gate-pvt">
+      <li>量産治具・量産部品で歩留まり目標を達成（例：直行率95%以上）</li>
+      <li>RF最終検査の合否基準をゴールデンサンプルで検証した</li>
+      <li>FW書込み工程でモジュールFW版数を照合している</li>
+      <li>IMEI・ICCID/EID・シリアルの紐付けデータが正しく出力される</li>
+      <li>全検査工程の作業標準書・検査規格書がある</li>
+      <li>出荷国すべての認証が完了し、ラベル・表示が正しい</li>
+    </ul></div>
+    <div data-tab-panel="g4"><ul data-checklist="ch12-gate-mp">
+      <li>出荷時の回線状態（休止・開通）と課金開始の条件が決まっている</li>
+      <li>FOTAの段階配信・ロールバック手順がある</li>
+      <li>回線管理（開通・休止・解約・通信量監視）の担当と手順がある</li>
+      <li>PCN/EOL通知の受信窓口と影響評価手順がある</li>
+      <li>証明書・鍵の期限一覧と更新計画がある</li>
+      <li>輸出先の停波・周波数再編の予定を定期確認している</li>
+    </ul></div>
+  </div>
+
+  <h2>10. 期間と費用の目安</h2>
+  <p>最後に、基準ケース（LTEモジュール採用・輸出先1か国・中国なし・キャリア認証なし）での期間と<strong>外部費用</strong>の目安をまとめます。社内の人件費や部材費（量産部品）は含みません。<strong>数値はあくまで目安（要見積）</strong>で、モジュールやアンテナの認証流用の可否、試作台数、国数、試験所によって大きく変わります。必ず試験所・認証代行・キャリアから見積もりを取ってください。</p>
+  <div class="callout warn"><span class="title">目安（要見積）</span><p>下表の金額は計画の叩き台として幅を示したものです。実際の費用は製品・時期・依頼先で数倍変わることがあります。</p></div>
+  <div class="table-wrap"><table class="cost-table" id="cost-table">
+    <thead><tr><th>フェーズ</th><th class="num">期間（週）</th><th class="num">外部費用（万円）</th><th>主な担当</th></tr></thead>
+    <tbody></tbody>
+    <tfoot></tfoot>
+  </table></div>
+  <p>国数を増やす、中国を含める、キャリア認証を取る、チップダウン設計にする、といった条件で期間がどう伸びるかは、<a href="../tools/roadmap.html">開発ロードマップ（ガント）ツール</a>で試してみてください。</p>
+
+  <div class="callout robot"><span class="title">私たちのロボットの場合：最初の一歩</span>
+    <p>量産プラットフォームがない今、最もコスト対効果が高いのは、<strong>①要件（国・通信量・電源）を数字で決める、②候補モジュール2機種のEVBを買って実網と電流を測る、③筐体設計の初期にアンテナ領域を確保する</strong>の3つです。ここまでなら数十万円・2〜3か月程度で進められ、その後の大きな手戻りを防げます。</p>
+  </div>
+
+  <h2>まとめ</h2>
+  <ul>
+    <li>ハード開発は <b>EVT（設計の検証）→ DVT（製品要件の検証）→ PVT（量産工程の検証）→ MP（量産）</b> と段階を踏み、各段階の終わりに<b>事前に決めた出口基準</b>で判定する。</li>
+    <li>LTEロボットでは、EVTの前に<b>EVBでの実網検証とピーク電流測定</b>を入れ、<b>アンテナ配置は筐体設計と同時に</b>決める。</li>
+    <li>電波性能は <b>RF導通 → アンテナ受動（効率・VSWR）→ OTA（TRP/TIS）</b> の順に測ると原因を切り分けやすい。ロボットはノイズによるデセンスに注意。</li>
+    <li>認証（技適・各国・キャリア）は国ごとに並行して進めるが、<b>中国は長め</b>。DVTで認証サンプルの版を凍結する。</li>
+    <li>量産では <b>FW版数照合・IMEI等の紐付け・RF最終検査・SIMプロビジョニング・出荷時回線状態</b> がLTE特有の工程。</li>
+    <li>出荷後も <b>FOTA・回線管理・EOL/PCN・証明書・停波</b> への対応が続く。</li>
+  </ul>
+
+  <h2>用語</h2>
+  <dl class="terms">
+    <dt>EVT</dt><dd>Engineering Validation Test。技術検証試作。設計の考え方・部品選定が正しいかを確かめる段階。</dd>
+    <dt>DVT</dt><dd>Design Validation Test。設計検証試作。製品として全要件を満たすかを確かめ、設計を確定する段階。</dd>
+    <dt>PVT</dt><dd>Production Validation Test。量産検証試作。量産工場・治具・部品で安定して作れるかを確かめる段階。</dd>
+    <dt>MP</dt><dd>Mass Production。量産。</dd>
+    <dt>出口基準</dt><dd>exit criteria。その段階を終えて次へ進むための合格条件。段階の開始前に数値で決める。</dd>
+    <dt>EVB</dt><dd>Evaluation Board。モジュールメーカーが提供する評価用基板。</dd>
+    <dt>RF導通試験</dt><dd>アンテナを外し、RF端子をケーブルで測定器に直結して送受信性能を測る試験。</dd>
+    <dt>VSWR</dt><dd>Voltage Standing Wave Ratio（電圧定在波比）。アンテナでの反射の大きさ。1に近いほど良い。</dd>
+    <dt>OTA</dt><dd>Over-The-Air。製品を電波暗室に入れ、実際に電波を送受信して測る試験。</dd>
+    <dt>TRP</dt><dd>Total Radiated Power。全方向に放射される送信電力の合計。</dd>
+    <dt>TIS</dt><dd>Total Isotropic Sensitivity。全方向で平均した受信感度。</dd>
+    <dt>デセンス</dt><dd>desense。製品内部のノイズによって受信感度が劣化すること。</dd>
+    <dt>EMC</dt><dd>Electromagnetic Compatibility。電磁両立性。不要な電波を出さず、周囲の電波で誤動作しないこと。</dd>
+    <dt>ゴールデンサンプル</dt><dd>特性がよくわかっている基準品。検査装置の校正や合否基準の確認に使う。</dd>
+    <dt>IMEI</dt><dd>International Mobile Equipment Identity。端末（モジュール）ごとの15桁の識別番号。先頭8桁はTAC。</dd>
+    <dt>PCN / EOL</dt><dd>Product Change Notification（仕様・部品の変更通知）/ End of Life（生産終了）。</dd>
+    <dt>FOTA</dt><dd>Firmware Over-The-Air。無線でのファームウェア更新。</dd>
+    <dt>歩留まり</dt><dd>作ったもののうち良品の割合。1回目の検査で合格した割合を直行率という。</dd>
+  </dl>
+
+  <h2>確認クイズ</h2>
+  <div class="quiz" data-quiz="12"></div>
+
+  <section class="sources"><h2>参考・出典</h2><ul>
+    <li><a href="https://instrumental.com/build-better-handbook/evt-dvt-pvt">Instrumental: EVT, DVT, PVT Stage Gate Definitions</a></li>
+    <li><a href="https://ctiacertification.org/program/over-the-air-performance-testing/">CTIA Certification: Over-the-Air (OTA) Performance Testing</a></li>
+    <li><a href="https://www.globalcertificationforum.org/">Global Certification Forum (GCF)</a></li>
+    <li><a href="https://www.ptcrb.com/">PTCRB</a></li>
+    <li><a href="https://www.tele.soumu.go.jp/j/adm/monitoring/summary/qa/giteki_mark/">総務省 電波利用ポータル：技適マーク・技術基準適合証明等について</a></li>
+    <li><a href="https://www.tele.soumu.go.jp/j/sys/others/exp-sp/">総務省 電波利用ポータル：技適未取得機器を用いた実験等の特例制度</a></li>
+    <li><a href="https://www.docomo.ne.jp/info/3g_closed/">NTTドコモ：「FOMA」および「iモード」サービス終了のご案内</a></li>
+    <li><a href="https://www.gsma.com/services/tac-allocation/">GSMA: TAC Allocation</a> ／ <a href="https://imeidb.gsma.com/imei/resources/documents/GSMA-TAC-Allocation-and-IMEI-Programming-Rules.pdf">GSMA TAC Allocation and IMEI Programming Rules</a></li>
+    <li><a href="https://www.rohde-schwarz.com/us/products/test-and-measurement/wireless-tester-rf-analyzer-generator/cmw100-communications-manufacturing-test-set_63493-143617.html">Rohde &amp; Schwarz: R&amp;S CMW100 communications manufacturing test set</a></li>
+    <li><a href="https://www.gsma.com/solutions-and-impact/technologies/internet-of-things/deployment-map/">GSMA: Mobile IoT Deployment Map</a></li>
+  </ul><p>期間・費用は筆者による一般的な目安であり、見積もりではありません。確認日: 2026-09</p></section>
+</main>
+</div>
+<script src="../assets/data/roadmap.js"></script>
+<script>
+/* ---- 第12章：ロードマップのステッパー・費用表・計算機・失敗カード絞り込み ----
+   app.js より前に実行し、ステッパーのDOMを roadmap.js から生成する */
+(function () {
+  "use strict";
+  var R = window.LTE_ROADMAP;
+  if (!R) return;
+  var root = "../";
+  var escH = function (s) { return String(s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); };
+  var NUM = "①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮";
+  var plan = R.plan({});
+  // 条件付きフェーズ（キャリア認証）は、基準ケースでは点線で参考表示する
+  var phases = plan.phases.map(function (p) {
+    if (!p.skipped) return p;
+    return Object.assign({}, p, { start: p.startWeek, end: p.startWeek + p.weeks });
+  });
+
+  // ---- SVGタイムライン ----
+  var svg = document.getElementById("tl-svg");
+  var NS = "http://www.w3.org/2000/svg";
+  var X0 = 104, X1 = 430, TOP = 34, ROW = 28;
+  var maxW = Math.ceil((plan.total + 8) / 4) * 4;
+  var sx = function (w) { return X0 + (X1 - X0) * w / maxW; };
+  var H = TOP + phases.length * ROW + 12;
+  svg.setAttribute("viewBox", "0 0 440 " + H);
+  var parts = [];
+  // 月目盛り（3か月ごと）
+  for (var m = 0; m * 4.345 <= maxW; m += 3) {
+    var x = sx(m * 4.345);
+    parts.push('<line x1="' + x + '" y1="' + (TOP - 8) + '" x2="' + x + '" y2="' + (H - 8) + '" stroke="var(--border)" stroke-width="1"/>');
+    parts.push('<text x="' + x + '" y="' + (TOP - 14) + '" text-anchor="middle" font-size="12" class="t-muted">' + m + 'か月</text>');
+  }
+  phases.forEach(function (p, i) {
+    var y = TOP + i * ROW;
+    var dimList = [];
+    for (var k = 1; k <= i; k++) dimList.push(k);
+    var dimAttr = dimList.length ? ' data-dim-at="' + dimList.join(",") + '"' : "";
+    var w = Math.max(4, sx(p.end) - sx(p.start));
+    parts.push('<g class="tl-bar"' + dimAttr + '>' +
+      '<text x="' + (X0 - 8) + '" y="' + (y + 15) + '" text-anchor="end" font-size="13">' + escH(p.short) + '</text>' +
+      (p.skipped
+        ? '<rect x="' + sx(p.start) + '" y="' + (y + 3) + '" width="' + w + '" height="17" rx="4" fill="var(' + p.color + ')" fill-opacity=".15" stroke="var(' + p.color + ')" stroke-dasharray="4 3"/>'
+        : '<rect x="' + sx(p.start) + '" y="' + (y + 3) + '" width="' + w + '" height="17" rx="4" fill="var(' + p.color + ')"' + (p.ongoing ? ' fill-opacity=".45"' : '') + '/>') +
+      (p.ongoing ? '<text x="' + (sx(p.end) + 4) + '" y="' + (y + 16) + '" font-size="12" class="t-muted">継続→</text>' : '') +
+      '</g>');
+    parts.push('<rect data-show-at="' + (i + 1) + '" x="' + (sx(p.start) - 3) + '" y="' + (y) + '" width="' + (w + 6) + '" height="23" rx="6" fill="none" stroke="var(--accent)" stroke-width="2.5"/>');
+  });
+  svg.innerHTML = parts.join("");
+
+  // ---- ステップ本文 ----
+  var box = document.getElementById("tl-steps");
+  var li = function (arr) { return "<ul>" + arr.map(function (x) { return "<li>" + escH(x) + "</li>"; }).join("") + "</ul>"; };
+  box.outerHTML = phases.map(function (p, i) {
+    var range = p.ongoing ? "出荷後ずっと" : "目安 " + p.min + "〜" + p.max + " 週";
+    var links = p.chapters.map(function (c) { return '<a href="' + root + c.file + '">' + escH(c.title) + "</a>"; }).join("　");
+    return '<div class="step" data-title="' + escH(p.name) + '">' +
+      "<h4>" + NUM.charAt(i) + " " + escH(p.name) + "</h4>" +
+      '<div class="meta"><span class="badge accent">' + escH(p.stage) + '</span><span class="badge">' + range + '</span><span class="badge">第' + Math.floor(p.start) + "週〜</span>" + (p.skipped ? '<span class="badge warn">条件付き：キャリア認証が必要な場合</span>' : "") +
+      p.owners.map(function (o) { return '<span class="badge ok">' + escH(o) + "</span>"; }).join("") + "</div>" +
+      "<p>" + escH(p.summary) + "</p>" +
+      '<div class="cols"><div><h5>主な成果物</h5>' + li(p.deliverables) + "</div><div><h5>ゲート基準（出口基準）</h5>" + li(p.gate) + "</div></div>" +
+      '<p class="small"><b>ロボットでの注意：</b>' + escH(p.robot) + "</p>" +
+      '<p class="small"><b>関連：</b>' + links + "</p></div>";
+  }).join("");
+
+  // ---- 費用表 ----
+  var tb = document.querySelector("#cost-table tbody");
+  var sumMin = 0, sumMax = 0;
+  tb.innerHTML = plan.phases.map(function (p) {
+    var dur = p.ongoing ? "継続" : p.min + "〜" + p.max;
+    var cost = p.cost.max ? p.cost.min + "〜" + p.cost.max : "—";
+    if (!p.ongoing) { sumMin += p.cost.min; sumMax += p.cost.max; }
+    return "<tr><td>" + escH(p.name) + (p.optional ? ' <span class="badge warn">条件付き</span>' : "") + '<div class="small muted">' + escH(p.cost.note) + '</div></td><td class="num">' + dur + '</td><td class="num">' + cost + "</td><td>" + escH(p.owners.join("・")) + "</td></tr>";
+  }).join("");
+  document.querySelector("#cost-table tfoot").innerHTML = '<tr><td>合計（期間は基準ケース、費用は条件付きフェーズも含む）</td><td class="num">約' + plan.total + "週（約" + plan.months.toFixed(0) + 'か月）</td><td class="num">' + sumMin + "〜" + sumMax + "</td><td>目安（要見積）</td></tr>";
+
+  // ---- データ量計算機 ----
+  var $ = function (id) { return document.getElementById(id); };
+  var fmtGB = function (gb) { return gb >= 1000 ? (gb / 1000).toFixed(1) + " TB" : gb >= 10 ? gb.toFixed(0) + " GB" : gb.toFixed(1) + " GB"; };
+  function calc() {
+    var rate = +$("c-rate").value, hrs = +$("c-hours").value, tele = +$("c-tele").value, days = +$("c-days").value, units = +$("c-units").value;
+    $("o-rate").textContent = rate + " Mbps";
+    $("o-hours").textContent = hrs + " 時間";
+    $("o-tele").textContent = tele + " kbps";
+    $("o-days").textContent = days + " 日";
+    $("o-units").textContent = units + " 台";
+    var videoGB = rate * 1e6 * hrs * 3600 * days / 8 / 1e9;
+    var teleGB = tele * 1e3 * 24 * 3600 * days / 8 / 1e9;
+    var gb = videoGB + teleGB;
+    $("r-month").textContent = fmtGB(gb);
+    $("r-fleet").textContent = fmtGB(gb * units);
+    var ul = Math.max(rate, tele / 1000) * 1.5;
+    $("r-ul").textContent = ul < 1 ? (ul * 1000).toFixed(0) + " kbps" : ul.toFixed(1) + " Mbps";
+    var c;
+    if (rate === 0 || hrs === 0) c = tele <= 1 ? "テレメトリだけで非常に少ない通信量です。NB-IoT/LTE-Mの省電力回線も候補になりますが、移動するロボットではLTE-Mのほうが安心です（第5章）。" : "映像なしのテレメトリ中心です。LTE-MやCat-1bis/Cat-1で十分なことが多く、月数十〜数百MBの安価なIoTプランが使えます。";
+    else if (ul <= 3) c = "上り数Mbpsの映像です。Cat-1/Cat-1bisの上り上限（規格上約5Mbps）に近づくため、電波の弱い場所では足りなくなる可能性があります。余裕を見るならCat-4も比較しましょう。";
+    else c = "上り数Mbps以上の映像です。Cat-4以上（または5G）を検討し、月間データ量に見合う回線プランの見積もりが必要です。";
+    if (gb > 20) c += " 1台あたり月" + fmtGB(gb) + "は、IoT向けの小容量プランでは収まりません。映像は必要なときだけ送る・解像度を下げるなどの設計も検討しましょう。";
+    $("r-comment").textContent = c;
+  }
+  ["c-rate", "c-hours", "c-tele", "c-days", "c-units"].forEach(function (id) { $(id).addEventListener("input", calc); });
+  calc();
+
+  // ---- 失敗カードの絞り込み ----
+  var chips = document.querySelectorAll("#fail-filter .chip");
+  chips.forEach(function (ch) {
+    ch.addEventListener("click", function () {
+      var f = ch.dataset.f;
+      chips.forEach(function (c) { c.setAttribute("aria-pressed", String(c === ch)); });
+      document.querySelectorAll("#fail-grid .card").forEach(function (card) { card.hidden = !(f === "all" || card.dataset.f === f); });
+    });
+  });
+})();
+</script>
+<script src="../assets/data/quiz/ch12.js"></script>
+<script src="../assets/app.js"></script>
+</body>
+</html>

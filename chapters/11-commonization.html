@@ -1,0 +1,598 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>国ごとの部品共通化戦略｜LTE Study</title>
+  <link rel="stylesheet" href="../assets/style.css">
+  <style>
+    .fig-narrow > svg { max-width: 620px; margin: 0 auto; }
+    .fig-narrow svg text { font-size: 14px; }
+    .fig-narrow svg .tag { font-size: 12px; }
+    .fig-strat > svg { max-width: 560px; margin: 0 auto; }
+    .fig-strat svg text { font-size: 14px; }
+    .fig-strat svg text.t-small, .fig-narrow svg text.t-small { font-size: 12px; }
+    .tool-link { display: flex; gap: 14px; align-items: center; border: 2px solid var(--accent); background: var(--accent-soft); border-radius: var(--radius); padding: 14px 18px; margin: 20px 0; text-decoration: none; color: var(--text); }
+    .tool-link:hover { filter: brightness(1.03); }
+    .tool-link .ic { font-size: 2rem; line-height: 1; }
+    .tool-link b { color: var(--accent); }
+    .pc-list { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .pc-list > div { background: var(--surface-2); border-radius: var(--radius-sm); padding: 8px 12px; }
+    .pc-list h4 { margin: 0 0 4px; font-size: .95rem; }
+    .pc-list ul { margin: 0; padding-left: 1.2em; font-size: .92rem; }
+    @media (max-width: 600px) { .pc-list { grid-template-columns: 1fr; } }
+    /* アンテナ長ウィジェット */
+    .ant-row { display: grid; grid-template-columns: 5.5em 1fr 4.8em; gap: 8px; align-items: center; font-size: .88rem; margin: 5px 0; }
+    .ant-row .bar { height: 14px; border-radius: 3px; background: color-mix(in srgb, var(--c1) 30%, var(--surface-2)); }
+    .ant-row.is-on .bar { background: var(--c1); }
+    .ant-row.is-on { font-weight: 700; }
+    .ant-row .mm { text-align: right; font-family: var(--mono); }
+    .ant-out { background: var(--surface-2); border-radius: var(--radius-sm); padding: 10px 14px; margin-top: 10px; }
+    /* 試算 */
+    .calc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px 16px; margin: 8px 0 12px; }
+    .calc-grid label { display: flex; flex-direction: column; font-size: .85rem; color: var(--text-muted); gap: 2px; }
+    .calc-grid input[type=number] { font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; width: 100%; }
+    .calc-grid label.cb { flex-direction: row; align-items: center; gap: 6px; color: var(--text); }
+    .cbar { margin: 10px 0; }
+    .cbar .hd { display: flex; justify-content: space-between; gap: 8px; font-size: .9rem; flex-wrap: wrap; }
+    .cbar .hd b { font-family: var(--mono); }
+    .cbar .track { display: flex; height: 20px; border-radius: 4px; overflow: hidden; background: var(--surface-2); margin-top: 3px; }
+    .cbar .track span { display: block; height: 100%; }
+    .cbar.best .hd::after { content: "最安"; font-size: .72rem; font-weight: 700; color: var(--ok); background: var(--ok-soft); padding: 0 8px; border-radius: 999px; }
+    .sw { display: inline-block; width: 12px; height: 10px; border-radius: 2px; margin: 0 4px 0 10px; vertical-align: -1px; }
+    #liveTable td, #liveTable th { text-align: center; white-space: nowrap; }
+    #liveTable td:first-child, #liveTable th:first-child { text-align: left; }
+  </style>
+</head>
+<body data-root="../" data-chapter="11">
+<div class="page">
+<main>
+  <header class="chapter-hero">
+    <div class="eyebrow">CHAPTER 11</div>
+    <h1>国ごとの部品共通化戦略</h1>
+    <p class="lead">アジア各国へ輸出するとき、ロボットを国の数だけ作り分けるのは大変です。どの部品は世界共通にでき、どこは国ごとに変えざるを得ないのか。「1機種で何か国まで行けるか」を考えるための道具をそろえます。</p>
+    <div class="goals"><h2>この章のゴール</h2><ul>
+      <li>ロボットの構成要素を「共通化しやすい／条件付き／国別になりがち」に分けて説明できる</li>
+      <li>通信部の4つの戦略（グローバル1SKU・地域版＋共通基板・通信カード差し替え・外付けゲートウェイ）の長所短所を比べられる</li>
+      <li>アンテナの広帯域化、認証の再利用、eSIM、国別設定の考え方を理解する</li>
+      <li>台数や認証費から、どの戦略が有利かを概算できる</li>
+    </ul></div>
+  </header>
+
+  <a class="tool-link" href="../tools/band-checker.html"><span class="ic">🧭</span><span><b>バンド共通化チェッカー</b>で実際に試せます。<br><span class="small muted">輸出先を選ぶ → 必要バンドの行列 → モジュールごとの国別判定（◎○△×）と「1SKUで行けるか」を表示します。</span></span></a>
+
+  <h2>1. なぜ「共通化」が大事なのか</h2>
+  <p>製品の世界では、在庫や生産を管理する単位を <b>SKU</b>（Stock Keeping Unit：在庫管理単位）と呼びます。「日本向けロボット」と「タイ向けロボット」で中身が1つでも違えば、SKUは2つです。SKUが1つ増えるたびに、次のような仕事がまるごと増えます。</p>
+  <ul>
+    <li><b>設計・検証</b>：部品表（<b>BOM</b>：Bill of Materials）が別になり、試験も別に回す</li>
+    <li><b>認証</b>：電波認証やキャリア認証を型番ごとに取り直す可能性がある</li>
+    <li><b>調達・在庫</b>：部品ごとに発注量が分散して単価が下がりにくく、売れ残りのリスクも国ごとに発生</li>
+    <li><b>生産</b>：ラインの段取り替え、ラベル・梱包の取り違え防止</li>
+    <li><b>保守</b>：修理部品、ファームウェア、問い合わせ対応が国ごとに分岐</li>
+  </ul>
+  <p>たとえるなら、海外旅行用の荷物です。国ごとに別のスーツケースを用意するより、<b>「世界対応のACアダプタ＋国ごとの変換プラグだけ」</b>にしたほうが圧倒的に楽です。ロボットでも同じで、<b>大部分を共通にして、国ごとに違う部分をできるだけ小さく・後から差し替えられる形にまとめる</b>のが基本方針になります。</p>
+  <p>ただし、何でも共通にすればよいわけではありません。全部の国に対応する「全部入り」の部品は高価で、消費電力やサイズでも不利なことがあります。<b>共通化の度合いは、台数・国数・部品の単価差・認証費のバランスで決まる</b>——これがこの章のテーマです。</p>
+
+  <div class="callout robot"><span class="title">私たちのロボットの場合</span>
+    <p>まだ量産プラットフォームがなく、試作から設計する段階です。これは実はチャンスで、<b>最初の基板設計の時点で「差し替えられる余地」を仕込んでおける</b>からです。後から国を追加するときに基板を作り直さずに済むよう、この章の考え方を試作の段階から取り入れましょう。</p>
+  </div>
+
+  <h2>2. ロボットのどこが共通化できるか</h2>
+  <p>ロボットを構成要素ごとに分けて、「共通化しやすさ」で色分けしたのが下の図です。緑は世界共通にしやすい部分、橙は選び方しだいで共通化できる部分、赤は国ごとに変わりがちな部分です。</p>
+
+  <figure class="figure fig-narrow" data-hotspots data-hs-default="module">
+    <div class="hint">各行をクリック（タップ）すると、共通化のポイントが表示されます</div>
+    <svg viewBox="0 0 560 530" role="img" aria-label="ロボットの構成要素と共通化しやすさ">
+      <text x="10" y="20" style="font-weight:700;fill:var(--ok)">■ 共通化しやすい</text>
+      <g data-hs="body"><rect class="box" x="10" y="30" width="540" height="30" rx="6"/><rect x="10" y="30" width="8" height="30" rx="3" fill="var(--ok)"/><text x="28" y="50">筐体・機構・モーター</text><text x="540" y="50" text-anchor="end" class="t-muted tag">ほぼ全世界共通</text></g>
+      <g data-hs="soc"><rect class="box" x="10" y="66" width="540" height="30" rx="6"/><rect x="10" y="66" width="8" height="30" rx="3" fill="var(--ok)"/><text x="28" y="86">ホストSoC・アプリケーションソフト</text><text x="540" y="86" text-anchor="end" class="t-muted tag">1ビルドで共通</text></g>
+      <g data-hs="board"><rect class="box" x="10" y="102" width="540" height="30" rx="6"/><rect x="10" y="102" width="8" height="30" rx="3" fill="var(--ok)"/><text x="28" y="122">メイン基板（LTE部以外）</text><text x="540" y="122" text-anchor="end" class="t-muted tag">設計しだいで共通</text></g>
+
+      <text x="10" y="162" style="font-weight:700;fill:var(--warn)">■ 条件付きで共通化できる</text>
+      <g data-hs="module"><rect class="box" x="10" y="172" width="540" height="30" rx="6"/><rect x="10" y="172" width="8" height="30" rx="3" fill="var(--warn)"/><text x="28" y="192">LTEモジュール</text><text x="540" y="192" text-anchor="end" class="t-muted tag">グローバル版 or 地域版</text></g>
+      <g data-hs="antenna"><rect class="box" x="10" y="208" width="540" height="30" rx="6"/><rect x="10" y="208" width="8" height="30" rx="3" fill="var(--warn)"/><text x="28" y="228">アンテナ</text><text x="540" y="228" text-anchor="end" class="t-muted tag">広帯域化で共通</text></g>
+      <g data-hs="sim"><rect class="box" x="10" y="244" width="540" height="30" rx="6"/><rect x="10" y="244" width="8" height="30" rx="3" fill="var(--warn)"/><text x="28" y="264">SIM / eSIMプロファイル</text><text x="540" y="264" text-anchor="end" class="t-muted tag">eSIMで共通</text></g>
+      <g data-hs="fw"><rect class="box" x="10" y="280" width="540" height="30" rx="6"/><rect x="10" y="280" width="8" height="30" rx="3" fill="var(--warn)"/><text x="28" y="300">通信設定（バンド・APN・事業者設定）</text><text x="540" y="300" text-anchor="end" class="t-muted tag">設定で切替</text></g>
+
+      <text x="10" y="340" style="font-weight:700;fill:var(--bad)">■ 国別になりがち</text>
+      <g data-hs="label"><rect class="box" x="10" y="350" width="540" height="30" rx="6"/><rect x="10" y="350" width="8" height="30" rx="3" fill="var(--bad)"/><text x="28" y="370">認証ラベル・銘板</text><text x="540" y="370" text-anchor="end" class="t-muted tag">国ごとの表示</text></g>
+      <g data-hs="manual"><rect class="box" x="10" y="386" width="540" height="30" rx="6"/><rect x="10" y="386" width="8" height="30" rx="3" fill="var(--bad)"/><text x="28" y="406">取扱説明書・表示言語</text><text x="540" y="406" text-anchor="end" class="t-muted tag">言語・法定記載</text></g>
+      <g data-hs="power"><rect class="box" x="10" y="422" width="540" height="30" rx="6"/><rect x="10" y="422" width="8" height="30" rx="3" fill="var(--bad)"/><text x="28" y="442">電源プラグ・ACアダプタ</text><text x="540" y="442" text-anchor="end" class="t-muted tag">形状・安全認証</text></g>
+      <g data-hs="carrier"><rect class="box" x="10" y="458" width="540" height="30" rx="6"/><rect x="10" y="458" width="8" height="30" rx="3" fill="var(--bad)"/><text x="28" y="478">キャリア認証</text><text x="540" y="478" text-anchor="end" class="t-muted tag">事業者ごと</text></g>
+      <g data-hs="china"><rect class="box" x="10" y="494" width="540" height="30" rx="6"/><rect x="10" y="494" width="8" height="30" rx="3" fill="var(--bad)"/><text x="28" y="514">中国向け仕様</text><text x="540" y="514" text-anchor="end" class="t-muted tag">別SKUが定番</text></g>
+    </svg>
+    <div class="hs-panel"></div>
+    <template data-hs-content="body"><h4>筐体・機構・モーター（共通化しやすい）</h4><p>機械部分は国で変える理由がほとんどありません。注意点は2つだけです。①<b>アンテナを置く場所</b>を金属で囲わないこと（樹脂窓やアンテナ用スペースを最初から確保）。②銘板・認証ラベルを<b>貼り替えやすい位置</b>に用意しておくこと。これで筐体は全世界共通にできます。</p></template>
+    <template data-hs-content="soc"><h4>ホストSoC・アプリケーションソフト（共通化しやすい）</h4><p>ロボットの頭脳（SoC＝System on Chip）とアプリは、LTEモジュールとUSBやUARTでつながるだけなので国に依存しません。<b>国ごとの違いは「設定データ」に閉じ込め、ソフトは1ビルド</b>にします（第8節）。言語リソースも同じビルドに全言語を入れて切り替えるのが一般的です。</p></template>
+    <template data-hs-content="board"><h4>メイン基板（共通化しやすい）</h4><p>電源回路・センサー・モーター制御などLTE以外の回路は共通です。LTE部分も、<b>ピン互換のモジュールファミリー</b>のフットプリント（部品を載せるための銅パターン）を採用すれば、基板1種類のまま地域版を載せ替えられます（第4節）。電源はファミリー中で最も電流が大きいモデルに合わせて設計します。</p></template>
+    <template data-hs-content="module"><h4>LTEモジュール（条件付き）</h4><p>共通化のいちばんの分かれ道です。<b>グローバル版</b>（例: Quectel EG25-G、SIMCom SIM7600G-H）は多くのバンドに対応して1種類で済みますが、割高になりがちです。<b>地域版</b>（例: EC25-J＝日本、EC25-EUX＝欧州・アジア一部）は安い代わりに種類が増えます。どちらが得かは、台数と認証費で決まります（第3節・第9節）。</p></template>
+    <template data-hs-content="antenna"><h4>アンテナ（条件付き）</h4><p>698–960MHz と 1710–2690MHz をカバーする<b>広帯域アンテナ</b>にしておけば、アジアの主要バンド（B1/B3/B5/B8/B28/B40/B41など）はほぼ1種類で済みます。最も低いバンドがアンテナの大きさを決めるので、600MHz帯（B71、主に米国）まで含めるかどうかが設計上の分かれ目です（第5節）。</p></template>
+    <template data-hs-content="sim"><h4>SIM / eSIMプロファイル（条件付き）</h4><p>物理SIMを国ごとに差し替えると、工場や現地でSIMの管理が必要になります。基板に<b>チップ型のeSIM（MFF2）</b>を実装し、出荷後に国・事業者のプロファイルを書き込めば、ハードウェアは1種類のままにできます（第7節）。</p></template>
+    <template data-hs-content="fw"><h4>通信設定（条件付き）</h4><p>APN（接続先の名前）、使用バンドの限定（バンドロック）、事業者ごとのモジュール設定などは国によって違います。これを<b>ファームウェアの作り分けではなく設定で切り替える</b>設計にしておくのがポイントです。SIMの情報から自動判定すれば、現場作業もなくせます（第8節）。</p></template>
+    <template data-hs-content="label"><h4>認証ラベル・銘板（国別）</h4><p>日本の技適マーク、韓国のKCマーク、台湾のNCCマーク、豪州のRCM、欧州のCEなど、国ごとに表示が必要です。<b>ラベルだけを国別にする</b>、複数国の表示を1枚にまとめる、機器の画面に表示する（電子表示が認められる国もある）などで、本体の違いを最小にします。表示ルールは国ごとに異なるので <a href="09-certification.html">9章</a>・<a href="10-asia.html">10章</a> で確認します。</p></template>
+    <template data-hs-content="manual"><h4>取扱説明書・表示言語（国別）</h4><p>現地語の説明書、安全上の注意、法定の記載事項（輸入者名など）が必要です。紙は国別、本体の画面やアプリは多言語1ビルド、という分け方が一般的です。</p></template>
+    <template data-hs-content="power"><h4>電源プラグ・ACアダプタ（国別）</h4><p>プラグ形状（A/C/G/Iなど）と、電気用品の安全認証（日本のPSEなど）が国によって違います。<b>ロボット本体はDC入力にして、ACアダプタとケーブルだけ国別</b>にするのが定石です。アダプタは複数国の安全認証を持つ既製品を選ぶと楽になります。</p></template>
+    <template data-hs-content="carrier"><h4>キャリア認証（国別・事業者別）</h4><p>日本・韓国・米国などでは、通信事業者が自社網につなぐ端末を試験・承認する仕組みがあります。これは<b>最終製品の型番ごと</b>が基本で、モジュールが事前に認証済みだと試験項目が減る場合があります。どの事業者と組むかで必要な認証が変わるため、早めに相談します。</p></template>
+    <template data-hs-content="china"><h4>中国向け仕様（別SKUが定番）</h4><p>中国では SRRC（無線の型式認可）・NAL（網への接続許可）・CCC（強制製品認証）などが必要で、多くの場合<b>中国の認証を取った中国版モジュール</b>を使います。China Mobile は TD-LTE（B34/B38/B39/B40/B41）が主力なのでTDD対応も必須です。さらにクラウド接続先やデータの国外移転ルールも異なるため、中国だけは別SKU・別運用として計画するのが現実的です。</p></template>
+    <figcaption>図11-1 ロボットの構成要素と共通化しやすさ。緑＝共通、橙＝選び方しだい、赤＝国別になりがち。</figcaption>
+  </figure>
+
+  <h2>3. 通信部の4つの戦略</h2>
+  <p>通信部分（LTEモジュール・アンテナ・SIM）をどう作るかで、SKUの数も認証の回数も大きく変わります。代表的な4つの戦略を比べます。</p>
+
+  <div data-tabs>
+    <div class="tab-list">
+      <button data-tab="a">A グローバル1SKU</button>
+      <button data-tab="b">B 地域版＋共通基板</button>
+      <button data-tab="c">C 通信カード差し替え</button>
+      <button data-tab="d">D 外付けゲートウェイ</button>
+    </div>
+    <div data-tab-panel="a">
+      <figure class="figure fig-strat">
+        <svg viewBox="0 0 560 170" role="img" aria-label="戦略A: グローバルモジュール1種類">
+          <rect class="box" x="20" y="20" width="520" height="130" rx="10"/>
+          <text x="36" y="44" style="font-weight:700">ロボット（全世界共通）</text>
+          <rect x="40" y="62" width="200" height="70" rx="6" fill="color-mix(in srgb, var(--c6) 18%, var(--surface))" stroke="var(--c6)"/>
+          <text x="140" y="102" text-anchor="middle">メイン基板</text>
+          <rect x="270" y="62" width="150" height="70" rx="6" fill="color-mix(in srgb, var(--c1) 22%, var(--surface))" stroke="var(--c1)" stroke-width="2"/>
+          <text x="345" y="92" text-anchor="middle" style="font-weight:700">グローバル版</text>
+          <text x="345" y="114" text-anchor="middle" class="t-small t-muted">多バンド対応</text>
+          <path d="M470 132 V70 M455 80 L470 62 L485 80" class="line" stroke-width="2"/>
+          <text x="470" y="150" text-anchor="middle" class="t-small t-muted">広帯域</text>
+        </svg>
+      </figure>
+      <p>全バンド対応に近い<b>グローバル版モジュール1種類</b>で全輸出先をまかなう方法です。基板もソフトも在庫も1種類。アジアの主要国は、EG25-G や SIM7600G-H、LARA-R6001 のようなグローバル版で多くがカバーできます（チェッカーで確認できます）。</p>
+      <div class="pc-list">
+        <div><h4>👍 長所</h4><ul><li>SKU・在庫・検証が最小</li><li>国を後から追加しやすい</li><li>生産・保守がシンプル</li></ul></div>
+        <div><h4>👎 短所</h4><ul><li>モジュール単価が高め</li><li>対応バンドが多いほど、アンテナ設計・試験の範囲が広い</li><li>中国など、グローバル版の認証が無い国は結局別SKU</li></ul></div>
+      </div>
+    </div>
+    <div data-tab-panel="b">
+      <figure class="figure fig-strat">
+        <svg viewBox="0 0 560 170" role="img" aria-label="戦略B: 共通基板に地域版モジュールを載せ替え">
+          <rect class="box" x="20" y="20" width="330" height="130" rx="10"/>
+          <text x="36" y="44" style="font-weight:700">共通基板</text>
+          <rect x="40" y="62" width="130" height="70" rx="6" fill="color-mix(in srgb, var(--c6) 18%, var(--surface))" stroke="var(--c6)"/>
+          <text x="105" y="102" text-anchor="middle">回路（共通）</text>
+          <rect x="195" y="62" width="130" height="70" rx="6" fill="none" stroke="var(--c1)" stroke-width="2" stroke-dasharray="6 4"/>
+          <text x="260" y="92" text-anchor="middle" class="t-small">共通フットプリント</text>
+          <text x="260" y="112" text-anchor="middle" class="t-small t-muted">(ピン互換)</text>
+          <g>
+            <rect x="400" y="22" width="130" height="34" rx="6" fill="color-mix(in srgb, var(--c1) 22%, var(--surface))" stroke="var(--c1)"/><text x="465" y="44" text-anchor="middle">日本版</text>
+            <rect x="400" y="68" width="130" height="34" rx="6" fill="color-mix(in srgb, var(--c3) 22%, var(--surface))" stroke="var(--c3)"/><text x="465" y="90" text-anchor="middle">アジア・欧州版</text>
+            <rect x="400" y="114" width="130" height="34" rx="6" fill="color-mix(in srgb, var(--c5) 22%, var(--surface))" stroke="var(--c5)"/><text x="465" y="136" text-anchor="middle">中国版</text>
+            <path d="M398 39 L330 90 M398 85 L330 97 M398 131 L330 104" class="line dash"/>
+          </g>
+        </svg>
+      </figure>
+      <p>基板は1種類で、<b>同じフットプリントに載る地域版モジュール</b>を仕向け地ごとに実装する方法です。例えば Quectel の EC25 シリーズは、日本版 EC25-J、EMEA/APAC向け EC25-EUX、豪州・中南米・アジア向け EC25-AU などの地域版があり、同じ29.0×32.0mmのLCCパッケージでグローバル版 EG25-G や Cat-1 の EC21/EG21-G とも互換とされています。</p>
+      <div class="pc-list">
+        <div><h4>👍 長所</h4><ul><li>モジュール単価を抑えられる</li><li>基板・筐体・ソフトは共通</li><li>中国版も同じ基板に載せられる場合がある</li></ul></div>
+        <div><h4>👎 短所</h4><ul><li>モジュールの種類だけSKUと在庫が増える</li><li>認証・キャリア認証は地域版の型番ごと</li><li>地域版ごとの細かな差（電流、GNSS、ダイバーシティの有無など）の検証が必要</li></ul></div>
+      </div>
+    </div>
+    <div data-tab-panel="c">
+      <figure class="figure fig-strat">
+        <svg viewBox="0 0 560 170" role="img" aria-label="戦略C: M.2などの通信カードを差し替え">
+          <rect class="box" x="20" y="20" width="330" height="130" rx="10"/>
+          <text x="36" y="44" style="font-weight:700">ロボット本体（共通）</text>
+          <rect x="40" y="62" width="150" height="70" rx="6" fill="color-mix(in srgb, var(--c6) 18%, var(--surface))" stroke="var(--c6)"/>
+          <text x="115" y="102" text-anchor="middle">メイン基板</text>
+          <rect x="210" y="80" width="120" height="34" rx="4" fill="none" stroke="var(--c2)" stroke-width="2"/>
+          <text x="270" y="102" text-anchor="middle" class="t-small">M.2スロット</text>
+          <rect x="400" y="30" width="130" height="30" rx="4" fill="color-mix(in srgb, var(--c1) 22%, var(--surface))" stroke="var(--c1)"/><text x="465" y="50" text-anchor="middle" class="t-small">カード 日本</text>
+          <rect x="400" y="70" width="130" height="30" rx="4" fill="color-mix(in srgb, var(--c3) 22%, var(--surface))" stroke="var(--c3)"/><text x="465" y="90" text-anchor="middle" class="t-small">カード アジア</text>
+          <rect x="400" y="110" width="130" height="30" rx="4" fill="color-mix(in srgb, var(--c5) 22%, var(--surface))" stroke="var(--c5)"/><text x="465" y="130" text-anchor="middle" class="t-small">カード 中国</text>
+          <path d="M398 97 L332 97" class="line" stroke-width="2"/><path d="M342 91 L332 97 L342 103" class="line" stroke-width="2"/>
+        </svg>
+      </figure>
+      <p>通信部分だけを <b>M.2カードやMini PCIeカード、自社設計の通信サブ基板</b>にして、本体とはコネクタでつなぐ方法です。本体は完全に共通のまま、組立の最終工程や現地でカードを差し替えられます。M.2版のモジュール（例: 5GのRM520N-GL）やMini PCIe版（EG25-G Mini PCIe など）が市販されています。</p>
+      <div class="pc-list">
+        <div><h4>👍 長所</h4><ul><li>本体は1SKU、カードだけ国別</li><li>世代交代（LTE→5G RedCapなど）も差し替えで対応しやすい</li><li>試作段階で複数モジュールを比較しやすい</li></ul></div>
+        <div><h4>👎 短所</h4><ul><li>コネクタ・カードの分だけ部材費とスペースが増える</li><li>振動の多いロボットではコネクタの固定・信頼性に注意</li><li>アンテナ同軸ケーブルの取り回しが必要</li></ul></div>
+      </div>
+    </div>
+    <div data-tab-panel="d">
+      <figure class="figure fig-strat">
+        <svg viewBox="0 0 560 170" role="img" aria-label="戦略D: 外付けLTEルーターを使う">
+          <rect class="box" x="20" y="30" width="220" height="110" rx="10"/>
+          <text x="36" y="54" style="font-weight:700">ロボット</text>
+          <text x="36" y="80" class="t-small t-muted">LTEなし</text>
+          <text x="36" y="104" class="t-small t-muted">Wi-Fi / Ethernet のみ</text>
+          <path d="M240 85 H330" class="line dash" stroke-width="2"/>
+          <text x="285" y="76" text-anchor="middle" class="t-small t-muted">Wi-Fi/有線</text>
+          <rect x="330" y="45" width="190" height="80" rx="10" fill="color-mix(in srgb, var(--c4) 18%, var(--surface))" stroke="var(--c4)" stroke-width="2"/>
+          <text x="425" y="78" text-anchor="middle" style="font-weight:700">LTEルーター</text>
+          <text x="425" y="102" text-anchor="middle" class="t-small t-muted">現地で認証済みの製品</text>
+        </svg>
+      </figure>
+      <p>ロボット本体にはLTEを入れず、<b>各国で認証・キャリア承認を取得済みの市販LTEルーター（ゲートウェイ）</b>をセットで提供する方法です。本体の無線はWi-Fi等だけになり、LTE関連の認証を大幅に減らせます。</p>
+      <div class="pc-list">
+        <div><h4>👍 長所</h4><ul><li>LTEの認証・キャリア認証をルーターに任せられる</li><li>市場投入が最速。少量・実証実験向き</li><li>本体は完全に1SKU</li></ul></div>
+        <div><h4>👎 短所</h4><ul><li>ルーター代が1台ごとにかかる</li><li>電源・設置・盗難など運用の手間が増える</li><li>移動するロボットでは使いにくい。遠隔管理（死活監視・FOTA）の一体感が弱い</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="table-wrap"><table>
+    <thead><tr><th>評価軸</th><th>A グローバル1SKU</th><th>B 地域版＋共通基板</th><th>C カード差し替え</th><th>D 外付けGW</th></tr></thead>
+    <tbody>
+      <tr><td>モジュール等の単価</td><td><span class="badge warn">高め</span></td><td><span class="badge ok">安い</span></td><td><span class="badge warn">中（カード・コネクタ分増）</span></td><td><span class="badge bad">高い（ルーター1台分）</span></td></tr>
+      <tr><td>BOMの種類</td><td><span class="badge ok">1</span></td><td><span class="badge warn">地域版の数</span></td><td><span class="badge accent">本体1＋カード数</span></td><td><span class="badge ok">本体1＋市販品</span></td></tr>
+      <tr><td>認証の回数・負担</td><td><span class="badge accent">国数ぶん（型番は1つ）</span></td><td><span class="badge warn">国数ぶん＋型番の差分確認</span></td><td><span class="badge warn">国数ぶん＋カードごと</span></td><td><span class="badge ok">少ない（LTEはルーター側）</span></td></tr>
+      <tr><td>在庫・SKU管理</td><td><span class="badge ok">最小</span></td><td><span class="badge warn">モジュール在庫が分散</span></td><td><span class="badge accent">カードだけ分散</span></td><td><span class="badge accent">ルーター在庫が別に必要</span></td></tr>
+      <tr><td>性能・一体感</td><td><span class="badge ok">良い</span></td><td><span class="badge ok">良い（地域最適）</span></td><td><span class="badge accent">良い（ケーブル損失に注意）</span></td><td><span class="badge warn">移動体に不向き</span></td></tr>
+      <tr><td>向いている段階</td><td>中量産・多国展開</td><td>大量産・コスト重視</td><td>試作〜少量、世代交代を見込む</td><td>PoC・実証実験</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="callout robot"><span class="title">私たちのロボットの場合</span>
+    <p>現実的な進め方は<b>「試作はC（カード）で複数モジュールを比べる → 量産はAかB」</b>です。試作時にM.2やMini PCIeで候補を差し替えて通信品質や消費電力を比べ、量産では基板にモジュールを直接実装してコストと振動耐性を確保します。最初の実証実験だけD（外付けルーター）で始めるのもよい選択です。</p>
+  </div>
+
+  <h2>4. ピン互換ファミリーで基板を共用する</h2>
+  <p>戦略Bの肝は<b>フットプリントの共用</b>です。モジュールメーカーは、同じ外形・同じピン配置で複数の地域版やカテゴリ違いを用意していることが多く、これを「ピン互換（pin-to-pin compatible）」と呼びます。代表例をまとめます（メーカーの公表内容に基づく。実際の互換範囲は各 Hardware Design 資料で確認してください）。</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>ファミリー（外形）</th><th>含まれるモジュールの例</th><th>ポイント</th></tr></thead>
+    <tbody>
+      <tr><td>Quectel LTE Standard<br>LCC 29.0×32.0mm</td><td>EC25-J / EC25-EUX / EC25-E / EC25-AU / EC25-AF（Cat-4 地域版）、EG25-G（Cat-4 グローバル版）、EC21 / EG21-G（Cat-1）</td><td>メーカーは EC25 が EC21・EC20-CE・EG25-G・EG21-G と互換と記載。<b>地域版⇔グローバル版⇔Cat-1</b>を同じ基板で切り替えられる</td></tr>
+      <tr><td>Quectel LGA 23.6×19.9mm 系</td><td>EG91 / EG95（LTE）、BG95（LTE-M/NB-IoT）、EG915U-EU / EG915U-CN（Cat-1）</td><td>BG95 は EG91/EG95 とピン互換、EG915U は EG91/EG95/BG95/BG96 と互換とメーカー記載。<b>LTE-M⇔Cat-1</b>の乗り換えも視野に入る</td></tr>
+      <tr><td>u-blox LARA 系</td><td>LARA-R6001（グローバル）/ LARA-R6401（北米）/ LARA-R6801（EMEA/APAC/日本）</td><td>同一シリーズ内で地域版を選べる。シリーズをまたぐ互換は資料で要確認</td></tr>
+    </tbody>
+  </table></div>
+
+  <figure class="figure fig-narrow" data-stepper data-interval="3800">
+    <svg viewBox="0 0 560 230" role="img" aria-label="共通基板で地域版を載せ替える流れ">
+      <rect class="box" x="20" y="20" width="300" height="190" rx="10"/>
+      <text x="36" y="44" style="font-weight:700">共通基板</text>
+      <rect x="40" y="60" width="110" height="60" rx="6" fill="color-mix(in srgb, var(--c6) 18%, var(--surface))" stroke="var(--c6)"/>
+      <text x="95" y="95" text-anchor="middle" class="t-small">ホストSoC</text>
+      <rect x="180" y="60" width="120" height="90" rx="6" fill="none" stroke="var(--c1)" stroke-width="2" stroke-dasharray="6 4"/>
+      <text x="240" y="170" text-anchor="middle" class="t-small t-muted">共通フットプリント</text>
+      <g data-show-from="2">
+        <rect x="186" y="66" width="108" height="78" rx="4" fill="color-mix(in srgb, var(--c1) 26%, var(--surface))" stroke="var(--c1)"/>
+        <text x="240" y="102" text-anchor="middle" style="font-weight:700">EC25-J</text>
+        <text x="240" y="124" text-anchor="middle" class="t-small t-muted">（日本向け）</text>
+      </g>
+      <g data-show-from="3">
+        <path d="M180 90 H150" class="line" stroke-width="2"/>
+        <text x="150" y="140" text-anchor="middle" class="t-small" style="fill:var(--c1)">型番を読む</text>
+      </g>
+      <g data-show-from="4">
+        <rect x="350" y="30" width="190" height="80" rx="8" fill="color-mix(in srgb, var(--c3) 16%, var(--surface))" stroke="var(--c3)"/>
+        <text x="445" y="54" text-anchor="middle" style="font-weight:700">region = JP</text>
+        <text x="445" y="76" text-anchor="middle" class="t-small">APN・バンド・事業者設定</text>
+        <text x="445" y="96" text-anchor="middle" class="t-small t-muted">共通ファーム＋設定</text>
+        <path d="M320 70 H350" class="line" stroke-width="2"/>
+      </g>
+      <g data-show-from="5">
+        <rect x="350" y="130" width="190" height="70" rx="8" fill="color-mix(in srgb, var(--bad) 12%, var(--surface))" stroke="var(--bad)"/>
+        <text x="445" y="158" text-anchor="middle" style="font-weight:700">国別ラベル</text>
+        <text x="445" y="182" text-anchor="middle" class="t-small">技適 / JATE 表示</text>
+      </g>
+    </svg>
+    <div class="stepper-controls-slot"></div>
+    <div class="step" data-title="共通フットプリント"><h4>① 共通フットプリントで基板を設計</h4><p>ファミリーの中で<b>最も条件が厳しいモデル</b>（最大電流、ピン数、アンテナ端子数）に合わせて設計します。一部のモデルだけが使うピン（GNSS、ダイバーシティ、音声など）も配線しておき、使わない場合は未接続でもよい設計にします。</p></div>
+    <div class="step" data-title="地域版を実装"><h4>② 仕向け地に合わせて地域版を実装</h4><p>日本向けロットでは EC25-J、東南アジア向けでは EC25-EUX…というように、<b>実装する部品だけ</b>を変えます。基板・筐体・組立手順は共通です。生産管理上はここで SKU が分かれるので、ロット管理とトレーサビリティ（どの個体にどのモジュールが載ったか）を記録します。</p></div>
+    <div class="step" data-title="型番を識別"><h4>③ 起動時にモジュールの型番を識別</h4><p>ホストは起動時に AT コマンド（例: <code>ATI</code>、<code>AT+GMM</code>）でモジュールの型番・ファーム版を読み取ります。これで「どの地域版が載っているか」をソフトが自動で知ることができます。</p></div>
+    <div class="step" data-title="国別設定を適用"><h4>④ 共通ファームウェアが国別設定を適用</h4><p>型番、SIMの IMSI（加入者識別番号の先頭の国・事業者コード）、工場で書き込んだ地域コードなどから <b>region</b> を決め、APN・バンド・事業者設定を設定ファイルから適用します。ファームウェアのビルドは1つのままです。</p></div>
+    <div class="step" data-title="国別ラベル"><h4>⑤ 最後に国別ラベルを貼る</h4><p>認証マークや型番ラベル、説明書・ACアダプタだけが国別になります。本体の違いは「どのモジュールが載っているか」と「ラベル」だけ——ここまで絞り込めれば、戦略Bは十分に管理できます。</p></div>
+    <figcaption>図11-2 共通基板＋地域版モジュールの流れ（ステップ再生）</figcaption>
+  </figure>
+
+  <div class="callout warn"><span class="title">「ピン互換」でも確認が必要なこと</span>
+    <ul>
+      <li><b>電源</b>：送信時のピーク電流（特に2G/3Gフォールバック付きモデル）が違う。最大値に合わせて電源とコンデンサを設計</li>
+      <li><b>インターフェース</b>：USB・UART・PCM・GNSSなど、モデルによって一部ピンが無効・予約（Reserved）になっている</li>
+      <li><b>アンテナ端子</b>：ダイバーシティ（受信用の2本目）の有無、GNSSアンテナの有無</li>
+      <li><b>ソフト</b>：ATコマンドやドライバの差、ファームウェア更新（FOTA）の方式</li>
+      <li><b>認証</b>：ピン互換でも<b>認証は型番ごと</b>。地域版ごとに最終製品の扱いを確認（第6節）</li>
+    </ul>
+  </div>
+
+  <h2>5. アンテナの広帯域化 ——「いちばん低いバンド」が大きさを決める</h2>
+  <p>LTEのアンテナは、使う電波の<b>波長</b>に合わせた長さが必要です。基本形であるモノポールアンテナは、波長の約1/4（λ/4）の長さで共振します。波長は「光の速さ÷周波数」なので、<b>周波数が低いほどアンテナは長く</b>なります。つまり、対応バンドのうち<b>最も低い周波数のバンドがアンテナの大きさを決めます</b>。</p>
+  <p>市販の「LTE広帯域アンテナ」の多くは、<b>698–960MHz（ローバンド）と 1710–2690MHz（ミッド・ハイバンド）</b>の2つの帯域をカバーしています。アジアの主要バンドに当てはめると次のとおりです。</p>
+  <ul>
+    <li>ローバンド 698–960MHz：B28（700）、B20（800）、B18/B19/B26（日本の800）、B5（850）、B8（900）</li>
+    <li>ミッド・ハイバンド 1710–2690MHz：B3（1800）、B39（1900 TDD）、B1（2100）、B34（2000 TDD）、<b>B40（2300 TDD）、B41（2500 TDD）</b>、B7/B38（2600）</li>
+    <li>範囲外：日本の B11/B21（1.5GHz帯、1427.9–1510.9MHz）、B42（3.5GHz帯）、米国の B71（600MHz帯）</li>
+  </ul>
+  <p>日本の1.5GHz帯（B11/B21）は容量用の補助バンドで、B1/B3/B19などが使えれば通信はできます。ただし、日本向けに最高の性能を狙うなら 1.4–1.5GHz まで対応したアンテナを選ぶ価値があります。</p>
+
+  <figure class="figure" id="antFig">
+    <div class="hint">「最も低いバンド」を選ぶと、必要なアンテナ長（λ/4、自由空間）の目安が変わります</div>
+    <div class="chips" id="antChips" role="group" aria-label="最も低いバンドを選ぶ"></div>
+    <div id="antBars"></div>
+    <div class="ant-out" id="antOut" aria-live="polite"></div>
+    <figcaption>図11-3 最低周波数とアンテナ長の関係。実際のアンテナは誘電体やパターン形状で短縮できますが、低い周波数ほど大きなアンテナ（と基板のグラウンド）が必要になる傾向は変わりません。</figcaption>
+  </figure>
+
+  <p>もう一つ重要なのが <b>グラウンド（GND）面</b>です。小型のチップアンテナやフレキシブル基板アンテナでも、ローバンドでは基板や金属シャーシのGNDが「アンテナの片割れ」として働きます。GND長が波長に比べて短すぎると、ローバンドの効率がガクッと落ちます。ロボットの場合、筐体の金属部分やモーター・ケーブルとの位置関係も効率に影響するので、<b>筐体の試作ができた段階で実機のアンテナ効率（OTA測定）を確認</b>します。</p>
+  <div class="callout tip"><span class="title">MIMOと2本目のアンテナ</span>
+    <p>Cat-4 などは受信用に2本のアンテナ（メイン＋ダイバーシティ）を前提としており、キャリアの試験でも2本での性能を求められることがあります。Cat-1bis や LTE-M は1本で動くため、アンテナの置き場が限られるロボットでは有利です。カテゴリの選び方は <a href="05-categories.html">5章</a> を参照してください。</p>
+  </div>
+
+  <h2>6. 認証をどこまで使い回せるか</h2>
+  <p>「モジュールが認証済みなら製品はそのまま売れる」と思われがちですが、実際は<b>モジュールの認証を土台に、最終製品として何が追加で必要か</b>を国ごとに判断します。共通化の観点で押さえておきたいのは次の3点です。</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>項目</th><th>使い回しやすいもの</th><th>取り直し・追加が必要になりやすいもの</th></tr></thead>
+    <tbody>
+      <tr><td>無線の認証（技適・FCC・NCC・KCなど）</td><td>モジュール単体の認証（モジュラー認証）。指定のアンテナ種別・利得の範囲内で使えば、最終製品の試験を大きく減らせる制度が多い</td><td>アンテナ利得の超過、他の無線（Wi-Fi等）との同時送信、表示が外から見えない場合の製品側表示。米国では FCC KDB 996369 がモジュール組込みの指針</td></tr>
+      <tr><td>モジュールの型番変更</td><td>同じ型番内のファーム更新（多くは届出不要だが要確認）</td><td><b>ピン互換の別型番</b>（地域版⇔グローバル版）は別の認証。製品側の申請・宣言書・ラベルも更新</td></tr>
+      <tr><td>キャリア認証</td><td>モジュールが事前認証済みなら、最終製品の試験項目が減ることがある</td><td>最終製品（型番）単位の承認。アンテナや筐体を変えると再試験の可能性</td></tr>
+      <tr><td>EMC・安全（電気安全・電磁両立性）</td><td>同一設計なら各国で試験報告書を流用しやすい（国際規格ベースのCBスキームなど）</td><td>国別の差分規格、現地試験所での試験を求める国</td></tr>
+    </tbody>
+  </table></div>
+  <p>つまり<b>「同じファミリーなら認証も同じ」ではありません</b>。戦略Bで地域版を増やすと、そのたびに認証の手続きが（全部ではないにせよ）発生します。一方、戦略Aでも国ごとの手続きは必要ですが、型番が1つなので書類・試験データを使い回しやすいのが利点です。詳しい制度は <a href="09-certification.html">9章</a>、各国の要点は <a href="10-asia.html">10章</a> で扱います。</p>
+
+  <h2>7. eSIMで「回線」を共通化する</h2>
+  <p>ハードウェアを共通化しても、SIMカードを国ごとに差し替えていては工場や現地の作業が残ります。そこで有効なのが <b>eSIM</b>（embedded SIM）です。正確には、書き換え可能なSIMチップを <b>eUICC</b> と呼び、中に入れる事業者の契約情報を<b>プロファイル</b>と呼びます。</p>
+  <ul>
+    <li><b>ハードは1種類</b>：基板にチップ型SIM（MFF2など）を実装。振動・抜き差しに強く、ロボット向き</li>
+    <li><b>プロファイルを後から入れる</b>：出荷先が決まってから、遠隔で現地事業者（またはグローバルIoT事業者）のプロファイルを書き込む</li>
+    <li><b>IoT向けの標準</b>：GSMA は M2M 向けの SGP.02 に加え、IoT向けの新しい仕様 <b>SGP.32</b>（v1.0 は2023年公開）を定めており、画面のない機器でもプロファイルを管理しやすくなっています</li>
+  </ul>
+  <div class="callout warn"><span class="title">eSIMでも解決しないこと</span>
+    <p>eSIMは「SIMの中身」を共通化する技術で、<b>バンドの違いや電波認証は解決しません</b>。また、グローバルSIM（海外事業者の回線）でずっとローミング接続する「恒久ローミング」を制限・禁止する国や事業者があります。長期運用する国では<b>現地事業者のプロファイル</b>に切り替える計画を立てておきます。SIMの種類と回線の選び方は <a href="07-sim.html">7章</a> で扱います。</p>
+  </div>
+
+  <h2>8. ファームウェアは「1ビルド＋国別設定」</h2>
+  <p>国ごとにファームウェアを作り分けると、検証・署名・FOTA（無線でのファーム更新）配信・不具合修正が国の数だけ増えます。そこで、<b>違いはすべて設定データに追い出し、ビルドは1つ</b>にします。国ごとに変わる代表的な設定は次のとおりです。</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>設定</th><th>内容</th><th>決め方の例</th></tr></thead>
+    <tbody>
+      <tr><td>APN</td><td>データ通信の接続先名。事業者・契約ごとに違う</td><td>SIMのIMSI先頭（MCC=国番号、MNC=事業者番号）から選ぶ</td></tr>
+      <tr><td>バンドロック</td><td>使うバンドを限定し、接続を早く・安定させる。国によっては未認証バンドを無効化する目的も</td><td>地域コードごとに許可バンドのリストを持つ</td></tr>
+      <tr><td>RATの優先順位</td><td>LTE / LTE-M / NB-IoT / 2G などの優先順位</td><td>その国の停波状況・事業者の提供状況で決める</td></tr>
+      <tr><td>事業者向けモジュール設定</td><td>モジュール内の事業者別パラメータ（Quectel では MBN と呼ばれる設定ファイル）</td><td>SIMに応じた自動選択を有効化</td></tr>
+      <tr><td>接続先サーバー</td><td>クラウドのエンドポイント（中国は国内サーバーが必要な場合など）</td><td>地域コードで切り替え</td></tr>
+    </tbody>
+  </table></div>
+  <p>設定ファイルのイメージは次のようになります（例示）。</p>
+<pre><code>{
+  "JP": { "apn": "example.jp", "lteBands": [1, 3, 8, 18, 19, 26, 28, 41], "rat": ["LTE"] },
+  "TH": { "apn": "example.th", "lteBands": [1, 3, 8, 28, 40], "rat": ["LTE"] },
+  "IN": { "apn": "example.in", "lteBands": [1, 3, 5, 8, 40, 41], "rat": ["LTE"], "volte": true },
+  "default": { "apn": "", "lteBands": "all", "rat": ["LTE"] }
+}</code></pre>
+  <p>ホストは起動時にモジュールとSIMの情報を読み、該当する設定をATコマンドでモジュールに書き込みます。以下は Quectel 系モジュールでの流れの例です（コマンドや引数はモジュールごとに違うので、必ず各社の AT コマンドマニュアルで確認してください）。</p>
+  <div class="terminal" aria-label="ATコマンドの例">
+    <div class="note"># 1) 型番とSIMの国・事業者を確認</div>
+    <div class="in">AT+GMM</div><div class="out">EC25</div>
+    <div class="in">AT+CIMI</div><div class="out">440xx0123456789</div>
+    <div class="note">→ 先頭の MCC=440 は日本。設定ファイルの "JP" を選ぶ</div>
+    <div class="note"># 2) 事業者設定（MBN）の自動選択を有効化（Quectel の例）</div>
+    <div class="in">AT+QMBNCFG="AutoSel",1</div><div class="out">OK</div>
+    <div class="note"># 3) APN を設定（PDPコンテキスト1）</div>
+    <div class="in">AT+CGDCONT=1,"IP","example.jp"</div><div class="out">OK</div>
+    <div class="note"># 4) 必要ならバンドを限定（AT+QCFG="band",... の引数はビットマスク。マニュアル参照）</div>
+  </div>
+  <div class="callout robot"><span class="title">私たちのロボットの場合</span>
+    <p>国別設定は<b>クラウド側からも更新できる</b>ようにしておくと、事業者のAPN変更や周波数再編にもファーム更新なしで追従できます。ただし設定ミスで圏外になると遠隔からも直せなくなるので、「接続できなければ前回の設定に戻る」<b>フォールバック</b>を必ず入れておきましょう。</p>
+  </div>
+
+  <h2>9. どの戦略が得か：概算コストを比べる</h2>
+  <p>最後に、4つの戦略をお金で比べてみます。下の数値は<b>説明用の仮の値</b>です。自社の見積もりに置き換えて、どの条件で結論が変わるかを体感してください。</p>
+  <figure class="figure" id="calcFig">
+    <div class="hint">数値を書き換えると、戦略ごとの概算総コストが再計算されます（入力値はこのブラウザに保存）</div>
+    <div class="calc-grid" id="calcInputs"></div>
+    <div class="small muted" style="margin:4px 0"><span class="sw" style="background:var(--c1);margin-left:0"></span>部材（台数×単価）<span class="sw" style="background:var(--c5)"></span>認証<span class="sw" style="background:var(--c4)"></span>SKU管理（設計検証・在庫・生産切替）</div>
+    <div id="calcOut" aria-live="polite"></div>
+    <div class="btn-row"><button class="btn" id="calcReset" type="button">初期値に戻す</button></div>
+    <figcaption>図11-4 戦略別の概算総コスト（説明用の単純モデル）。A=台数×グローバル版単価＋国数×認証費＋SKU管理費1つ分、B=台数×地域版単価＋国数×認証費＋地域版数×SKU管理費、C=Bにカード・コネクタ費を加えSKU管理費を係数で軽減、D=台数×ルーター単価＋国数×本体側認証費＋SKU管理費1つ分。中国を含む場合、Aにも中国版SKUを1つ追加。</figcaption>
+  </figure>
+  <p>このモデルからわかる傾向は次のとおりです。</p>
+  <ul>
+    <li><b>台数が少ないうちは A（グローバル1SKU）や D（外付け）が有利</b>。SKU管理や認証の固定費が支配的だからです。</li>
+    <li><b>台数が増えると B（地域版）が逆転</b>。1台あたりの単価差が積み上がり、SKUが増える固定費を上回ります。逆転する台数（損益分岐点）は「増えるSKUの固定費 ÷ 単価差」で概算できます。</li>
+    <li><b>C（カード）</b>は1台あたりのカード費がかかるものの、本体を完全共通にできる安心感と、将来の世代交代への備えが価値になります。</li>
+    <li>現実には、ここに入っていない要素——開発期間、アンテナ設計の難しさ、キャリア認証の期間、部品の供給寿命（EOL）——も効いてきます。数字は判断の「たたき台」として使いましょう。</li>
+  </ul>
+
+  <h2>10. データで確かめる：5か国なら1SKUで行けるか</h2>
+  <p>本サイトのバンドデータ（<code>assets/data/bands.js</code>）を使って、例として<b>日本・韓国・台湾・タイ・インド</b>の5か国に対する代表モジュールの判定を表示します。判定の意味は ◎＝全主要バンド対応、○＝カバレッジの要となるバンドは対応、△＝一部、×＝非対応 です。</p>
+  <div class="table-wrap" id="liveWrap"><p class="small muted" style="padding:8px 12px">読み込み中…</p></div>
+  <p id="liveSummary"></p>
+  <p>国の組み合わせを変えたり、中国を加えたりすると結果が大きく変わります。ぜひ <a href="../tools/band-checker.html">バンド共通化チェッカー</a> で試してください。</p>
+
+  <h2>11. 私たちのロボットの進め方</h2>
+  <p>ここまでの内容を、試作段階から使えるチェックリストにまとめます。</p>
+  <ul data-checklist="ch11-plan">
+    <li>最初の輸出先（2〜3か国）と、将来追加する可能性がある国をリストにした</li>
+    <li>各国で組む事業者（または回線サービス）の候補を決めた</li>
+    <li>バンド共通化チェッカーで、グローバル版と地域版の候補を洗い出した</li>
+    <li>中国を対象にするか決め、対象なら別SKUとして計画した</li>
+    <li>試作基板は、候補モジュールを差し替えられる形（M.2／ピン互換フットプリント）にした</li>
+    <li>アンテナの帯域（最低周波数）を決め、筐体にアンテナ用スペースと樹脂窓を確保した</li>
+    <li>SIMは eSIM（チップ型）を実装できるようにした</li>
+    <li>ファームウェアは1ビルド＋国別設定（APN・バンド・事業者設定）の構成にした</li>
+    <li>認証ラベル・説明書・ACアダプタだけを国別にできるよう、梱包・ラベル工程を設計した</li>
+    <li>台数見込みで戦略A〜Dの概算コストを比較し、量産時の方針を決めた</li>
+  </ul>
+
+  <h2>まとめ</h2>
+  <ul>
+    <li>SKUが1つ増えると、設計検証・認証・在庫・生産・保守がまるごと増える。<b>大部分を共通にし、国別の部分を小さく・差し替えやすく</b>するのが基本。</li>
+    <li>筐体・SoC・ソフト・基板の大部分は共通化しやすい。LTEモジュール・アンテナ・SIM・通信設定は<b>選び方しだい</b>。ラベル・説明書・ACアダプタ・キャリア認証・中国向けは<b>国別になりがち</b>。</li>
+    <li>通信部の戦略は A グローバル1SKU／B 地域版＋共通基板／C カード差し替え／D 外付けゲートウェイ。台数が増えるほど B が有利になりやすい。</li>
+    <li>ピン互換ファミリーなら基板は共通にできるが、<b>認証は型番ごと</b>。電源・ピン・アンテナ端子の差も要確認。</li>
+    <li>アンテナは 698–960MHz / 1710–2690MHz の広帯域品でアジアの主要バンドをほぼカバー。<b>最も低いバンドがアンテナの大きさを決める</b>。</li>
+    <li>eSIMで回線を、<b>1ビルド＋国別設定</b>でファームウェアを共通化する。</li>
+  </ul>
+
+  <h2>用語</h2>
+  <dl class="terms">
+    <dt>SKU</dt><dd>Stock Keeping Unit。在庫・生産を管理する最小単位。中身が1つでも違えば別SKU。</dd>
+    <dt>BOM</dt><dd>Bill of Materials。部品表。どの部品を何個使うかの一覧。</dd>
+    <dt>フットプリント</dt><dd>基板上で部品を載せるための銅パターン（パッド配置）。</dd>
+    <dt>ピン互換</dt><dd>外形とピン配置が同じで、同じフットプリントに載せ替えられること。機能や電気的特性まで同じとは限らない。</dd>
+    <dt>グローバル版／地域版</dt><dd>多くの国のバンドに対応したモジュールと、特定地域のバンドに絞った安価なモジュール。</dd>
+    <dt>M.2 / Mini PCIe</dt><dd>カード型モジュールの規格。コネクタで基板に差し込む。</dd>
+    <dt>λ/4（4分の1波長）</dt><dd>モノポールアンテナが共振する基本の長さ。λ(mm) ≒ 300,000 ÷ 周波数(MHz)。</dd>
+    <dt>OTA測定</dt><dd>Over The Air。実機を電波暗室に置き、アンテナ込みの送受信性能（TRP/TIS）を測る試験。</dd>
+    <dt>MFBI</dt><dd>Multiple Frequency Band Indicator。1つの周波数を複数のバンド番号で報知し、上位集合バンド（例: B26）の端末も接続できるようにする仕組み。</dd>
+    <dt>モジュラー認証</dt><dd>無線モジュール単体で取得する認証。条件を守れば最終製品の試験・申請を簡略化できる。</dd>
+    <dt>eUICC / プロファイル</dt><dd>書き換え可能なSIMチップ（eSIM）と、その中に入れる事業者の契約情報。</dd>
+    <dt>SGP.32</dt><dd>GSMA の IoT 向け eSIM 仕様。画面のない機器でもプロファイルを遠隔管理しやすくする。</dd>
+    <dt>APN</dt><dd>Access Point Name。データ通信の接続先を示す名前。事業者・契約で異なる。</dd>
+    <dt>バンドロック</dt><dd>モジュールが使うバンドを設定で限定すること。</dd>
+    <dt>MBN</dt><dd>Quectel などのモジュールが持つ、事業者ごとの設定ファイル。SIMに応じて自動選択できる。</dd>
+    <dt>MCC / MNC</dt><dd>Mobile Country Code / Mobile Network Code。IMSIの先頭にある国番号と事業者番号（日本のMCCは440/441）。</dd>
+  </dl>
+
+  <h2>確認クイズ</h2>
+  <div class="quiz" data-quiz="11"></div>
+
+  <section class="sources"><h2>参考・出典</h2><ul>
+    <li><a href="https://www.quectel.com/product/lte-ec25-series/">Quectel EC25 Series 製品ページ（EC21/EC20-CE/EG25-G/EG21-G との互換の記載）</a></li>
+    <li><a href="https://www.muziot.com/wp-content/uploads/2022/08/Quectel_EC25_Series_Hardware_Design_V2.5.pdf">Quectel EC25 Series Hardware Design V2.5（地域版ごとの対応バンド、29.0×32.0mm）</a></li>
+    <li><a href="https://www.quectel.com/content/uploads/2024/03/Quectel_EG25-G_Mini_PCIe_LTE_Standard_Specification_V1.7-1-1.pdf">Quectel EG25-G Mini PCIe Specification V1.7（対応バンド・認証）</a></li>
+    <li><a href="https://developer.quectel.com/en/wp-content/uploads/sites/2/2024/11/Quectel_BG95_Series_LPWA_Specification_V2.0.pdf">Quectel BG95 Series Specification V2.0（EG91/EG95 とのピン互換の記載）</a></li>
+    <li><a href="https://www.quectel.com/content/uploads/2024/03/Quectel_EG915U_Series_LTE_Standard_Module_Specification_V1.6.pdf">Quectel EG915U Series Specification V1.6（EG91/EG95/BG95/BG96 との互換の記載）</a></li>
+    <li><a href="https://docs.sparkfun.com/SparkFun_LTE_Stick_LARA_R6/assets/component_documentation/LARA-R6-Datasheet.pdf">u-blox LARA-R6 series Data sheet（地域版ごとのバンド・認証）</a></li>
+    <li><a href="https://www.simcom.com/product/A7672X.html">SIMCom A7672X 製品ページ</a></li>
+    <li><a href="https://mc-technologies.com/wp-content/uploads/2023/11/Quectel_RM520N-GL_5G_Specification_V1.0.0_Preliminary_20210915.pdf">Quectel RM520N-GL Specification（M.2 5Gモジュール）</a></li>
+    <li><a href="https://www.fcc.gov/sites/default/files/32-KDB-996369-Modules-TCB_Oct_2023.pdf">FCC KDB 996369 Modules（モジュール認証と組込みの指針, TCB Workshop 2023）</a></li>
+    <li><a href="https://www.gsma.com/solutions-and-impact/technologies/esim/esim-specification/">GSMA eSIM Consumer and IoT Specifications（SGP.02 / SGP.32）</a></li>
+    <li><a href="https://www.gsma.com/solutions-and-impact/technologies/esim/gsma_resources/sgp-32-v1-0/">GSMA SGP.32 v1.0</a></li>
+    <li><a href="https://en.wikipedia.org/wiki/List_of_LTE_networks_in_Asia">List of LTE networks in Asia（各国事業者のバンド）</a></li>
+    <li><a href="https://www.3gpp.org/dynareport/36101.htm">3GPP TS 36.101（E-UTRA 運用バンドの定義）</a></li>
+  </ul><p>確認日: 2026-09</p></section>
+</main>
+</div>
+<script src="../assets/data/bands.js"></script>
+<script src="../assets/data/quiz/ch11.js"></script>
+<script src="../assets/app.js"></script>
+<script>
+(function () {
+  "use strict";
+  const L = window.LTE, esc = L.esc, store = L.store;
+  const $ = (id) => document.getElementById(id);
+
+  // ---------- アンテナ長ウィジェット ----------
+  const ANT = [
+    { b: 71, f: 617, label: "B71 600MHz", note: "米国T-Mobile。アジア向けには通常不要" },
+    { b: 28, f: 703, label: "B28 700MHz", note: "アジア太平洋の主力ローバンド（台湾・タイ・マレーシア・フィリピン・豪州など）" },
+    { b: 20, f: 791, label: "B20 800MHz", note: "欧州の主力ローバンド" },
+    { b: 18, f: 815, label: "B18/19 800MHz", note: "日本のKDDI・ドコモのローバンド（B26でも可）" },
+    { b: 8, f: 880, label: "B8 900MHz", note: "ソフトバンク、韓国KT、東南アジアで多用" },
+    { b: 3, f: 1710, label: "B3 1800MHz", note: "ハイバンドのみ。郊外・屋内のカバレッジは大きく落ちる" },
+    { b: 1, f: 1920, label: "B1 2100MHz", note: "ハイバンドのみ" },
+  ];
+  const lamQ = (f) => 300000 / f / 4; // mm, 自由空間
+  let antSel = store.get("ch11.antBand", 28);
+  if (!ANT.some((a) => a.b === antSel)) antSel = 28;
+  function renderAnt() {
+    const chips = $("antChips"); chips.innerHTML = "";
+    ANT.forEach((a) => {
+      const c = document.createElement("button");
+      c.type = "button"; c.className = "chip"; c.setAttribute("aria-pressed", String(a.b === antSel)); c.textContent = a.label;
+      c.addEventListener("click", () => { antSel = a.b; store.set("ch11.antBand", antSel); renderAnt(); });
+      chips.append(c);
+    });
+    const max = lamQ(ANT[0].f);
+    $("antBars").innerHTML = ANT.map((a) => `<div class="ant-row ${a.b === antSel ? "is-on" : ""}"><span>${esc(a.label.split(" ")[0])}</span><div class="bar" style="width:${(lamQ(a.f) / max * 100).toFixed(1)}%"></div><span class="mm">${lamQ(a.f).toFixed(0)}mm</span></div>`).join("");
+    const a = ANT.find((x) => x.b === antSel);
+    const q = lamQ(a.f), ref = lamQ(1920);
+    $("antOut").innerHTML = `<b>最も低いバンド = ${esc(a.label)}</b>（上り下りの下端 約${a.f}MHz）<br>` +
+      `λ/4（自由空間）≒ <b>${q.toFixed(0)}mm</b>。B1(2100MHz)だけの場合（約${ref.toFixed(0)}mm）の <b>${(q / ref).toFixed(1)}倍</b>です。<br>` +
+      `<span class="small muted">${esc(a.note)}。基板パターンやチップアンテナでは短縮できますが、目安として基板のGND長も同程度（λ/4前後）あると効率を確保しやすくなります。</span>`;
+  }
+
+  // ---------- コスト試算 ----------
+  const DEF = { n: 3000, k: 5, r: 3, pg: 6000, pr: 4500, cert: 3000000, sku: 2000000, card: 1500, cardRatio: 50, gw: 20000, gwCert: 1000000, cn: false };
+  const FIELDS = [
+    ["n", "台数（総出荷台数）", 1],
+    ["k", "輸出先の国数", 1],
+    ["r", "地域版の種類数（B・C）", 1],
+    ["pg", "グローバル版モジュール単価（円）", 100],
+    ["pr", "地域版モジュール単価（円）", 100],
+    ["cert", "認証費用（1国あたり, 円）", 100000],
+    ["sku", "SKU管理コスト（1SKUあたり, 円）", 100000],
+    ["card", "カード・コネクタ追加費（1台, 円）", 100],
+    ["cardRatio", "カード方式のSKU管理費の割合（%）", 5],
+    ["gw", "外付けルーター単価（1台, 円）", 1000],
+    ["gwCert", "D方式の本体認証費（1国あたり, 円）", 100000],
+  ];
+  let cv = Object.assign({}, DEF, store.get("ch11.calc", {}) || {});
+  function renderInputs() {
+    const box = $("calcInputs"); box.innerHTML = "";
+    FIELDS.forEach(([k, label, step]) => {
+      const l = document.createElement("label");
+      l.innerHTML = `${esc(label)}<input type="number" min="0" step="${step}" value="${Number(cv[k]) || 0}" data-k="${k}">`;
+      box.append(l);
+    });
+    const c = document.createElement("label"); c.className = "cb";
+    c.innerHTML = `<input type="checkbox" data-k="cn" ${cv.cn ? "checked" : ""}> 中国を含む（Aでも中国版SKUが1つ増える）`;
+    box.append(c);
+    box.querySelectorAll("input").forEach((i) => i.addEventListener("input", () => {
+      cv[i.dataset.k] = i.type === "checkbox" ? i.checked : Math.max(0, parseFloat(i.value) || 0);
+      store.set("ch11.calc", cv); renderCalc();
+    }));
+  }
+  const yen = (x) => x >= 1e8 ? (x / 1e8).toFixed(2) + "億円" : x >= 1e4 ? Math.round(x / 1e4).toLocaleString("ja-JP") + "万円" : Math.round(x).toLocaleString("ja-JP") + "円";
+  function renderCalc() {
+    const v = cv;
+    const skuA = 1 + (v.cn ? 1 : 0);
+    const S = [
+      { id: "A", name: "A グローバル1SKU", parts: v.n * v.pg, cert: v.k * v.cert, sku: skuA * v.sku },
+      { id: "B", name: "B 地域版＋共通基板", parts: v.n * v.pr, cert: v.k * v.cert, sku: Math.max(1, v.r) * v.sku },
+      { id: "C", name: "C 通信カード差し替え", parts: v.n * (v.pr + v.card), cert: v.k * v.cert, sku: v.sku + Math.max(1, v.r) * v.sku * v.cardRatio / 100 },
+      { id: "D", name: "D 外付けゲートウェイ", parts: v.n * v.gw, cert: v.k * v.gwCert, sku: v.sku },
+    ];
+    S.forEach((s) => { s.total = s.parts + s.cert + s.sku; });
+    const max = Math.max.apply(null, S.map((s) => s.total)) || 1;
+    const min = Math.min.apply(null, S.map((s) => s.total));
+    let h = S.map((s) => `<div class="cbar ${s.total === min ? "best" : ""}">
+      <div class="hd"><span>${esc(s.name)}</span><span><b>${yen(s.total)}</b> <span class="small muted">（1台あたり ${Math.round(s.total / Math.max(1, v.n)).toLocaleString("ja-JP")}円）</span></span></div>
+      <div class="track" role="img" aria-label="${esc(s.name)} ${yen(s.total)}">
+        <span style="width:${(s.parts / max * 100).toFixed(2)}%;background:var(--c1)" title="部材 ${yen(s.parts)}"></span>
+        <span style="width:${(s.cert / max * 100).toFixed(2)}%;background:var(--c5)" title="認証 ${yen(s.cert)}"></span>
+        <span style="width:${(s.sku / max * 100).toFixed(2)}%;background:var(--c4)" title="SKU管理 ${yen(s.sku)}"></span>
+      </div></div>`).join("");
+    const diff = v.pg - v.pr, extra = (Math.max(1, v.r) - skuA) * v.sku;
+    if (diff > 0 && extra > 0) h += `<p class="small">A と B の損益分岐点（目安）: 増えるSKU管理費 ${yen(extra)} ÷ 単価差 ${yen(diff)} ≒ <b>${Math.ceil(extra / diff).toLocaleString("ja-JP")}台</b>。これより多く出荷するなら B が有利です。</p>`;
+    else if (diff <= 0) h += `<p class="small">グローバル版が地域版より安い（または同額）条件では、A が常に有利です。</p>`;
+    else h += `<p class="small">この条件では B の SKU 数が A 以下のため、単価の安い B が常に有利です。</p>`;
+    h += `<p class="small muted">※ 説明用の単純モデルです。開発期間、アンテナ設計、キャリア認証の期間、部品の供給寿命などは含みません。</p>`;
+    $("calcOut").innerHTML = h;
+  }
+
+  // ---------- ライブ例（bands.js） ----------
+  function renderLive() {
+    const D = window.LTE_BANDS;
+    if (!D) { $("liveWrap").innerHTML = `<p class="small muted" style="padding:8px 12px">バンドデータを読み込めませんでした。</p>`; return; }
+    const U = D.util;
+    const codes = ["JP", "KR", "TW", "TH", "IN"];
+    const cs = codes.map((c) => D.countries.find((x) => x.code === c)).filter(Boolean);
+    const ids = ["eg25g", "sim7600gh", "lara6001", "ec25j", "ec25eux", "ec25au", "eg915ueu", "a7672e", "bg95m3"];
+    const ms = ids.map((id) => D.modules.find((m) => m.id === id)).filter(Boolean);
+    let h = `<table id="liveTable"><thead><tr><th>モジュール</th>${cs.map((c) => `<th>${c.flag} ${esc(c.name)}</th>`).join("")}<th>5か国1SKU</th></tr></thead><tbody>`;
+    const okAll = [];
+    ms.forEach((m) => {
+      const rs = cs.map((c) => U.evaluate(m, c));
+      const ok = rs.every((r) => U.VERDICT[r.verdict].rank >= 2);
+      if (ok) okAll.push(m.name);
+      h += `<tr><td><b>${esc(m.name)}</b> <span class="small muted">${esc(m.category)}</span></td>` +
+        rs.map((r) => `<td title="${esc(U.VERDICT[r.verdict].label)}"><span class="badge ${U.VERDICT[r.verdict].cls}">${r.verdict}</span> <span class="small muted">${Math.round(r.coverage * 100)}%</span></td>`).join("") +
+        `<td>${ok ? `<span class="badge ok">可</span>` : `<span class="badge warn">不可</span>`}</td></tr>`;
+    });
+    h += `</tbody></table>`;
+    $("liveWrap").innerHTML = h;
+    $("liveSummary").innerHTML = okAll.length
+      ? `この5か国なら、<b>${okAll.map(esc).join("、")}</b> が全か国で ○ 以上 ＝ バンドの面では1SKUで行ける候補です。地域版（EC25-J など）は日本では強い一方、他国ではローバンドが抜けて △ になりがちです。LTE-M の BG95-M3 は、インドで LTE-M が未展開のため NB-IoT での判定になっている点に注意してください（データ更新: ${esc(D.updated)}）。`
+      : `この5か国をすべて ○ 以上でカバーできるモジュールは、表の中にはありませんでした。`;
+  }
+
+  function init() {
+    renderAnt();
+    renderInputs(); renderCalc();
+    $("calcReset").addEventListener("click", () => { cv = Object.assign({}, DEF); store.set("ch11.calc", cv); renderInputs(); renderCalc(); });
+    renderLive();
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init); else init();
+})();
+</script>
+</body>
+</html>

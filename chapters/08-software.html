@@ -1,0 +1,852 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ソフトウェアと制御｜LTE Study</title>
+  <link rel="stylesheet" href="../assets/style.css">
+  <style>
+    /* ---- 第8章ローカル ---- */
+    #stack .path-on rect { stroke: var(--accent); stroke-width: 3; }
+    .at-sim .chips { margin: 6px 0 10px; }
+    .at-form { display: flex; gap: 8px; margin: 10px 0 6px; }
+    .at-form input { flex: 1; min-width: 0; font-family: var(--mono); font-size: .95rem; padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); }
+    .at-cands { display: flex; flex-wrap: wrap; gap: 6px; }
+    .at-cands button { font-family: var(--mono); font-size: .8rem; border: 1px solid var(--border); background: var(--surface-2); color: var(--text); border-radius: 6px; padding: 2px 8px; cursor: pointer; }
+    .at-cands button:hover { border-color: var(--accent); }
+    .at-explain { margin-top: 12px; background: var(--surface-2); border-radius: var(--radius-sm); padding: 12px 16px; min-height: 64px; }
+    .at-explain h4 { margin: 0 0 4px; font-size: 1rem; }
+    .at-explain > :last-child { margin-bottom: 0; }
+    .gauge { margin: 14px 0 18px; }
+    .gauge-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+    .gauge-head b { font-family: var(--mono); }
+    .gauge-val { font-family: var(--mono); font-weight: 700; }
+    .gauge-wrap { position: relative; margin: 6px 0 2px; }
+    .gauge-bar { display: flex; height: 14px; border-radius: 999px; overflow: hidden; border: 1px solid var(--border); }
+    .gauge-bar .z-bad { background: color-mix(in srgb, var(--bad) 45%, var(--surface)); }
+    .gauge-bar .z-fair { background: color-mix(in srgb, var(--warn) 45%, var(--surface)); }
+    .gauge-bar .z-good { background: color-mix(in srgb, var(--ok) 45%, var(--surface)); }
+    .gauge-marker { position: absolute; top: -4px; width: 4px; height: 22px; margin-left: -2px; background: var(--text); border-radius: 2px; transition: left .15s; }
+    .gauge input[type="range"] { width: 100%; accent-color: var(--accent); margin: 4px 0 0; }
+    .gauge-scale { display: flex; justify-content: space-between; font-size: .75rem; color: var(--text-muted); font-family: var(--mono); }
+    .diag { background: var(--surface-2); border-radius: var(--radius-sm); padding: 10px 14px; margin-top: 8px; }
+  </style>
+</head>
+<body data-root="../" data-chapter="08">
+<div class="page">
+<main>
+  <header class="chapter-hero">
+    <div class="eyebrow">CHAPTER 08</div>
+    <h1>ソフトウェアと制御</h1>
+    <p class="lead">LTEモジュールは「つなげば勝手に通信してくれる部品」ではありません。ホスト（ロボットのメインCPU）がモジュールに指示を出し、状態を見張り、壊れたら立て直す――その仕組みを、ATコマンドを実際に打ちながら学びます。</p>
+    <div class="goals"><h2>この章のゴール</h2><ul>
+      <li>ホストとモジュールのソフトウェア構成（PPP / QMI / MBIM / ECM / ATソケット）を説明できる</li>
+      <li>Linux搭載SoCとRTOS/MCUで、選ぶ方式がどう変わるかがわかる</li>
+      <li>基本のATコマンドを打って、SIM・登録・接続状態を読み取れる</li>
+      <li>起動シーケンス、再接続、ハング時のリカバリを状態機械として設計できる</li>
+      <li>RSRP / RSRQ / SINR / RSSI の意味と目安がわかる</li>
+      <li>FOTA、ログ取得、セキュリティ、遠隔操作時のフェイルセーフの勘所を押さえる</li>
+    </ul></div>
+  </header>
+
+  <h2>1. 役割分担：ホストとモジュールは「社長と通訳」</h2>
+  <p>LTEモジュールの中には、無線回路（RF: Radio Frequency、高周波部）と、LTEの複雑な手順を処理する<strong>ベースバンドプロセッサ</strong>、そしてそれを動かすファームウェア（FW）が入っています。基地局とのやり取り（第3章のアタッチなど）はすべてモジュールの中で完結します。つまりモジュールは、それ自体が小さなコンピューターです。</p>
+  <p>一方、ロボットのメインCPU（<strong>ホスト</strong>）は「何を送りたいか」「いつつなぐか」「おかしくなったらどうするか」を決めます。たとえるなら、ホストは社長、モジュールは海外との電話を代行する<strong>通訳</strong>です。社長は通訳に「この番号につないで」「今つながってる？」と指示・確認し（＝<strong>制御</strong>）、つながったら書類を渡して送ってもらいます（＝<strong>データ</strong>）。この「指示・確認の通り道」と「データの通り道」を分けて考えるのが、この章全体のコツです。</p>
+
+  <figure class="figure" data-hotspots data-hs-default="app" id="stack">
+    <div class="hint">箱をクリック（タップ）すると解説が出ます。下のボタンで典型的な組み合わせを強調表示できます。</div>
+    <div class="chips" role="group" aria-label="構成の強調">
+      <button class="chip" data-path="linux" aria-pressed="false">Linux SoC の典型</button>
+      <button class="chip" data-path="mcu" aria-pressed="false">RTOS / MCU の典型</button>
+      <button class="chip" data-path="none" aria-pressed="true">強調なし</button>
+    </div>
+    <svg viewBox="0 0 560 500" role="img" aria-label="ホストとLTEモジュールのソフトウェア構成図">
+      <text x="20" y="18" class="t-muted" font-size="12">① アプリケーション層（ホスト）</text>
+      <g data-hs="app"><rect x="20" y="26" width="520" height="44" rx="8" fill="var(--c1)" fill-opacity=".15" stroke="var(--c1)" stroke-width="1.5"/>
+        <text x="280" y="53" text-anchor="middle" font-size="14" font-weight="700">ロボットのアプリ（遠隔操作・映像・テレメトリ・ログ）</text></g>
+      <line class="line" x1="147" y1="70" x2="147" y2="102"/><line class="line" x1="412" y1="70" x2="412" y2="102"/>
+
+      <text x="20" y="94" class="t-muted" font-size="12">② 接続管理（ミドルウェア / ドライバ）</text>
+      <g data-hs="nm"><rect x="20" y="102" width="255" height="52" rx="8" fill="var(--c3)" fill-opacity=".15" stroke="var(--c3)" stroke-width="1.5"/>
+        <text x="147" y="123" text-anchor="middle" font-size="13" font-weight="700">NetworkManager ＋</text>
+        <text x="147" y="143" text-anchor="middle" font-size="13" font-weight="700">ModemManager（Linux）</text></g>
+      <g data-hs="own"><rect x="285" y="102" width="255" height="52" rx="8" fill="var(--c3)" fill-opacity=".15" stroke="var(--c3)" stroke-width="1.5"/>
+        <text x="412" y="123" text-anchor="middle" font-size="13" font-weight="700">自前の接続管理タスク</text>
+        <text x="412" y="143" text-anchor="middle" font-size="13" font-weight="700">＋ATパーサ（RTOS/MCU）</text></g>
+
+      <text x="20" y="178" class="t-muted" font-size="12">③ データと制御の通り道（プロトコル）</text>
+      <g data-hs="ppp"><rect x="20" y="186" width="166" height="44" rx="8" fill="var(--c4)" fill-opacity=".15" stroke="var(--c4)" stroke-width="1.5"/>
+        <text x="103" y="205" text-anchor="middle" font-size="13" font-weight="700">PPP</text><text x="103" y="222" text-anchor="middle" font-size="12" class="t-muted">シリアル上でIP</text></g>
+      <g data-hs="qmi"><rect x="197" y="186" width="166" height="44" rx="8" fill="var(--c4)" fill-opacity=".15" stroke="var(--c4)" stroke-width="1.5"/>
+        <text x="280" y="205" text-anchor="middle" font-size="13" font-weight="700">QMI</text><text x="280" y="222" text-anchor="middle" font-size="12" class="t-muted">qmi_wwan</text></g>
+      <g data-hs="mbim"><rect x="374" y="186" width="166" height="44" rx="8" fill="var(--c4)" fill-opacity=".15" stroke="var(--c4)" stroke-width="1.5"/>
+        <text x="457" y="205" text-anchor="middle" font-size="13" font-weight="700">MBIM</text><text x="457" y="222" text-anchor="middle" font-size="12" class="t-muted">cdc_mbim</text></g>
+      <g data-hs="ecm"><rect x="20" y="240" width="166" height="44" rx="8" fill="var(--c4)" fill-opacity=".15" stroke="var(--c4)" stroke-width="1.5"/>
+        <text x="103" y="259" text-anchor="middle" font-size="13" font-weight="700">ECM / RNDIS</text><text x="103" y="276" text-anchor="middle" font-size="12" class="t-muted">USB LANに見せる</text></g>
+      <g data-hs="atsock"><rect x="197" y="240" width="166" height="44" rx="8" fill="var(--c4)" fill-opacity=".15" stroke="var(--c4)" stroke-width="1.5"/>
+        <text x="280" y="259" text-anchor="middle" font-size="13" font-weight="700">ATソケット</text><text x="280" y="276" text-anchor="middle" font-size="12" class="t-muted">内蔵TCP/IPを使う</text></g>
+      <g data-hs="atctl"><rect x="374" y="240" width="166" height="44" rx="8" fill="var(--c4)" fill-opacity=".15" stroke="var(--c4)" stroke-width="1.5"/>
+        <text x="457" y="259" text-anchor="middle" font-size="13" font-weight="700">ATコマンド</text><text x="457" y="276" text-anchor="middle" font-size="12" class="t-muted">制御・状態確認</text></g>
+
+      <text x="20" y="308" class="t-muted" font-size="12">④ 物理インターフェース（配線）</text>
+      <g data-hs="uart"><rect x="20" y="316" width="166" height="44" rx="8" fill="var(--c6)" fill-opacity=".15" stroke="var(--c6)" stroke-width="1.5"/>
+        <text x="103" y="343" text-anchor="middle" font-size="13" font-weight="700">UART</text></g>
+      <g data-hs="usb"><rect x="197" y="316" width="166" height="44" rx="8" fill="var(--c6)" fill-opacity=".15" stroke="var(--c6)" stroke-width="1.5"/>
+        <text x="280" y="343" text-anchor="middle" font-size="13" font-weight="700">USB</text></g>
+      <g data-hs="pcie"><rect x="374" y="316" width="166" height="44" rx="8" fill="var(--c6)" fill-opacity=".15" stroke="var(--c6)" stroke-width="1.5"/>
+        <text x="457" y="343" text-anchor="middle" font-size="13" font-weight="700">PCIe（M.2等）</text></g>
+      <line class="line" x1="103" y1="360" x2="103" y2="392"/><line class="line" x1="280" y1="360" x2="280" y2="392"/><line class="line" x1="440" y1="360" x2="440" y2="392"/>
+
+      <text x="20" y="384" class="t-muted" font-size="12">⑤ LTEモジュール（中身も小さなコンピューター）</text>
+      <rect x="20" y="392" width="450" height="92" rx="10" fill="var(--c2)" fill-opacity=".10" stroke="var(--c2)" stroke-width="1.5"/>
+      <g data-hs="mod-at"><rect x="32" y="404" width="136" height="68" rx="8" class="box"/>
+        <text x="100" y="433" text-anchor="middle" font-size="13" font-weight="700">ATインタプリタ</text><text x="100" y="453" text-anchor="middle" font-size="12" class="t-muted">内蔵TCP/IP</text></g>
+      <g data-hs="mod-fw"><rect x="177" y="404" width="136" height="68" rx="8" class="box"/>
+        <text x="245" y="433" text-anchor="middle" font-size="13" font-weight="700">FW・NV設定</text><text x="245" y="453" text-anchor="middle" font-size="12" class="t-muted">FOTAで更新</text></g>
+      <g data-hs="mod-bb"><rect x="322" y="404" width="136" height="68" rx="8" class="box"/>
+        <text x="390" y="433" text-anchor="middle" font-size="13" font-weight="700">ベースバンド</text><text x="390" y="453" text-anchor="middle" font-size="12" class="t-muted">＋RF（無線）</text></g>
+      <line class="line" x1="458" y1="438" x2="505" y2="438"/>
+      <line class="line" x1="505" y1="438" x2="505" y2="404"/>
+      <path class="line" d="M493 400 L505 414 L517 400"/>
+      <path class="line" d="M522 392 q8 8 0 16 M530 386 q13 14 0 28"/>
+      <text x="505" y="462" text-anchor="middle" font-size="12" class="t-muted">基地局へ</text>
+    </svg>
+    <div class="hs-panel"></div>
+    <template data-hs-content="app"><h4>① アプリケーション</h4><p>ロボットの本業のソフトです。遠隔操作の指令受信、カメラ映像の送信、位置・バッテリー・エラーなどのテレメトリ送信、ログのアップロードなど。理想は<strong>「アプリはLTEを意識せず、普通のネットワーク（ソケット）として使う」</strong>ことです。Linuxならアプリは <code>wwan0</code> などのネットワークインターフェース越しに通信するだけで、下の層の違いを知らなくて済みます。</p></template>
+    <template data-hs-content="nm"><h4>② NetworkManager ＋ ModemManager（Linux）</h4><p><strong>ModemManager</strong> はモデム（LTEモジュール）を検出し、SIM確認・網登録・データ接続などをATやQMI/MBIMで操作するLinuxの標準デーモンです。<strong>NetworkManager</strong> はWi-Fi・有線・LTEを含むネットワーク全体を管理し、「接続プロファイル（APNなど）」を持ちます。<code>mmcli</code> や <code>nmcli</code> コマンドで状態を見られます。</p><p>メリット：実績が多く、再接続なども面倒を見てくれる。注意：モジュールによって対応状況に差があるため、採用候補のモジュールが対応済みか（ModemManagerのサポート一覧やベンダーの資料）を確認します。ベンダーが独自の接続マネージャ（例: 接続用のサンプルツール）を提供していることもあります。</p></template>
+    <template data-hs-content="own"><h4>② 自前の接続管理（RTOS / MCU）</h4><p>FreeRTOS や Zephyr などのRTOS（Real-Time OS、リアルタイムOS）や、OSなしのマイコン（MCU: Micro Controller Unit）では、LinuxのModemManagerに当たるものを<strong>自分で作る</strong>のが基本です。中身は「ATコマンドを送る→応答を待つ→解析する」を繰り返す状態機械（ステートマシン）です。</p><p>ZephyrのModem subsystemや、ベンダー提供のSDK/サンプル（ATコマンドライブラリ）を土台にすると工数を減らせます。モジュールから突然届く通知（URC: Unsolicited Result Code、例: <code>+CEREG: 2</code>）の処理を忘れないことがポイントです。</p></template>
+    <template data-hs-content="ppp"><h4>PPP（Point-to-Point Protocol）</h4><p>シリアル回線（UARTやUSBの仮想シリアル）の上にIPパケットを流す、昔ながらの方式です。<code>ATD*99#</code> でデータモードに入り、ホスト側のPPPスタック（Linuxなら <code>pppd</code>、RTOSならlwIPのPPP等）がIPを扱います。</p><p>どのモジュールでもほぼ使える「最大公約数」ですが、UARTの速度（例: 921.6kbps〜数Mbps）が上限になり、1本のシリアルをデータに使うと制御用ATが打てなくなるため、<strong>CMUX（多重化）</strong>で論理チャネルを分けることがよくあります。低速なCat-1/LTE-M機器なら十分な選択肢です。</p></template>
+    <template data-hs-content="qmi"><h4>QMI（Qualcomm MSM Interface）</h4><p>Qualcomm系チップを使うモジュールで広く使われる制御プロトコルです。Linuxでは <code>qmi_wwan</code> ドライバがUSB上に <code>wwan0</code> というネットワークインターフェースを作り、<code>libqmi</code>（<code>qmicli</code>）やModemManagerが接続を制御します。IPパケットはPPPを通らず直接流れるので<strong>高速・低負荷</strong>。Cat-4以上をLinuxで使うなら第一候補です。高スループット時は複数パケットをまとめる「QMAP」などの機能も使われます。</p></template>
+    <template data-hs-content="mbim"><h4>MBIM（Mobile Broadband Interface Model）</h4><p>USB-IF（USBの業界団体）が定めた、モバイルブロードバンド機器の<strong>標準</strong>USBインターフェースです。Windowsは標準で対応し、Linuxでは <code>cdc_mbim</code> ドライバ＋<code>libmbim</code>／ModemManagerで使えます。QMIと同様に高速で、ベンダー非依存なのが利点。モジュールによってはUSB構成（コンポジション）をATコマンドで QMI/MBIM/ECM などに切り替えます。</p></template>
+    <template data-hs-content="ecm"><h4>ECM / RNDIS（USB Ethernet）</h4><p>モジュールがUSB接続の<strong>LANアダプタのふり</strong>をする方式です。ECM（Ethernet Control Model）は標準規格でLinux・macOSが対応、RNDIS はMicrosoft由来の方式です。モジュール内部でルーター（NAT）が動き、ホストにはDHCPでプライベートIPが配られることが多いので、ホスト側はほぼ何も設定せずに使えます。</p><p>手軽な反面、モジュール内のNATが挟まる、細かな状態がわかりにくい、といった点に注意。試作初期の「とりあえず動かす」に便利です。</p></template>
+    <template data-hs-content="atsock"><h4>ATソケット（モジュール内蔵TCP/IP）</h4><p>モジュール内部のTCP/IPスタックを使い、ATコマンドで「ソケットを開く→データを送る→受け取る」を行う方式です（コマンドはベンダー独自。例: 「ソケットを開くコマンド」「送信コマンド」など）。ホストにTCP/IPスタックが要らないので、<strong>小さなマイコンでもMQTTやHTTPを話せる</strong>のが最大の利点。多くのモジュールはTLSやMQTT/HTTPクライアントまで内蔵しています。</p><p>一方で、スループットは低め、ベンダー依存が強く、モジュールを替えるとソフトの書き換えが必要です。</p></template>
+    <template data-hs-content="atctl"><h4>ATコマンド（制御用）</h4><p>どの方式を選んでも、<strong>状態確認と設定のためにATコマンドは必ず使います</strong>。SIMの状態、電波品質、網への登録、APN設定、FW版数などは多くの場合ATで確認します。USB接続のモジュールは、データ用インターフェースとは別に「ATポート」「診断ポート」「GNSS(NMEA)ポート」など複数の仮想シリアルを出すのが一般的です（Linuxでは <code>/dev/ttyUSB2</code> などとして見えます。番号はモジュールによって違います）。</p></template>
+    <template data-hs-content="uart"><h4>UART（シリアル）</h4><p>TX/RXの2本（＋フロー制御のRTS/CTS）でつなぐ、最もシンプルな配線です。マイコンなら必ずある。数百kbps〜数Mbps程度なので、Cat-1 bis・LTE-M・NB-IoTなど低速用途向き。<strong>ハードウェアフロー制御（RTS/CTS）を使う</strong>、電圧レベル（1.8V系が多い）を合わせる、の2点は設計時の定番チェック項目です（第6章）。</p></template>
+    <template data-hs-content="usb"><h4>USB</h4><p>Cat-1以上のモジュールの多くは USB 2.0（高速品はUSB 3.x）を持ちます。1本のUSBでAT・データ・診断・GNSSの複数インターフェースを同時に出せるのが強み。Linux SoCとの組み合わせではほぼ標準です。USBが使えないとモジュールのFW更新やログ取得ができない機種も多いので、<strong>量産基板でもUSBをテストパッドやコネクタで引き出しておく</strong>のがおすすめです。</p></template>
+    <template data-hs-content="pcie"><h4>PCIe（M.2 など）</h4><p>5GやLTE Cat-12以上などの高速モジュールで使われ、M.2カード形状が多いです。Linuxでは <code>mhi</code> ドライバ経由のWWANサブシステムで扱う構成があります。ロボットで高画質の映像を複数本送るような用途では候補ですが、M.2モジュールでもUSBインターフェースを持つものがあり、どちらで使うか選べることもあります。</p></template>
+    <template data-hs-content="mod-at"><h4>ATインタプリタ・内蔵TCP/IP</h4><p>モジュールの中でATコマンドを解釈し、実行し、応答（<code>OK</code> / <code>ERROR</code> / 結果）を返す部分です。内蔵TCP/IP・TLS・MQTTなどの機能もここに含まれます。ホストからは「文字を送ると文字が返ってくる箱」に見えます。</p></template>
+    <template data-hs-content="mod-fw"><h4>ファームウェアとNV（不揮発）設定</h4><p>モジュールのFWは、LTEプロトコルの実装そのものです。キャリアの仕様変更や不具合修正で<strong>更新が必要になることがあります</strong>（→ 第7節 FOTA）。APNやバンド設定など、ATで行った設定の多くはNV（Non-Volatile、電源を切っても消えない領域）に保存されます。「一度設定したら残る」ため、工場出荷時の設定手順と、現場での上書きルールを決めておくことが大切です。</p></template>
+    <template data-hs-content="mod-bb"><h4>ベースバンド＋RF</h4><p>基地局を探し、同期し、アタッチし、データを変調して電波にする部分です（第1〜3章）。ホストはここを直接触りません。電波の状態はATコマンド（<code>+CSQ</code> やベンダー独自のセル情報コマンド）で「覗き見る」だけです。モジュールの認証（技適・GCF等）はこの部分を含めて取られています（第9章）。</p></template>
+  </figure>
+
+  <h3>接続方式の比較</h3>
+  <div class="table-wrap"><table>
+    <thead><tr><th>方式</th><th>主な物理IF</th><th>速度の目安</th><th>ホスト要件</th><th>向いている場面</th></tr></thead>
+    <tbody>
+      <tr><td>PPP</td><td>UART / USBシリアル</td><td>UART速度が上限（〜数Mbps）</td><td>PPPスタック（pppd, lwIP等）</td><td>低速・マイコン・どのモジュールでも使いたい</td></tr>
+      <tr><td>QMI</td><td>USB</td><td>カテゴリ上限まで（Cat-4なら150Mbps級）</td><td>Linux + qmi_wwan / libqmi</td><td>Qualcomm系モジュール × Linux の定番</td></tr>
+      <tr><td>MBIM</td><td>USB</td><td>カテゴリ上限まで</td><td>Linux / Windows 標準ドライバ</td><td>ベンダー非依存にしたい</td></tr>
+      <tr><td>ECM / RNDIS</td><td>USB</td><td>比較的高速（モジュール内NATを経由）</td><td>ほぼ設定不要</td><td>試作初期、手早く動かしたい</td></tr>
+      <tr><td>ATソケット</td><td>UART / USB</td><td>低速（〜数百kbps程度が多い）</td><td>TCP/IP不要（ATパーサのみ）</td><td>小型MCU、センサー的な少量データ</td></tr>
+    </tbody>
+  </table></div>
+  <p class="small muted">※ 速度は目安です。実際はカテゴリ、電波状態、モジュールの実装、ホストの処理能力で決まります。</p>
+
+  <h2>2. Linux搭載SoCとRTOS/MCUの違い</h2>
+  <p>ロボットのメインボードは、Linuxが動くSoC（System on Chip：Raspberry Pi、NVIDIA Jetson、i.MX などのアプリケーションプロセッサ）であることが多いでしょう。一方、電源管理や足回りを担当する小さなマイコン（RTOS/ベアメタル）にLTEをつなぐ設計もありえます。どちらにモジュールをつなぐかで、ソフトの作り方が大きく変わります。</p>
+
+  <div data-tabs>
+    <div class="tab-list"><button data-tab="linux">Linux SoC</button><button data-tab="mcu">RTOS / MCU</button><button data-tab="which">どちらにつなぐ？</button></div>
+    <div data-tab-panel="linux">
+      <p><strong>典型構成：</strong>USB接続 → カーネルドライバ（<code>qmi_wwan</code> / <code>cdc_mbim</code> / <code>option</code>（ATポート用シリアル））→ ModemManager ＋ NetworkManager → アプリは普通のソケット。</p>
+      <ul>
+        <li>カーネルが対応しているか（USBのVID/PIDがドライバに登録済みか）を最初に確認。古いカーネルでは新しいモジュールが認識されないことがあり、パッチやベンダー提供ドライバが必要な場合も。</li>
+        <li>Yocto / Buildroot など組込みLinuxでは、ModemManager・libqmi・libmbim・usb-modeswitch などのパッケージを含めることを忘れずに。</li>
+        <li>Wi-Fi と LTE を併用するなら、経路の優先度（ルートメトリック）とフェイルオーバーの方針を決めます（例: 構内はWi-Fi優先、途切れたらLTE）。</li>
+        <li>systemd のサービスとして「接続監視デーモン」を置き、ModemManagerの状態を監視して異常時にモジュールをリセットする、という構成がよく使われます。</li>
+      </ul>
+    </div>
+    <div data-tab-panel="mcu">
+      <p><strong>典型構成：</strong>UART接続 → ATパーサ（状態機械）→ ATソケット（MQTT/HTTP内蔵機能）またはPPP＋lwIP。</p>
+      <ul>
+        <li>応答待ちのタイムアウト値はコマンドごとに違います（数百msで返るものもあれば、網への問い合わせを伴い数十秒〜数分かかるものも）。<strong>モジュールのATマニュアルに書かれた最大応答時間</strong>を表にしておきましょう。</li>
+        <li>URC（非同期通知）がコマンド応答の途中に割り込むことがあるので、受信処理は「1行ずつ読み、応答かURCかを判定する」作りにします。</li>
+        <li>メモリが小さいので、TLSはモジュール内蔵機能に任せるのが一般的。その場合、証明書はモジュールのファイル領域に書き込みます。</li>
+        <li>低消費電力が重要なら、PSM（Power Saving Mode）や eDRX（extended Discontinuous Reception）といったLTE-M/NB-IoTの省電力機能と、モジュールのスリープ制御ピン（DTRなど）も扱います。</li>
+      </ul>
+    </div>
+    <div data-tab-panel="which">
+      <p>ロボットで映像伝送や遠隔操作をするなら、<strong>Linux SoC に USB でつなぐ</strong>構成が第一候補です。ソフト資産が多く、スループットも出ます。</p>
+      <p>ただし「メインCPUが落ちても位置と異常を通報したい」「待機中はメインCPUの電源を切りたい」といった要件があるなら、<strong>監視用マイコンにもモジュールの制御線（電源・リセット）をつなぐ</strong>、あるいは低速な通報専用の経路を持たせる設計も考えられます。どちらのCPUがモジュールの「持ち主」なのか（電源とリセットの権限）を最初に決めておかないと、後で取り合いになります。</p>
+    </div>
+  </div>
+
+  <div class="callout robot"><span class="title">わたしたちのロボットでは</span>
+    <p>カテゴリが未定でも、ソフト側は次のように「差し替えられる」設計にしておくと安全です。</p>
+    <ul>
+      <li>アプリ ⇔ 通信は「ソケット（Linuxのネットワークインターフェース）」で抽象化し、LTEかWi-Fiかをアプリに意識させない。</li>
+      <li>ATコマンドを使う部分は1つのモジュール（ソースファイル）に閉じ込め、ベンダー独自コマンドはそこだけに書く。</li>
+      <li>モジュールの電源（PWRKEY）・リセット・電源スイッチ（ロードスイッチ）をホストのGPIOから操作できるよう回路を用意する（第6章）。</li>
+    </ul>
+  </div>
+
+  <h2>3. ATコマンドの基本：標準と独自</h2>
+  <p>ATコマンドは、1980年代の電話モデムに由来する「文字で命令する」方式です。<code>AT</code>（ATtention＝注目）で始まる文字列を送り、改行（CR）で確定すると、モジュールが結果と <code>OK</code> または <code>ERROR</code> を返します。携帯電話向けのATコマンドは <strong>3GPP TS 27.007</strong>（一般・パケット通信）や TS 27.005（SMS）で標準化されています。</p>
+
+  <div class="table-wrap"><table>
+    <thead><tr><th>書き方</th><th>意味</th><th>例</th></tr></thead>
+    <tbody>
+      <tr><td><code>AT+XXX?</code></td><td>現在の値を読む（読み出し）</td><td><code>AT+CEREG?</code> 登録状態は？</td></tr>
+      <tr><td><code>AT+XXX=…</code></td><td>値を設定する（設定）</td><td><code>AT+CGDCONT=1,"IP","example.apn"</code></td></tr>
+      <tr><td><code>AT+XXX=?</code></td><td>設定できる範囲を聞く（テスト）</td><td><code>AT+COPS=?</code> 周りの事業者一覧（時間がかかる）</td></tr>
+      <tr><td><code>AT+XXX</code></td><td>実行する</td><td><code>AT+CSQ</code> 電波品質を測って</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="card-grid">
+    <div class="card"><h3>標準AT（3GPP TS 27.007 等）</h3><p class="small">先頭が <code>+C</code> のものが中心：<code>+CPIN</code>（SIM）、<code>+CSQ</code>（電波）、<code>+CEREG</code>（LTE登録状態）、<code>+COPS</code>（事業者）、<code>+CGDCONT</code>（APN）、<code>+CGACT</code>（接続の有効化）、<code>+CGPADDR</code>（IPアドレス）、<code>+CFUN</code>（無線ON/OFF）など。<strong>どのメーカーでもほぼ同じ意味</strong>で使えます。</p></div>
+    <div class="card"><h3>ベンダー独自AT</h3><p class="small">メーカーごとに接頭辞が違います（例: Quectelは <code>+Q…</code>、u-bloxは <code>+U…</code>、Telitは <code>#…</code>、SIMComは <code>+C…</code> の独自拡張や <code>+S…</code> など）。<strong>詳細なセル情報、バンド固定、FOTA、ソケット、TLS、GNSS、USB構成切替、省電力</strong>など、製品開発で本当に必要な機能ほど独自コマンドです。</p></div>
+  </div>
+  <div class="callout warn"><span class="title">モジュールを替えたときに困らないために</span>
+    <p>標準ATでも、応答の細部（空白の有無、省略されるフィールド、エラーコードの出し方）はメーカーやFW版で違うことがあります。パーサは「厳密な文字列一致」ではなく「<code>+CEREG:</code> で始まる行をカンマで分けて数値を取る」ように作り、<code>AT+CMEE=2</code>（エラーを文字で詳しく返す）などで開発中のデバッグをしやすくしておきましょう。</p>
+  </div>
+
+  <h2>4. やってみよう：ATコマンド・シミュレーター</h2>
+  <p>下の黒い画面は、架空のLTEモジュールにつながったターミナルです。コマンドを入力するか、候補ボタンを押してください。シナリオを切り替えると、SIM未挿入・圏外・APN誤りといった「現場でよくあるトラブル」を再現できます。応答の下に「読み方」の解説が出ます。</p>
+
+  <figure class="figure at-sim" id="atsim">
+    <div class="hint">シナリオを選び、候補ボタンを押すかコマンドを入力して Enter。<code>help</code> で一覧、<code>clear</code> で画面クリア。</div>
+    <div class="chips" role="group" aria-label="シナリオ">
+      <button class="chip" data-scn="normal" aria-pressed="true">正常</button>
+      <button class="chip" data-scn="nosim" aria-pressed="false">SIM未挿入</button>
+      <button class="chip" data-scn="nocov" aria-pressed="false">圏外</button>
+      <button class="chip" data-scn="badapn" aria-pressed="false">APN誤り</button>
+    </div>
+    <div class="terminal" id="at-term" aria-live="polite" role="log"></div>
+    <form class="at-form" id="at-form" autocomplete="off">
+      <label class="sr-only" for="at-input">ATコマンド</label>
+      <input id="at-input" type="text" placeholder="例: AT+CEREG?" spellcheck="false" autocapitalize="characters">
+      <button class="btn primary" type="submit">送信</button>
+    </form>
+    <div class="at-cands" aria-label="コマンド候補">
+      <button type="button" data-at="AT">AT</button>
+      <button type="button" data-at="ATI">ATI</button>
+      <button type="button" data-at="AT+CPIN?">AT+CPIN?</button>
+      <button type="button" data-at="AT+CSQ">AT+CSQ</button>
+      <button type="button" data-at="AT+CEREG?">AT+CEREG?</button>
+      <button type="button" data-at="AT+CEREG=2">AT+CEREG=2</button>
+      <button type="button" data-at="AT+COPS?">AT+COPS?</button>
+      <button type="button" data-at="AT+CGDCONT?">AT+CGDCONT?</button>
+      <button type="button" data-at='AT+CGDCONT=1,"IP","example.apn"'>AT+CGDCONT=1,"IP","example.apn"</button>
+      <button type="button" data-at="AT+CGACT?">AT+CGACT?</button>
+      <button type="button" data-at="AT+CGACT=1,1">AT+CGACT=1,1</button>
+      <button type="button" data-at="AT+CGPADDR=1">AT+CGPADDR=1</button>
+      <button type="button" data-at='AT+QENG="servingcell"'>AT+QENG="servingcell"</button>
+    </div>
+    <div class="at-explain" id="at-explain" aria-live="polite"></div>
+    <figcaption>架空のモジュール「EXM-LTE1」の応答例です。実機の応答書式・値はメーカーとFW版で異なります。<code>+QENG</code> は Quectel 社の独自コマンドを模した例で、3GPP標準ではありません。MCC/MNC はテスト用の 001/01 を使っています。</figcaption>
+  </figure>
+
+  <details class="more"><summary>トラブル別：最初に打つコマンドの順番</summary>
+    <ol>
+      <li><code>AT</code> に応答がない → 電源・PWRKEY・UARTの配線（TX/RX逆、ボーレート、フロー制御）、USBの認識を疑う。</li>
+      <li><code>AT+CPIN?</code> がエラー → SIMの挿入・接触、SIMの電圧、PINロック（<code>SIM PIN</code> と返る）を確認。</li>
+      <li><code>AT+CSQ</code> が <code>99,99</code> → 電波が見つからない。アンテナ接続、対応バンド（第4章）、バンド設定を確認。</li>
+      <li><code>AT+CEREG?</code> が 2 のまま／3 → SIMの契約・ローミング可否・APN・（LTE-M/NB-IoTなら）対応RATの設定を確認。</li>
+      <li>登録済みなのに通信できない → <code>AT+CGDCONT?</code> でAPN、<code>AT+CGPADDR</code> でIP、DNS設定、ホスト側のルーティングを確認。</li>
+    </ol>
+  </details>
+
+  <h2>5. 起動シーケンスと接続監視</h2>
+  <p>現場のロボットは、トンネル・エレベーター・倉庫の奥など、電波が途切れる場所を何度も通ります。また、どんなモジュールでもまれに<strong>応答しなくなる（ハングする）</strong>ことがあります。そこで接続処理は「一度つないで終わり」ではなく、<strong>ずっと回り続ける状態機械</strong>として作ります。</p>
+
+  <figure class="figure" data-stepper data-interval="4000">
+    <svg viewBox="0 0 560 450" role="img" aria-label="LTEモジュールの起動と監視・復旧の状態遷移">
+      <defs><marker id="ar08" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="var(--text-muted)"/></marker></defs>
+      <g font-size="13">
+        <rect x="20" y="16" width="300" height="40" rx="8" fill="var(--c6)" fill-opacity=".15" stroke="var(--c6)"/><text x="170" y="41" text-anchor="middle">① 電源投入・PWRKEYパルス</text>
+        <rect x="20" y="70" width="300" height="40" rx="8" fill="var(--c6)" fill-opacity=".15" stroke="var(--c6)"/><text x="170" y="95" text-anchor="middle">② AT応答待ち → 初期設定</text>
+        <rect x="20" y="124" width="300" height="40" rx="8" fill="var(--c5)" fill-opacity=".15" stroke="var(--c5)"/><text x="170" y="149" text-anchor="middle">③ SIM確認（AT+CPIN?）</text>
+        <rect x="20" y="178" width="300" height="40" rx="8" fill="var(--c2)" fill-opacity=".15" stroke="var(--c2)"/><text x="170" y="203" text-anchor="middle">④ 網への登録待ち（+CEREG）</text>
+        <rect x="20" y="232" width="300" height="40" rx="8" fill="var(--c3)" fill-opacity=".15" stroke="var(--c3)"/><text x="170" y="257" text-anchor="middle">⑤ データ接続（PDN・IP取得）</text>
+        <rect x="20" y="286" width="300" height="40" rx="8" fill="var(--c4)" fill-opacity=".15" stroke="var(--c4)"/><text x="170" y="311" text-anchor="middle">⑥ サーバー接続（TLS/MQTT）</text>
+        <rect x="20" y="340" width="300" height="40" rx="8" fill="var(--c1)" fill-opacity=".15" stroke="var(--c1)"/><text x="170" y="365" text-anchor="middle">⑦ 運用・監視（ハートビート）</text>
+      </g>
+      <g stroke="var(--text-muted)" stroke-width="1.5" fill="none" marker-end="url(#ar08)">
+        <line x1="170" y1="56" x2="170" y2="69"/><line x1="170" y1="110" x2="170" y2="123"/><line x1="170" y1="164" x2="170" y2="177"/>
+        <line x1="170" y1="218" x2="170" y2="231"/><line x1="170" y1="272" x2="170" y2="285"/><line x1="170" y1="326" x2="170" y2="339"/>
+      </g>
+      <g data-dim-at="1,2,3,4,5,6" font-size="13">
+        <rect x="360" y="232" width="180" height="64" rx="8" fill="var(--warn)" fill-opacity=".15" stroke="var(--warn)"/>
+        <text x="450" y="259" text-anchor="middle" font-weight="700">ソフト再接続</text>
+        <text x="450" y="280" text-anchor="middle" font-size="12" class="t-muted">指数バックオフで再試行</text>
+      </g>
+      <g data-dim-at="1,2,3,4,5,6,7" font-size="13">
+        <rect x="360" y="16" width="180" height="64" rx="8" fill="var(--bad)" fill-opacity=".15" stroke="var(--bad)"/>
+        <text x="450" y="43" text-anchor="middle" font-weight="700">ハードリセット</text>
+        <text x="450" y="64" text-anchor="middle" font-size="12" class="t-muted">RESET / PWRKEY / 電源断</text>
+      </g>
+      <g data-show-at="7,8" stroke="var(--warn)" stroke-width="2" fill="none" marker-end="url(#ar08)">
+        <path d="M320 360 H450 V300"/>
+        <path d="M360 264 H340 V252 H323"/>
+      </g>
+      <text data-show-at="7,8" x="330" y="398" font-size="12" class="t-muted">切断・無応答を検知</text>
+      <g data-show-at="8" stroke="var(--bad)" stroke-width="2" fill="none" marker-end="url(#ar08)">
+        <path d="M450 232 V84"/>
+        <path d="M360 40 H323"/>
+      </g>
+      <text data-show-at="8" x="458" y="150" font-size="12" class="t-muted">N回失敗</text>
+      <text data-show-at="8" x="458" y="168" font-size="12" class="t-muted">AT無応答</text>
+      <g fill="none" stroke="var(--accent)" stroke-width="3">
+        <rect data-show-at="1,8" x="18" y="14" width="304" height="44" rx="9"/>
+        <rect data-show-at="2" x="18" y="68" width="304" height="44" rx="9"/>
+        <rect data-show-at="3" x="18" y="122" width="304" height="44" rx="9"/>
+        <rect data-show-at="4" x="18" y="176" width="304" height="44" rx="9"/>
+        <rect data-show-at="5,7" x="18" y="230" width="304" height="44" rx="9"/>
+        <rect data-show-at="5,7" x="18" y="284" width="304" height="44" rx="9"/>
+        <rect data-show-at="6,7" x="18" y="338" width="304" height="44" rx="9"/>
+      </g>
+      <text x="20" y="430" font-size="12" class="t-muted">各状態にタイムアウトを持たせ、超えたら次の手段（再試行→リセット）へ進む</text>
+    </svg>
+    <div class="stepper-controls-slot"></div>
+    <div class="step" data-title="電源投入"><h4>① 電源投入と PWRKEY</h4><p>多くのモジュールは、電源（VBAT）を入れただけでは起動せず、<strong>PWRKEY（電源キー）端子を一定時間Lowにする「パルス」</strong>で起動します。パルス幅や、起動完了を示す端子（STATUSなど）の仕様はモジュールのハードウェア設計ガイドに従います（数百ms〜数秒程度のことが多い）。起動には数秒〜十数秒かかるので、その間はATを送っても返事がありません。</p></div>
+    <div class="step" data-title="AT応答・初期設定"><h4>② AT応答待ち → 初期設定</h4><p>1秒おきなどで <code>AT</code> を送り、<code>OK</code> が返るまで待ちます（上限時間を決める）。返ったら初期設定：<code>ATE0</code>（エコーOFF）、<code>AT+CMEE=2</code>（詳しいエラー）、<code>AT+CEREG=2</code>（登録状態の変化をURCで通知）、必要ならAPN（<code>AT+CGDCONT</code>）。<code>ATI</code> / <code>AT+CGMR</code> でFW版数を記録しておくと、あとで不具合解析に役立ちます。</p></div>
+    <div class="step" data-title="SIM確認"><h4>③ SIM確認</h4><p><code>AT+CPIN?</code> で <code>READY</code> を確認。eSIMやチップSIM（第7章）でも同じです。起動直後はSIMの初期化中でエラーになることがあるので、数回の再試行を入れます。ここで恒久的に失敗する場合（SIM未挿入・破損・PINロック）は、再接続を繰り返しても直らないので<strong>「SIM異常」として通報</strong>し、無駄なリトライで電池を減らさないようにします。IMSI（<code>AT+CIMI</code>）やICCID（SIM固有番号）の取得もこの段階で。</p></div>
+    <div class="step" data-title="網登録"><h4>④ 網への登録待ち</h4><p><code>+CEREG</code> の stat が <strong>1（ホーム）または 5（ローミング）</strong>になるまで待ちます。海外ローミングSIMでは5が正常です。圏外では 2（検索中）が続きます。登録には数秒〜数十秒、条件が悪いと数分かかることも。登録拒否（3）が続く場合はSIM契約やバンド・RAT設定を疑います。</p></div>
+    <div class="step" data-title="データ接続"><h4>⑤ データ接続 → ⑥ サーバー接続</h4><p>LTEでは登録（アタッチ）と同時にデフォルトの通信路（デフォルトベアラ／PDN接続）ができるのが普通です。Linuxなら ModemManager が接続し、<code>wwan0</code> にIPが付きます。ATなら <code>AT+CGACT</code> / <code>AT+CGPADDR</code> で確認。IPが取れたら、DNSで名前解決し、TLSでクラウドのMQTTブローカーなどにつなぎます。</p></div>
+    <div class="step" data-title="監視"><h4>⑦ 運用・監視（ハートビート）</h4><p>つながった後も、定期的に「生きているか」を確かめます。</p><ul><li><strong>アプリ層</strong>：MQTTのKeepAlive（PINGREQ）、サーバーとの往復応答（RTT）。これが一番確実です。</li><li><strong>モジュール層</strong>：数十秒おきの <code>AT</code> 応答、<code>+CEREG</code> のURC、電波品質の記録。</li><li><strong>ホスト層</strong>：接続監視プロセス自体をウォッチドッグ（WDT: Watchdog Timer）で監視し、監視役が止まったら再起動。</li></ul></div>
+    <div class="step" data-title="ソフト再接続"><h4>⑧ 切断を検知 → ソフト再接続（指数バックオフ）</h4><p>切断を検知したら、まず軽い手段から：ソケット再接続 → PDN再接続 → <code>AT+CFUN=0</code>→<code>AT+CFUN=1</code>（無線の入れ直し）。再試行の間隔は<strong>指数バックオフ</strong>（例: 1, 2, 4, 8, 16…秒、上限5分）＋<strong>ランダムなゆらぎ（ジッタ）</strong>にします。全台が同時に同じ間隔で再接続すると、復旧直後の基地局やサーバーに一斉に押し寄せる（サンダリングハード）ためです。キャリアによってはIoT機器に「過剰な再接続をしない」ことを求めています。</p></div>
+    <div class="step" data-title="ハードリセット"><h4>⑨ それでもダメなら → ハードリセット</h4><p>一定回数失敗した、あるいは <code>AT</code> に応答しない（ハング）場合は、ハードウェアで立て直します。順番の例：<strong>(1) RESET端子</strong>でリセット → <strong>(2) PWRKEYで電源OFF/ON</strong> → <strong>(3) ロードスイッチでVBATを切って入れ直す</strong>（最終手段）。どの手段も使えるよう、基板設計時にGPIOを割り当てておくのが肝心です。電源断の前には、可能なら <code>AT+QPOWD</code> 等のシャットダウンコマンド（独自）で正常終了させ、FW更新中でないことも確認します。</p></div>
+  </figure>
+
+  <details class="more"><summary>指数バックオフの擬似コード</summary>
+<pre><code>delay = 1s
+fail  = 0
+loop:
+  if try_connect():            # ソケット/PDN/無線の入れ直しを段階的に
+      delay = 1s; fail = 0
+      wait_until_disconnected()
+  else:
+      fail += 1
+      if fail % 5 == 0: hard_reset_module()   # RESET → PWRKEY → 電源断
+      sleep(delay + random(0, delay/2))      # ゆらぎ（ジッタ）を足す
+      delay = min(delay * 2, 300s)           # 上限あり</code></pre>
+  </details>
+
+  <h2>6. 電波品質の指標：RSSI・RSRP・RSRQ・SINR</h2>
+  <p>アンテナの「本数表示」の裏には、いくつかの数値があります。LTEでは基地局が常に送っている<strong>参照信号（Reference Signal）</strong>を測るのが基本です（定義は 3GPP TS 36.214）。</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>指標</th><th>何を測る？</th><th>たとえ</th></tr></thead>
+    <tbody>
+      <tr><td><b>RSRP</b><br><span class="small muted">Reference Signal Received Power</span></td><td>つながっている基地局の参照信号1本あたりの受信電力（dBm）。<strong>基地局からの距離・遮蔽物</strong>を反映。</td><td>話し相手の声の大きさ</td></tr>
+      <tr><td><b>RSRQ</b><br><span class="small muted">Reference Signal Received Quality</span></td><td>RSRPを帯域全体の電力（RSSI）と比べた品質（dB）。混雑や他セルの影響で悪化。</td><td>ざわざわした部屋で相手の声がどれだけ目立つか</td></tr>
+      <tr><td><b>SINR</b><br><span class="small muted">Signal to Interference plus Noise Ratio</span></td><td>信号と「干渉＋雑音」の比（dB）。<strong>通信速度に最も直結</strong>。モジュールによっては独自コマンドでのみ取得可能。</td><td>声とBGM・雑音の比</td></tr>
+      <tr><td><b>RSSI</b><br><span class="small muted">Received Signal Strength Indicator</span></td><td>帯域内の全電力（自セル＋他セル＋雑音）。大きくても良いとは限らない。<code>AT+CSQ</code> で得られる値はこれ。</td><td>部屋全体の音量</td></tr>
+    </tbody>
+  </table></div>
+
+  <figure class="figure" id="gauges">
+    <div class="hint">スライダーを動かすか、場面のボタンを押してみましょう。判定と「診断コメント」が変わります。</div>
+    <div class="chips" role="group" aria-label="場面プリセット">
+      <button class="chip" data-preset="window">屋外・窓際</button>
+      <button class="chip" data-preset="warehouse">倉庫の奥</button>
+      <button class="chip" data-preset="noisy">モーター付近（ノイズ大）</button>
+      <button class="chip" data-preset="edge">セルの境目</button>
+    </div>
+    <div id="gauge-list"></div>
+    <div class="diag" id="gauge-diag" aria-live="polite"></div>
+    <figcaption>判定の閾値は一般的な目安です（ルーター・モジュールベンダーの公開資料などを参考に簡略化）。必要な品質は用途（映像の画質、遅延要件）で変わるので、実機で「この値ならこの映像品質」という対応表を作るのがおすすめです。</figcaption>
+  </figure>
+
+  <div class="callout robot"><span class="title">わたしたちのロボットでは</span>
+    <p>RSRP・RSRQ・SINR・セルID・バンドを<strong>数秒〜数十秒おきに記録し、位置情報と一緒にクラウドへ送る</strong>と、「どこで電波が弱いか」の地図が作れます。遠隔操作の映像ビットレートをSINRに応じて自動で下げる制御にも使えます。モーター駆動中だけSINRが落ちるなら、機体内部のノイズ（第6章：アンテナ配置・シールド）を疑いましょう。</p>
+  </div>
+
+  <h2>7. FOTA：モジュールのFWとホストのOTAを分けて考える</h2>
+  <p>FOTA（Firmware Over-The-Air）は、無線経由でファームウェアを更新する仕組みです。ロボットには<strong>2種類の更新対象</strong>があります。</p>
+  <div data-tabs>
+    <div class="tab-list"><button data-tab="mfota">モジュールFOTA</button><button data-tab="hota">ホストOTA</button><button data-tab="rule">運用ルール</button></div>
+    <div data-tab-panel="mfota">
+      <p>LTEモジュールのFW（プロトコルスタック）の更新です。キャリア仕様への追従やセキュリティ・不具合修正のため、量産後も更新が必要になることがあります。</p>
+      <ul>
+        <li><strong>差分更新（デルタ更新）</strong>：旧FWと新FWの差分だけを送る方式。全体で数十MBあるFWでも、差分は数百KB〜数MB程度になることがあり、通信量と時間を節約できます。Quectel社は「DFOTA（Delta FOTA）」と呼ぶ独自機能を持ち、ATコマンドで差分ファイルのURLを渡すと、モジュールが自分でダウンロードして更新します。</li>
+        <li><strong>ホスト経由の更新</strong>：ホストが差分ファイルをダウンロードし、モジュールのファイル領域に転送してから更新を指示する方式。</li>
+        <li><strong>ベンダーツール</strong>：工場や修理ではUSB経由でPCツール（各社のFW書き込みツール）を使って全体を書き換えます。量産基板でもUSBを引き出しておく理由の1つです。</li>
+        <li>差分ファイルは「旧版→新版」の組ごとに作られるので、<strong>現場のモジュールのFW版数を把握していないと配れません</strong>。起動時に版数をクラウドへ報告しましょう。</li>
+      </ul>
+    </div>
+    <div data-tab-panel="hota">
+      <p>ロボット本体（Linuxイメージやアプリ、マイコンFW）の更新です。</p>
+      <ul>
+        <li>A/Bパーティション（2面持ち）で書き込み、起動に失敗したら元に戻す（ロールバック）方式が定番。Linux向けには Mender、RAUC、SWUpdate などのOSSがあります。</li>
+        <li>更新ファイルには<strong>電子署名</strong>を付け、ロボット側で検証してから適用します（なりすましFWの防止）。</li>
+        <li>LTEの通信量（従量課金）を考え、差分配信・夜間配信・Wi-Fi接続時のみ配信などのポリシーを決めます。</li>
+      </ul>
+    </div>
+    <div data-tab-panel="rule">
+      <ul>
+        <li><strong>同時に更新しない</strong>：モジュールFOTA中はLTEが使えず、ホストOTAのダウンロードもできません。順番を決め、更新中はウォッチドッグによるモジュールのリセットを止めます（更新中の電源断は文鎮化＝起動不能の原因）。</li>
+        <li><strong>電源条件</strong>：バッテリー残量が十分・充電ドック上・停止中など、安全に更新できる条件を定義。</li>
+        <li><strong>認証との関係</strong>：モジュールFWの更新で無線特性が変わるとは通常考えにくいものの、キャリア認証（IOT）を取った構成のFW版数を変える場合は、キャリアやモジュールベンダーに手続きの要否を確認します（第9章）。</li>
+        <li><strong>段階配信</strong>：まず数台に配って問題がないことを確かめてから全台へ（カナリアリリース）。</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2>8. ログ取得とデバッグ</h2>
+  <p>「現場でつながらない」問題の多くは、ログなしでは原因がわかりません。取れるログは3段階あります。</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>レベル</th><th>内容</th><th>取り方</th></tr></thead>
+    <tbody>
+      <tr><td>アプリ／ホスト</td><td>接続・切断の時刻、再接続回数、RTT、送信失敗</td><td>自前ログ、<code>journalctl</code>（ModemManagerのログ）</td></tr>
+      <tr><td>ATレベル</td><td>送受信したATコマンドと応答、URC、電波指標、セル情報</td><td>ATパーサで全行を記録（リングバッファに残し、異常時にアップロード）</td></tr>
+      <tr><td>モデム内部（プロトコル）</td><td>基地局とのシグナリング（アタッチ拒否の理由コードなど）</td><td>USBの<strong>診断ポート（DMポート）</strong>からベンダーツールで取得。Qualcomm系では QXDM / QCAT などが知られ、モジュールベンダーが独自のログツールを提供していることも（利用には契約やNDAが必要な場合あり・要確認）</td></tr>
+    </tbody>
+  </table></div>
+  <p>キャリアとの接続試験やフィールドでの不具合解析では、モジュールベンダーのFAE（技術サポート）に<strong>モデム内部ログ</strong>を渡すよう求められるのが普通です。そのためにも「USBを外に出す」「診断ポートを有効化できる」設計にしておきましょう。なお、出荷品で診断ポートを開けっぱなしにするのはセキュリティ上好ましくないので、量産設定では無効化し、保守時だけ有効にする運用が望ましいです。</p>
+
+  <h2>9. セキュリティ：ポートを開けず、外向きにつなぐ</h2>
+  <p>LTE回線のIPアドレスは、多くの場合キャリアのNAT（CGNAT: Carrier-Grade NAT）の内側にあるプライベートアドレスで、インターネット側から直接ロボットにアクセスすることはできません。これは不便なようで、実はセキュリティ上は好都合です。<strong>ロボットの側から、クラウドへ、暗号化して「外向き」につなぐ</strong>のが定石です。</p>
+
+  <figure class="figure" data-hotspots data-hs-default="tls">
+    <div class="hint">各要素をクリック（タップ）して解説を表示</div>
+    <svg viewBox="0 0 560 290" role="img" aria-label="アウトバウンド型接続によるロボットの遠隔操作構成">
+      <defs><marker id="ar08b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="var(--text-muted)"/></marker></defs>
+      <g data-hs="robot"><rect x="20" y="30" width="200" height="70" rx="10" fill="var(--c1)" fill-opacity=".15" stroke="var(--c1)" stroke-width="1.5"/>
+        <text x="120" y="60" text-anchor="middle" font-size="14" font-weight="700">ロボット</text>
+        <text x="120" y="82" text-anchor="middle" font-size="12" class="t-muted">デバイス証明書・秘密鍵</text></g>
+      <g data-hs="carrier"><rect x="340" y="30" width="200" height="70" rx="10" fill="var(--c2)" fill-opacity=".15" stroke="var(--c2)" stroke-width="1.5"/>
+        <text x="440" y="60" text-anchor="middle" font-size="14" font-weight="700">キャリア網</text>
+        <text x="440" y="82" text-anchor="middle" font-size="12" class="t-muted">CGNAT／閉域網オプション</text></g>
+      <g data-hs="cloud"><rect x="340" y="190" width="200" height="70" rx="10" fill="var(--c3)" fill-opacity=".15" stroke="var(--c3)" stroke-width="1.5"/>
+        <text x="440" y="220" text-anchor="middle" font-size="14" font-weight="700">クラウド</text>
+        <text x="440" y="242" text-anchor="middle" font-size="12" class="t-muted">MQTTブローカー等</text></g>
+      <g data-hs="operator"><rect x="20" y="190" width="200" height="70" rx="10" fill="var(--c4)" fill-opacity=".15" stroke="var(--c4)" stroke-width="1.5"/>
+        <text x="120" y="220" text-anchor="middle" font-size="14" font-weight="700">オペレーター</text>
+        <text x="120" y="242" text-anchor="middle" font-size="12" class="t-muted">操作画面・監視</text></g>
+      <g data-hs="tls">
+        <rect x="222" y="40" width="116" height="50" fill="transparent"/>
+        <line x1="222" y1="65" x2="336" y2="65" stroke="var(--c5)" stroke-width="3" marker-end="url(#ar08b)"/>
+        <text x="280" y="55" text-anchor="middle" font-size="12" font-weight="700" fill="var(--c5)">TLSで外向き</text>
+      </g>
+      <line x1="440" y1="100" x2="440" y2="186" stroke="var(--c5)" stroke-width="3" marker-end="url(#ar08b)"/>
+      <text x="448" y="148" font-size="12" class="t-muted">インターネット</text>
+      <line class="line" x1="222" y1="225" x2="336" y2="225" marker-end="url(#ar08b)"/>
+      <text x="280" y="216" text-anchor="middle" font-size="12" class="t-muted">操作指令</text>
+      <g data-hs="inbound">
+        <rect x="60" y="104" width="220" height="70" fill="transparent"/>
+        <line x1="120" y1="168" x2="120" y2="106" stroke="var(--bad)" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#ar08b)"/>
+        <text x="120" y="142" text-anchor="middle" font-size="16" font-weight="700" fill="var(--bad)">✕</text>
+        <text x="134" y="130" font-size="12" fill="var(--bad)">外から直接は</text>
+        <text x="134" y="148" font-size="12" fill="var(--bad)">待ち受けない</text>
+      </g>
+    </svg>
+    <div class="hs-panel"></div>
+    <template data-hs-content="robot"><h4>ロボット（デバイス認証）</h4><p>ロボットごとに<strong>固有のクライアント証明書と秘密鍵</strong>を持たせ、クラウドは「この証明書を持つ機体だけ接続を許す」ようにします（相互TLS、mTLS）。全台共通のパスワードは、1台解析されると全台が危険になるので避けます。秘密鍵はセキュアエレメント（耐タンパー性のある専用チップ）やTPM、モジュール内の保護領域に入れると取り出されにくくなります。製造工程で1台ずつ証明書を書き込む「プロビジョニング」工程を量産計画に入れておきましょう（第12章）。</p></template>
+    <template data-hs-content="carrier"><h4>キャリア網：CGNAT と閉域網</h4><p>一般的なSIMは、キャリアのNATの内側のプライベートIPを割り当てられるため、外から直接届きません。IoT向けSIMでは、インターネットを通らずに自社のクラウドやデータセンターへ直結する<strong>閉域網（プライベートAPN・VPN接続）</strong>を選べるサービスも多くあります（第7章）。閉域網を使う場合も、端末とサーバー間のTLSは省略しないのが安全です。</p></template>
+    <template data-hs-content="cloud"><h4>クラウド（MQTTブローカー / WebSocketサーバー）</h4><p><strong>MQTT</strong> は軽量なpublish/subscribe型のプロトコルで、ロボットが常時接続を1本張っておき、その上でテレメトリの送信と指令の受信の両方を行えます。<strong>WebSocket</strong> もHTTPS上で双方向通信でき、ブラウザの操作画面と相性が良い方式です。映像はWebRTCなど別の仕組みで送ることが多く、その場合もシグナリングはこの常時接続を使います。</p></template>
+    <template data-hs-content="operator"><h4>オペレーター（操作画面）</h4><p>オペレーターはロボットに直接つなぐのではなく、<strong>クラウドを経由</strong>して指令を送ります。誰がどのロボットを操作してよいかの権限管理、操作ログの記録、同時に2人が操作しない排他制御もクラウド側で実装します。</p></template>
+    <template data-hs-content="tls"><h4>TLS で「外向き」に接続</h4><p>TLS（Transport Layer Security）は、HTTPSで使われる暗号化と相手確認の仕組みです。ロボットはサーバー証明書を検証してから接続し（ルート証明書をロボットに持たせる）、さらに自分の証明書を提示します。<strong>ロボット側から張った接続</strong>なので、NATの内側でも通り、ロボットに開いた待ち受けポートが不要になります。証明書には有効期限があるので、<strong>時刻の同期</strong>（NTPやLTE網からの時刻情報）と、証明書・ルート証明書の更新手段を用意しておきます。</p></template>
+    <template data-hs-content="inbound"><h4>待ち受けポートを開けない</h4><p>SSHやWebサーバーをロボット側で待ち受けると、固定IPや特殊な回線が必要になるうえ、攻撃の入り口になります。保守用のリモートログインが必要なら、ロボットから外向きにトンネルを張る方式（リバーストンネル、VPNクライアント）にし、必要なときだけ有効化します。</p></template>
+  </figure>
+
+  <ul data-checklist="ch08-security">
+    <li>機体ごとの証明書・秘密鍵（全台共通の秘密を持たない）</li>
+    <li>サーバー証明書の検証を無効にしない（開発用の設定を量産に持ち込まない）</li>
+    <li>ファームウェア・更新ファイルの署名検証とセキュアブート</li>
+    <li>デバッグ用ポート（UARTコンソール、モジュールの診断ポート、SSH）の量産時無効化</li>
+    <li>時刻同期と、証明書の期限切れ前に更新する仕組み</li>
+    <li>SIMの不正利用対策（SIMロック、IMEIとSIMの紐付けなどSIMサービス側の機能）</li>
+  </ul>
+
+  <h2>10. ロボットの遠隔操作：遅延・ジッタ・パケロスとフェイルセーフ</h2>
+  <p>LTEはWi-Fiより広い範囲で使える一方、<strong>遅延が大きく、しかも揺らぎます</strong>。目安として、LTEの往復遅延（RTT）は良い条件で数十ms、混雑時やセル切替（ハンドオーバー）時には数百ms〜1秒以上に跳ねることもあります。上り（ロボット→クラウド）の帯域は下りより狭いので、映像を送る遠隔操作では上りがボトルネックになりがちです。</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>問題</th><th>何が起きる</th><th>主な対策</th></tr></thead>
+    <tbody>
+      <tr><td>遅延（レイテンシ）</td><td>操作してから動くまで・映像が届くまでが遅い</td><td>サーバーを近い地域に置く、映像の解像度・フレームレートを下げる、低遅延コーデック設定、ロボット側での自律（障害物停止は機体で判断）</td></tr>
+      <tr><td>ジッタ（遅延の揺らぎ）</td><td>指令が固まって届き、動きがカクつく</td><td>指令にタイムスタンプと連番を付け、古い指令は捨てる。速度指令は「一定時間だけ有効」とする</td></tr>
+      <tr><td>パケットロス</td><td>映像の乱れ、指令の欠落</td><td>映像はUDP系（WebRTC等）でFEC・再送を調整、指令は最新値のみ意味を持つ設計に。TCPの再送待ちで遅れた指令を実行しない</td></tr>
+      <tr><td>通信断</td><td>数秒〜数分つながらない</td><td>下のフェイルセーフへ。復帰後は自動で操作を再開せず、オペレーターの確認を求める</td></tr>
+      <tr><td>帯域不足（特に上り）</td><td>映像が送りきれず遅延が積み上がる</td><td>SINR・送信キューの長さを見てビットレートを自動調整（適応ビットレート）。カテゴリ選定（第5章）で上り速度を確認</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="callout danger"><span class="title">フェイルセーフは「通信が必ず切れる」前提で</span>
+    <ul>
+      <li><strong>デッドマン（ハートビート）方式</strong>：オペレーターからの指令（またはハートビート）が一定時間（例: 数百ms〜1秒、ロボットの速度と停止距離から決める）届かなければ、自動で減速・停止する。</li>
+      <li><strong>段階的な縮退</strong>：遅延が増えたら最高速度を下げる → 途絶えたら停止 → 長時間途絶えたら安全な姿勢・場所で待機し、通報する。</li>
+      <li><strong>通信に頼らない安全機能</strong>：非常停止ボタン、衝突検知、障害物センサーによる停止は、ネットワーク経由ではなく機体内で完結させる。</li>
+      <li>停止時間・停止距離・縮退の閾値は、機械安全のリスクアセスメント（第9章コラム）で根拠を持って決め、記録に残す。</li>
+    </ul>
+  </div>
+
+  <h2>まとめ</h2>
+  <ul>
+    <li>モジュールは「通訳」。ホストは<strong>制御（ATコマンド）</strong>と<strong>データの通り道（PPP/QMI/MBIM/ECM/ATソケット）</strong>を分けて扱う。</li>
+    <li>Linux SoCならUSB＋QMI/MBIM＋ModemManagerが定番。RTOS/MCUならUART＋ATパーサ＋PPPまたはATソケット。</li>
+    <li>標準AT（3GPP TS 27.007）は共通、独自ATはメーカー依存。独自部分をソフト上で隔離しておく。</li>
+    <li>接続処理は状態機械。タイムアウト、指数バックオフ＋ゆらぎ、RESET/PWRKEY/電源断による段階的リカバリを設計する。</li>
+    <li>RSRP（強さ）・RSRQ／SINR（質）を記録し、映像ビットレート制御や設置場所の改善に使う。</li>
+    <li>モジュールFOTAとホストOTAは分けて計画。版数管理と「同時に更新しない」ルール。</li>
+    <li>待ち受けポートを開けず、機体ごとの証明書でTLSの外向き接続。通信断時は自動で安全側へ。</li>
+  </ul>
+
+  <h2>用語</h2>
+  <dl class="terms">
+    <dt>ホスト</dt><dd>モジュールを制御するメインCPU（SoCやマイコン）。</dd>
+    <dt>ATコマンド</dt><dd>「AT」で始まる文字列でモデムを制御する方式。携帯向けは3GPP TS 27.007等で標準化。</dd>
+    <dt>URC</dt><dd>Unsolicited Result Code。コマンドを送っていないのにモジュールから届く通知（例: 登録状態の変化）。</dd>
+    <dt>PPP</dt><dd>Point-to-Point Protocol。シリアル回線上でIPを運ぶ方式。</dd>
+    <dt>CMUX</dt><dd>1本のシリアル回線を複数の論理チャネルに分ける多重化方式（3GPP TS 27.010）。</dd>
+    <dt>QMI</dt><dd>Qualcomm MSM Interface。Qualcomm系モデムの制御プロトコル。Linuxでは qmi_wwan / libqmi。</dd>
+    <dt>MBIM</dt><dd>Mobile Broadband Interface Model。USB-IFが定めたモバイルブロードバンド機器の標準USBインターフェース。</dd>
+    <dt>ECM / RNDIS</dt><dd>USB経由でEthernetアダプタとして見せる方式（ECMは標準、RNDISはMicrosoft由来）。</dd>
+    <dt>ModemManager</dt><dd>Linuxでモデムを検出・制御する標準デーモン。NetworkManagerと連携する。</dd>
+    <dt>APN</dt><dd>Access Point Name。どの接続先（ゲートウェイ）につなぐかを示す名前。SIMの契約で決まる。</dd>
+    <dt>PWRKEY</dt><dd>モジュールの電源ON/OFFを指示する端子。一定時間のパルスで操作する。</dd>
+    <dt>RSRP / RSRQ / SINR / RSSI</dt><dd>LTEの電波の強さ・品質の指標（本文6節）。</dd>
+    <dt>FOTA / DFOTA</dt><dd>無線経由のFW更新／その差分更新版（DFOTAはQuectelの呼称）。</dd>
+    <dt>CGNAT</dt><dd>キャリアが多数の端末を少数のグローバルIPにまとめるNAT。外から端末に直接届かない。</dd>
+    <dt>MQTT</dt><dd>IoT向けの軽量なpublish/subscribe型プロトコル。</dd>
+    <dt>指数バックオフ</dt><dd>失敗するたびに待ち時間を倍にしていく再試行方法。</dd>
+  </dl>
+
+  <h2>確認クイズ</h2>
+  <div class="quiz" data-quiz="08"></div>
+
+  <section class="sources"><h2>参考・出典</h2><ul>
+    <li><a href="https://www.3gpp.org/DynaReport/27007.htm">3GPP TS 27.007 AT command set for User Equipment (UE)</a>（+CPIN, +CSQ, +CEREG, +COPS, +CGDCONT, +CGACT, +CGPADDR の定義）</li>
+    <li><a href="https://www.3gpp.org/DynaReport/27010.htm">3GPP TS 27.010 Terminal Equipment to User Equipment (TE-UE) multiplexing protocol</a>（CMUX）</li>
+    <li><a href="https://www.3gpp.org/DynaReport/36214.htm">3GPP TS 36.214 E-UTRA Physical layer; Measurements</a>（RSRP / RSRQ / RSSI の定義）</li>
+    <li><a href="https://www.3gpp.org/DynaReport/24301.htm">3GPP TS 24.301 NAS protocol for EPS</a>（ESM cause #27 Missing or unknown APN 等）</li>
+    <li><a href="https://modemmanager.org/docs/">ModemManager documentation（freedesktop.org）</a> / <a href="https://modemmanager.org/docs/libqmi/">libqmi</a> / <a href="https://modemmanager.org/docs/libmbim/">libmbim</a></li>
+    <li><a href="https://www.usb.org/documents">USB-IF Mobile Broadband Interface Model (MBIM)</a></li>
+    <li><a href="https://docs.kernel.org/networking/device_drivers/wwan/index.html">Linux kernel documentation: WWAN drivers</a></li>
+    <li><a href="https://wiki.teltonika-networks.com/view/Mobile_Signal_Strength_Recommendations">Teltonika Networks Wiki: Mobile Signal Strength Recommendations</a>（電波指標の目安）</li>
+    <li><a href="https://www.quectel.com/">Quectel</a> 各製品の AT Commands Manual / DFOTA User Guide（+QENG, DFOTA の書式は製品ごとに要確認）</li>
+    <li><a href="https://mqtt.org/">MQTT.org</a> / <a href="https://www.rfc-editor.org/rfc/rfc6455">RFC 6455 The WebSocket Protocol</a> / <a href="https://www.rfc-editor.org/rfc/rfc8446">RFC 8446 TLS 1.3</a></li>
+  </ul><p>確認日: 2026-09</p></section>
+</main>
+</div>
+<script src="../assets/data/quiz/ch08.js"></script>
+<script src="../assets/app.js"></script>
+<script>
+/* ===== 第8章：ページ内ウィジェット ===== */
+(function () {
+  "use strict";
+  var esc = function (s) { return String(s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); };
+
+  /* ---------- 1. 構成図の強調 ---------- */
+  var PATHS = {
+    linux: ["nm", "qmi", "mbim", "ecm", "atctl", "usb", "pcie"],
+    mcu: ["own", "ppp", "atsock", "atctl", "uart"],
+    none: []
+  };
+  var stack = document.getElementById("stack");
+  if (stack) {
+    var pbtns = stack.querySelectorAll("[data-path]");
+    Array.prototype.forEach.call(pbtns, function (b) {
+      b.addEventListener("click", function () {
+        var keys = PATHS[b.dataset.path] || [];
+        Array.prototype.forEach.call(pbtns, function (x) { x.setAttribute("aria-pressed", String(x === b)); });
+        Array.prototype.forEach.call(stack.querySelectorAll("[data-hs]"), function (g) {
+          g.classList.toggle("path-on", keys.indexOf(g.dataset.hs) >= 0);
+        });
+      });
+    });
+  }
+
+  /* ---------- 2. ATコマンド・シミュレーター ---------- */
+  var term = document.getElementById("at-term");
+  var form = document.getElementById("at-form");
+  var input = document.getElementById("at-input");
+  var explain = document.getElementById("at-explain");
+  if (term && form) {
+    var GOOD_APN = "example.apn";
+    var SCN = {
+      normal: { name: "正常", sim: true, cov: true, apn: GOOD_APN, csq: 18 },
+      nosim: { name: "SIM未挿入", sim: false, cov: true, apn: GOOD_APN, csq: 18 },
+      nocov: { name: "圏外", sim: true, cov: false, apn: GOOD_APN, csq: 99 },
+      badapn: { name: "APN誤り", sim: true, cov: true, apn: "wrong.apn", csq: 20 }
+    };
+    var S = {};
+    var history = [], hIdx = 0;
+
+    var apnOk = function () { return S.apn.toLowerCase() === GOOD_APN; };
+    var registered = function () { return S.sim && S.cov && apnOk(); };
+    var stat = function () {
+      if (!S.sim) return 0;
+      if (!S.cov) return 2;
+      if (!apnOk()) return 2;
+      return 1;
+    };
+
+    function line(cls, text) {
+      var d = document.createElement("div");
+      d.className = cls;
+      d.textContent = text;
+      term.appendChild(d);
+      term.scrollTop = term.scrollHeight;
+    }
+    function setExplain(html) { explain.innerHTML = html; }
+
+    function reset(k) {
+      var c = SCN[k];
+      S = { key: k, sim: c.sim, cov: c.cov, apn: c.apn, csq: c.csq, cereg: 0 };
+      S.act = registered();
+      term.innerHTML = "";
+      line("note", "# シナリオ「" + c.name + "」: 架空モジュール EXM-LTE1 に接続しました。");
+      line("note", "# まずは AT から。help で使えるコマンド一覧を表示します。");
+      var intro = {
+        normal: "<h4>シナリオ：正常</h4><p>SIMが入り、電波もあり、APNも正しい状態です。上から順に <code>AT</code> → <code>AT+CPIN?</code> → <code>AT+CSQ</code> → <code>AT+CEREG?</code> → <code>AT+CGPADDR=1</code> と打って、「正常な応答」を覚えましょう。これが比較の基準になります。</p>",
+        nosim: "<h4>シナリオ：SIM未挿入</h4><p>SIMが挿さっていない（または接触不良）状態です。どのコマンドで異常がわかるか探してみましょう。ヒント：電波の強さは測れるでしょうか？</p>",
+        nocov: "<h4>シナリオ：圏外</h4><p>地下や金属に囲まれた場所、あるいはアンテナ未接続・対応バンドが合わない状態です。<code>AT+CSQ</code> と <code>AT+CEREG?</code> の値に注目。</p>",
+        badapn: "<h4>シナリオ：APN誤り</h4><p>SIMも電波もOKなのに、APN設定が契約と違う状態です。<code>AT+CGDCONT?</code> で設定を確認し、正しいAPN <code>example.apn</code> に直して、つながるか試してみましょう。</p>"
+      }[k];
+      setExplain(intro);
+    }
+
+    function ok(lines) { (lines || []).forEach(function (l) { line("out", l); }); line("out", "OK"); }
+    function err(text) { line("err", text || "ERROR"); }
+
+    function cmdList() {
+      return "<h4>使えるコマンド</h4><p><code>AT</code> <code>ATI</code> <code>AT+CGMR</code> <code>AT+CGSN</code> <code>AT+CIMI</code> <code>AT+CPIN?</code> <code>AT+CSQ</code> <code>AT+CEREG?</code> <code>AT+CEREG=0|2</code> <code>AT+COPS?</code> <code>AT+CFUN?</code> <code>AT+CGDCONT?</code> <code>AT+CGDCONT=1,\"IP\",\"APN名\"</code> <code>AT+CGACT?</code> <code>AT+CGACT=1,1</code> <code>AT+CGACT=0,1</code> <code>AT+CGPADDR=1</code> <code>AT+QENG=\"servingcell\"</code>（独自）、<code>clear</code></p><p class=\"small muted\">大文字・小文字はどちらでも構いません（実機のATコマンドも一般に大文字小文字を区別しません）。</p>";
+    }
+
+    function run(raw) {
+      var cmd = raw.trim();
+      if (!cmd) return;
+      history.push(cmd); hIdx = history.length;
+      var low = cmd.toLowerCase();
+      if (low === "clear" || low === "cls") { term.innerHTML = ""; return; }
+      line("in", "> " + cmd);
+      if (low === "help" || low === "?") { line("note", "# 下の解説欄に一覧を表示しました"); setExplain(cmdList()); return; }
+      var U = cmd.toUpperCase().replace(/\s+/g, "");
+      var m;
+
+      if (!/^AT/.test(U)) {
+        line("note", "# ATコマンドは「AT」で始めます");
+        setExplain("<h4>「AT」で始めましょう</h4><p>ATコマンドは必ず <code>AT</code>（ATtention）で始まります。モジュールは AT 以外で始まる文字列を無視します。</p>");
+        return;
+      }
+
+      if (U === "AT") {
+        ok();
+        setExplain("<h4>AT → OK</h4><p>「聞こえますか？」「はい」の確認です。<code>OK</code> が返れば、<strong>モジュールが起動していて、配線（UART/USB）と通信設定が正しい</strong>ことがわかります。応答がないときは電源・PWRKEY・TX/RXの配線・ボーレート・フロー制御を疑います。起動直後のホストは、まずこれを繰り返して起動完了を待ちます。</p>");
+        return;
+      }
+      if (U === "ATI") {
+        ok(["Example Wireless", "EXM-LTE1", "Revision: EXM1R01A05"]);
+        setExplain("<h4>ATI：製品情報</h4><p>メーカー名・型番・<strong>FWの版数（Revision）</strong>が返ります。FW版数は不具合解析やFOTA（差分更新ファイルの選択）で必須なので、起動時に取得してログやクラウドに記録しておきましょう。<code>AT+CGMR</code> でも版数を取れます。</p>");
+        return;
+      }
+      if (U === "AT+CGMR") { ok(["EXM1R01A05"]); setExplain("<h4>AT+CGMR：FW版数</h4><p>3GPP標準のFW版数取得コマンドです。書式はメーカーごとに異なりますが、ここで得た文字列をそのまま記録すればOKです。</p>"); return; }
+      if (U === "AT+CGSN") { ok(["990000000000001"]); setExplain("<h4>AT+CGSN：IMEI</h4><p>IMEI（International Mobile Equipment Identity、端末識別番号：15桁）です。モジュール1台ごとに固有で、キャリアの管理画面やSIMとの紐付け（不正利用対策）に使います。※表示は架空の値です。</p>"); return; }
+      if (U === "AT+CIMI") {
+        if (!S.sim) { err("+CME ERROR: 10"); setExplain("<h4>AT+CIMI → SIM not inserted</h4><p>SIMがないので加入者識別番号（IMSI）が読めません。</p>"); return; }
+        ok(["001010123456789"]);
+        setExplain("<h4>AT+CIMI：IMSI</h4><p>IMSI（International Mobile Subscriber Identity）はSIMに書かれた加入者番号です。先頭3桁がMCC（国番号、ここではテスト用の001）、続く2〜3桁がMNC（事業者番号、01）。どの国のどの事業者のSIMかがわかります（第7章）。</p>");
+        return;
+      }
+      if (U === "AT+CPIN?") {
+        if (!S.sim) {
+          err("+CME ERROR: 10");
+          setExplain("<h4>+CME ERROR: 10 ＝ SIM not inserted</h4><p>3GPP TS 27.007 のエラーコード <strong>10 は「SIMが挿入されていない」</strong>。数字だけではわかりにくいので、開発中は <code>AT+CMEE=2</code> を送って文字でエラーを返させると便利です。SIMの挿入、トレイの接触、SIMカード用の電源・信号線（第6章）を確認します。チップSIMやeSIMでも、プロファイル未書き込みだと同様のエラーになることがあります。<br><b>設計のポイント：</b>この状態は再接続を繰り返しても直らないので、ホストは「SIM異常」として通報し、無駄なリトライを止めます。</p>");
+          return;
+        }
+        ok(["+CPIN: READY"]);
+        setExplain("<h4>+CPIN: READY</h4><p>SIMが認識され、PINロックもかかっておらず使える状態です。<code>SIM PIN</code> と返った場合はPINコードの入力（<code>AT+CPIN=\"1234\"</code>）が必要です。IoT用途ではSIMのPINロックは無効にして出荷するのが一般的です。</p>");
+        return;
+      }
+      if (U === "AT+CSQ") {
+        var v = S.csq;
+        ok(["+CSQ: " + v + ",99"]);
+        if (v === 99) {
+          setExplain("<h4>+CSQ: 99,99 ＝ 測定できない</h4><p>1つ目の値 99 は「不明・検出できない」。<strong>電波が見つかっていない</strong>状態です。アンテナの接続（同軸ケーブルの外れ）、設置場所、モジュールが対応するバンドと現地のバンドが合っているか（第4章）、バンドを制限する設定が入っていないかを確認します。</p>");
+        } else {
+          var dbm = -113 + 2 * v;
+          setExplain("<h4>+CSQ: " + v + ",99 の読み方</h4><p>1つ目は受信電力（RSSI）の段階値で、<strong>dBm ≒ -113 + 2 × 値</strong>。" + v + " → <strong>約 " + dbm + " dBm</strong>。0 は -113dBm 以下、31 は -51dBm 以上、99 は不明です。2つ目の 99 はビット誤り率が不明という意味で、LTEではたいてい99です。</p><p>" + (S.sim ? "" : "<b>注目：</b>SIMがなくても電波は測れます。電波はあるのにつながらない→SIM側の問題、と切り分けられます。") + "CSQはRSSI（部屋全体の音量）なので品質までは分かりません。詳しくは独自コマンドでRSRP/RSRQ/SINRを見ます（<code>AT+QENG=\"servingcell\"</code> を試してみましょう）。</p>");
+        }
+        return;
+      }
+      if ((m = U.match(/^AT\+CEREG=([0-5])$/))) {
+        S.cereg = parseInt(m[1], 10);
+        ok();
+        setExplain("<h4>AT+CEREG=" + S.cereg + "：通知モードの設定</h4><p>1つ目の値 n は「登録状態が変わったときにURC（非同期通知）を出すか」の設定です。0=出さない、1=状態だけ通知、<strong>2=状態に加えてエリアコード（TAC）・セルID・無線方式も通知</strong>。ホストは起動時に <code>AT+CEREG=2</code> を送っておくと、ポーリングしなくても圏外→復帰を知ることができます。もう一度 <code>AT+CEREG?</code> を打ってみてください。</p>");
+        return;
+      }
+      if (U === "AT+CEREG?") {
+        var st = stat();
+        var resp = "+CEREG: " + S.cereg + "," + st;
+        if (S.cereg >= 2 && st === 1) resp += ',"1A2B","01A2B3C4",7';
+        ok([resp]);
+        var meaning = { 0: "未登録・検索もしていない", 1: "ホーム網に登録済み", 2: "未登録・登録できる網を検索中", 3: "登録拒否", 4: "不明", 5: "ローミングで登録済み" }[st];
+        var extra = "";
+        if (st === 1) extra = "LTE網に登録できました。データ通信の準備OKです。" + (S.cereg >= 2 ? "続く <code>\"1A2B\"</code> はTAC（Tracking Area Code、位置登録エリア）、<code>\"01A2B3C4\"</code> はセルID（16進）、<code>7</code> は無線方式（AcT）で 7=E-UTRAN（LTE）です。LTE-Mでは 8、NB-IoTでは 9 が返ります。" : "<code>AT+CEREG=2</code> にすると、セルIDなども表示されます。");
+        else if (!S.sim) extra = "SIMがないため、モジュールは網への登録を試みていません（stat=0）。";
+        else if (!S.cov) extra = "電波が見つからず検索を続けています。圏外から戻れば自動で 1 に変わります。ホストは「2 がどれくらい続いたら何をするか」（待つ／無線の入れ直し／通報）を決めておきます。";
+        else extra = "SIMも電波もあるのに登録できない…。LTEでは<strong>アタッチ時にデフォルトの通信路（PDN接続）も同時に作る</strong>ため、APNが契約と違うとネットワークに拒否され、再試行を繰り返します（実機・網によっては stat=3「拒否」になることも）。拒否理由は独自コマンドやモデムログで確認でき、APN誤りなら ESM cause #27（Missing or unknown APN）などが見えます。<code>AT+CGDCONT?</code> を見てみましょう。";
+        setExplain("<h4>" + esc(resp) + " の読み方</h4><p>1つ目の値は通知モード（n）、<strong>2つ目の値 " + st + " は「" + meaning + "」</strong>です。stat の意味：0=未登録・検索なし、1=ホーム登録、2=検索中、3=拒否、4=不明、5=ローミング登録。</p><p>" + extra + "</p>");
+        return;
+      }
+      if (U === "AT+COPS?") {
+        if (registered()) {
+          ok(['+COPS: 0,0,"Example Mobile",7']);
+          setExplain("<h4>+COPS: 0,0,\"Example Mobile\",7</h4><p>1つ目 0 = 事業者を<strong>自動選択</strong>中、2つ目 0 = 名前を長い英字形式で表示、3つ目 = 事業者名、4つ目 7 = LTE。海外ローミングでは現地事業者の名前が出ます。特定の事業者に固定する手動選択（<code>AT+COPS=1,…</code>）は、つながらなくなるリスクがあるので慎重に。周囲の事業者一覧 <code>AT+COPS=?</code> は数十秒〜数分かかることがあります。</p>");
+        } else {
+          ok(["+COPS: 0"]);
+          setExplain("<h4>+COPS: 0（事業者名なし）</h4><p>自動選択モードですが、まだどの事業者にも登録できていないので、名前が返りません。<code>AT+CEREG?</code> の結果と合わせて原因を切り分けます。</p>");
+        }
+        return;
+      }
+      if (U === "AT+CFUN?") {
+        ok(["+CFUN: 1"]);
+        setExplain("<h4>+CFUN: 1（フル機能）</h4><p>1=無線ON（通常）、0=最小機能、4=無線OFF（機内モード相当）。<code>AT+CFUN=0</code>→<code>AT+CFUN=1</code> は、再起動より軽い「無線の入れ直し」として再接続処理でよく使われます。</p>");
+        return;
+      }
+      if (U === "AT+CGDCONT?") {
+        ok(['+CGDCONT: 1,"IP","' + S.apn + '","0.0.0.0",0,0,0,0']);
+        setExplain("<h4>AT+CGDCONT?：PDPコンテキスト（APN）設定</h4><p>1=コンテキスト番号（CID）、<code>\"IP\"</code>=IPv4（<code>\"IPV6\"</code> や <code>\"IPV4V6\"</code> もあり）、3つ目が <strong>APN</strong>、続く値はアドレスや圧縮設定などです（フィールド数は実装により異なる）。" + (apnOk() ? "APNは契約どおり <code>example.apn</code> です。" : "<strong>APNが <code>" + esc(S.apn) + "</code> になっています。</strong>このSIMの契約APNは <code>example.apn</code> です。<code>AT+CGDCONT=1,\"IP\",\"example.apn\"</code> で直してみましょう。") + "</p><p class=\"small\">多くのモジュールではこの設定がNV（不揮発領域）に保存され、電源を切っても残ります。</p>");
+        return;
+      }
+      if ((m = cmd.trim().match(/^at\+cgdcont\s*=\s*1\s*,\s*"(ip|ipv6|ipv4v6)"\s*,\s*"([^"]*)"\s*$/i))) {
+        var was = apnOk();
+        S.apn = m[2];
+        ok();
+        if (apnOk()) {
+          if (!was) {
+            S.act = registered();
+            line("note", "# （モジュールが再アタッチ → 登録完了）");
+            if (S.cereg >= 1) line("out", "+CEREG: " + stat());
+          }
+          setExplain("<h4>APNを設定しました</h4><p>CID 1 のAPNを <code>" + esc(S.apn) + "</code> に設定しました。" + (was ? "もともと正しい値だったので変化はありません。" : "<strong>正しいAPNになったので、モジュールは再アタッチして網に登録できました</strong>（実機では再アタッチを促すため <code>AT+CFUN=0</code>→<code>AT+CFUN=1</code> を送ることもあります）。<code>AT+CEREG?</code> と <code>AT+CGPADDR=1</code> で確認しましょう。") + "</p>");
+        } else {
+          S.act = false;
+          setExplain("<h4>APNを <code>" + esc(S.apn) + "</code> に設定しました</h4><p>このSIMの契約APNは <code>example.apn</code> なので、この設定ではネットワークに拒否されます" + (S.sim && S.cov ? "（<code>AT+CEREG?</code> で確かめてみましょう）" : "") + "。APNはSIMの契約・キャリアごとに違うため、<strong>輸出先ごとにSIMとAPNの組み合わせを管理する</strong>必要があります（第7章）。</p>");
+        }
+        return;
+      }
+      if (/^AT\+CGDCONT=/.test(U)) {
+        err();
+        setExplain("<h4>書式エラー</h4><p>このシミュレーターでは <code>AT+CGDCONT=1,\"IP\",\"APN名\"</code> の形に対応しています（ダブルクォートを忘れずに）。</p>");
+        return;
+      }
+      if (U === "AT+CGACT?") {
+        ok(["+CGACT: 1," + (S.act ? 1 : 0)]);
+        setExplain("<h4>+CGACT: 1," + (S.act ? 1 : 0) + "</h4><p>CID 1 の通信路（PDPコンテキスト）が " + (S.act ? "<strong>有効（1）</strong>です。IPアドレスが割り当てられています。" : "<strong>無効（0）</strong>です。") + "LTEではアタッチと同時にデフォルトの通信路が有効になるのが普通なので、登録済みなのに 0 の場合はAPNや契約を疑います。</p>");
+        return;
+      }
+      if ((m = U.match(/^AT\+CGACT=([01]),1$/))) {
+        if (m[1] === "0") { S.act = false; ok(); setExplain("<h4>通信路を無効化しました</h4><p><code>AT+CGACT=0,1</code> で CID 1 を切断しました。再接続処理の一段目として使うことがあります。<code>AT+CGACT=1,1</code> で戻せます。</p>"); return; }
+        if (!S.sim) { err("+CME ERROR: 10"); setExplain("<h4>SIMがないため接続できません</h4><p>通信路の有効化にはSIMと網への登録が前提です。</p>"); return; }
+        if (!S.cov) { err(); setExplain("<h4>ERROR：圏外</h4><p>網に登録されていないので通信路を作れません。まず電波（<code>AT+CSQ</code>）と登録（<code>AT+CEREG?</code>）を確認。ホストは圏外中にこのコマンドを連打せず、登録のURCを待つのが行儀の良い実装です。</p>"); return; }
+        if (!apnOk()) { err(); setExplain("<h4>ERROR：APNが契約と違う</h4><p>ネットワークが接続を拒否しました（実機では拒否理由として ESM cause #27「Missing or unknown APN」等がモデムログで見えます。<code>AT+CEER</code> で最後のエラー理由を返す実装もあります）。<code>AT+CGDCONT?</code> でAPNを確認しましょう。</p>"); return; }
+        S.act = true; ok();
+        setExplain("<h4>OK：通信路が有効です</h4><p>すでに有効なら何も変わらず OK が返ります。<code>AT+CGPADDR=1</code> でIPアドレスを確認しましょう。</p>");
+        return;
+      }
+      if (U === "AT+CGPADDR" || U === "AT+CGPADDR=1") {
+        if (S.act) {
+          ok(['+CGPADDR: 1,"10.123.45.67"']);
+          setExplain("<h4>+CGPADDR: 1,\"10.123.45.67\"</h4><p>CID 1 に割り当てられたIPアドレスです。<strong>10.x.x.x はプライベートアドレス</strong>で、キャリアのNAT（CGNAT）の内側にいることを示します。つまり、インターネットからこのロボットへ直接は接続できません（第9節：外向き接続）。ここまで来れば、あとはDNSとTLSでサーバーにつなぐだけです。</p>");
+        } else {
+          ok(["+CGPADDR: 1"]);
+          setExplain("<h4>+CGPADDR: 1（アドレスなし）</h4><p>通信路が有効でないため、IPアドレスが割り当てられていません。<code>AT+CEREG?</code>（登録）と <code>AT+CGACT?</code>（通信路）を確認します。</p>");
+        }
+        return;
+      }
+      if (U === 'AT+QENG="SERVINGCELL"') {
+        if (!S.cov) {
+          ok(['+QENG: "servingcell","SEARCH"']);
+          setExplain("<h4>+QENG: \"servingcell\",\"SEARCH\"（ベンダー独自）</h4><p>在圏セルを探している状態です。セル情報がないので、電波の問題と判断できます。</p>");
+          return;
+        }
+        var state = registered() ? (S.act ? "NOCONN" : "NOCONN") : "LIMSRV";
+        var r = S.key === "badapn" && !apnOk() ? [-88, -10, -60, 14] : (S.key === "nosim" ? [-92, -11, -62, 11] : [-90, -9, -61, 13]);
+        var q = '+QENG: "servingcell","' + state + '","LTE","FDD",001,01,1A2B3C4,256,1850,3,5,5,1A2B,' + r[0] + "," + r[1] + "," + r[2] + "," + r[3] + ",...";
+        ok([q]);
+        setExplain("<h4>AT+QENG=\"servingcell\"（Quectel風の独自コマンド例）</h4><p><strong>3GPP標準ではなくベンダー独自</strong>の「在圏セル情報」コマンドを模しています（実製品ではフィールドの順序・単位・換算式が製品やFW版で異なるので、必ずその製品のATマニュアルで確認）。この例の読み方：</p><ul><li><code>" + state + "</code>：状態（" + (state === "LIMSRV" ? "LIMSRV=限定サービス。セルは見えているが正規の登録ができていない" : "NOCONN=登録済み・待ち受け中、CONNECT=通信中") + "）</li><li><code>LTE</code>,<code>FDD</code>：無線方式と複信方式（第4章）</li><li><code>001</code>,<code>01</code>：MCC・MNC（テスト用）</li><li><code>1A2B3C4</code>：セルID、<code>256</code>：PCI（物理セルID）</li><li><code>1850</code>：EARFCN（周波数番号）、<code>3</code>：<strong>バンド3</strong>（1.8GHz帯）</li><li><code>5,5</code>：上り/下り帯域幅の区分（5=20MHz）、<code>1A2B</code>：TAC</li><li><strong><code>" + r[0] + "</code>：RSRP(dBm)、<code>" + r[1] + "</code>：RSRQ(dB)、<code>" + r[2] + "</code>：RSSI(dBm)、<code>" + r[3] + "</code>：SINR</strong>（以降はCQI・送信電力など）</li></ul><p>どのバンドにつながっているかは、輸出先ごとのバンド検証（第4章・第11章）で重要な情報です。</p>");
+        return;
+      }
+      if (/^AT\+CMEE=[012]$/.test(U)) { ok(); setExplain("<h4>AT+CMEE：エラー表示形式</h4><p>0=単に ERROR、1=番号（<code>+CME ERROR: 10</code>）、2=文字（<code>+CME ERROR: SIM not inserted</code>）。このシミュレーターは常に番号形式で返します。</p>"); return; }
+      if (U === "ATE0" || U === "ATE1") { ok(); setExplain("<h4>" + U + "：エコー設定</h4><p>ATE0 はホストが送った文字をモジュールが送り返す「エコー」を止めます。プログラムで応答を解析するときはエコーOFFが扱いやすいです。</p>"); return; }
+
+      err();
+      setExplain("<h4>ERROR：未対応のコマンド</h4><p>実機でも、存在しないコマンドや書式違いには <code>ERROR</code> が返ります。このシミュレーターが対応しているコマンドは <code>help</code> で確認できます。</p>");
+    }
+
+    form.addEventListener("submit", function (e) { e.preventDefault(); run(input.value); input.value = ""; });
+    input.addEventListener("keydown", function (e) {
+      if (e.key === "ArrowUp" && history.length) { hIdx = Math.max(0, hIdx - 1); input.value = history[hIdx]; e.preventDefault(); }
+      else if (e.key === "ArrowDown" && history.length) { hIdx = Math.min(history.length, hIdx + 1); input.value = history[hIdx] || ""; e.preventDefault(); }
+    });
+    Array.prototype.forEach.call(document.querySelectorAll("#atsim [data-at]"), function (b) {
+      b.addEventListener("click", function () { run(b.dataset.at); });
+    });
+    var sbtns = document.querySelectorAll("#atsim [data-scn]");
+    Array.prototype.forEach.call(sbtns, function (b) {
+      b.addEventListener("click", function () {
+        Array.prototype.forEach.call(sbtns, function (x) { x.setAttribute("aria-pressed", String(x === b)); });
+        reset(b.dataset.scn);
+      });
+    });
+    reset("normal");
+  }
+
+  /* ---------- 3. 電波品質ゲージ ---------- */
+  var list = document.getElementById("gauge-list");
+  var diag = document.getElementById("gauge-diag");
+  if (list && diag) {
+    var M = [
+      { id: "rsrp", name: "RSRP", unit: "dBm", min: -140, max: -44, fair: -100, good: -90, val: -95, note: "強さ（基地局からの距離・遮蔽）" },
+      { id: "rsrq", name: "RSRQ", unit: "dB", min: -20, max: -3, fair: -15, good: -10, val: -11, note: "品質（混雑・他セルの影響）" },
+      { id: "sinr", name: "SINR", unit: "dB", min: -10, max: 30, fair: 0, good: 10, val: 8, note: "信号 対 干渉＋雑音（速度に直結）" },
+      { id: "rssi", name: "RSSI", unit: "dBm", min: -113, max: -51, fair: -95, good: -75, val: -70, note: "帯域内の全電力（AT+CSQの値）" }
+    ];
+    var PRESET = {
+      window: { rsrp: -78, rsrq: -7, sinr: 22, rssi: -52 },
+      warehouse: { rsrp: -112, rsrq: -13, sinr: 3, rssi: -84 },
+      noisy: { rsrp: -86, rsrq: -16, sinr: -3, rssi: -58 },
+      edge: { rsrp: -104, rsrq: -17, sinr: -1, rssi: -72 }
+    };
+    var pct = function (m, v) { return (v - m.min) / (m.max - m.min) * 100; };
+    var level = function (m, v) { return v >= m.good ? "good" : v >= m.fair ? "fair" : "bad"; };
+    var LBL = { good: ["良好", "ok"], fair: ["普通", "warn"], bad: ["弱い", "bad"] };
+    var rows = {};
+    M.forEach(function (m) {
+      var el = document.createElement("div");
+      el.className = "gauge";
+      var wBad = pct(m, m.fair), wFair = pct(m, m.good) - wBad, wGood = 100 - wBad - wFair;
+      el.innerHTML =
+        '<div class="gauge-head"><span><b>' + m.name + '</b> <span class="small muted">' + m.note + '</span></span>' +
+        '<span><span class="gauge-val"></span> <span class="badge"></span></span></div>' +
+        '<div class="gauge-wrap"><div class="gauge-bar" aria-hidden="true"><span class="z-bad" style="width:' + wBad + '%"></span><span class="z-fair" style="width:' + wFair + '%"></span><span class="z-good" style="width:' + wGood + '%"></span></div><span class="gauge-marker"></span></div>' +
+        '<input type="range" min="' + m.min + '" max="' + m.max + '" step="1" value="' + m.val + '" aria-label="' + m.name + '">' +
+        '<div class="gauge-scale"><span>' + m.min + '</span><span>弱い &lt; ' + m.fair + ' ≦ 普通 &lt; ' + m.good + ' ≦ 良好</span><span>' + m.max + '</span></div>';
+      list.appendChild(el);
+      rows[m.id] = { m: m, el: el, input: el.querySelector("input") };
+      rows[m.id].input.addEventListener("input", update);
+    });
+    function v(id) { return parseInt(rows[id].input.value, 10); }
+    function update() {
+      M.forEach(function (m) {
+        var r = rows[m.id], val = v(m.id), lv = level(m, val);
+        r.el.querySelector(".gauge-val").textContent = val + " " + m.unit;
+        var b = r.el.querySelector(".badge");
+        b.textContent = LBL[lv][0]; b.className = "badge " + LBL[lv][1];
+        r.el.querySelector(".gauge-marker").style.left = pct(m, val) + "%";
+      });
+      var rsrp = v("rsrp"), rsrq = v("rsrq"), sinr = v("sinr"), rssi = v("rssi");
+      var msg;
+      if (rsrp < -110 && sinr < 0) msg = "<b>かなり厳しい状態です。</b>接続が不安定になり、切断・再接続が増えます。アンテナの位置と向き、ケーブル損失、設置場所（金属の囲い・地下）を見直しましょう。低速なテレメトリでも送信失敗への備えが必要です。";
+      else if (rsrp >= -100 && sinr < 0) msg = "<b>電波は強いのに品質が悪い</b>パターンです。隣のセルからの干渉（セル境界）や、機体内部のノイズ（モーター、DC-DCコンバーター、カメラの高速信号）を疑います。モーター停止中と駆動中でSINRを比べると切り分けられます。";
+      else if (rsrp < -100 && sinr >= 10) msg = "<b>弱いけれどきれいな電波</b>です。低いビットレートなら安定して使えることが多いですが、送信電力が上がって消費電力が増え、少し遮られただけで圏外になりやすい状態。上り映像は画質を抑えめに。";
+      else if (rssi >= -75 && rsrq < -15) msg = "<b>RSSI（全体の音量）は大きいがRSRQが悪い</b>――他セルの電波や混雑で「うるさい」状態です。RSSIだけ見て「電波は十分」と判断しないようにしましょう。";
+      else if (level(M[0], rsrp) === "good" && level(M[2], sinr) === "good") msg = "<b>良好です。</b>このくらいなら、カテゴリの上限に近い速度や、遠隔操作の映像伝送も期待できます（実際の速度は基地局の混雑にも左右されます）。";
+      else msg = "<b>普通〜やや弱い状態です。</b>通信はできますが、速度・遅延は変動しやすいでしょう。映像のビットレートを自動調整する、重要なメッセージは再送する、などの設計で吸収します。";
+      diag.innerHTML = msg;
+    }
+    Array.prototype.forEach.call(document.querySelectorAll("#gauges [data-preset]"), function (b) {
+      b.addEventListener("click", function () {
+        var p = PRESET[b.dataset.preset];
+        Object.keys(p).forEach(function (k) { rows[k].input.value = p[k]; });
+        update();
+      });
+    });
+    update();
+  }
+})();
+</script>
+</body>
+</html>

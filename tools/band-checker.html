@@ -1,0 +1,536 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>バンド共通化チェッカー｜LTE Study</title>
+  <link rel="stylesheet" href="../assets/style.css">
+  <style>
+    .bc-panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; margin: 16px 0; box-shadow: var(--shadow); }
+    .bc-panel h3 { margin: 0 0 6px; font-size: 1.05rem; }
+    .bc-step { display: inline-block; font-family: var(--mono); font-size: .78rem; font-weight: 700; color: var(--accent-text); background: var(--accent); border-radius: 999px; padding: 0 9px; margin-right: 6px; vertical-align: 2px; }
+    .bc-row { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; margin: 8px 0; font-size: .9rem; }
+    .bc-row label { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; }
+    .bc-row select { font: inherit; padding: 3px 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--text); }
+    .bc-group { font-size: .78rem; color: var(--text-muted); font-weight: 700; margin: 10px 0 2px; letter-spacing: .04em; }
+    .chip .sub { font-size: .75rem; opacity: .75; margin-left: 4px; }
+    .bc-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: .82rem; color: var(--text-muted); margin: 6px 0; }
+    .bc-legend i { display: inline-block; width: 14px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+    #axis svg { display: block; width: 100%; height: auto; }
+    #axis text { font-size: 12px; }
+    table.bc-matrix { font-size: .84rem; }
+    table.bc-matrix th, table.bc-matrix td { padding: 5px 8px; text-align: center; white-space: nowrap; }
+    table.bc-matrix th:first-child, table.bc-matrix td:first-child { text-align: left; position: sticky; left: 0; background: var(--surface); z-index: 1; border-right: 1px solid var(--border); }
+    table.bc-matrix thead th:first-child { background: var(--surface-2); }
+    table.bc-matrix .bn { font-family: var(--mono); font-weight: 700; }
+    table.bc-matrix .fq { font-size: .75rem; color: var(--text-muted); display: block; line-height: 1.3; }
+    table.bc-matrix td.use { background: color-mix(in srgb, var(--accent) 16%, var(--surface)); color: var(--text); font-weight: 600; }
+    table.bc-matrix td.use.core { background: color-mix(in srgb, var(--accent) 34%, var(--surface)); }
+    table.bc-matrix td.none { color: var(--border); }
+    table.bc-matrix th.modcol, table.bc-matrix td.modcol { border-left: 2px solid var(--border); }
+    table.bc-matrix td.m-yes { color: var(--ok); font-weight: 700; }
+    table.bc-matrix td.m-alt { color: var(--warn); font-weight: 700; }
+    table.bc-matrix td.m-no { color: var(--bad); }
+    table.bc-matrix tr.req-all td:first-child { box-shadow: inset 4px 0 0 var(--ok); }
+    table.bc-matrix tr.req-multi td:first-child { box-shadow: inset 4px 0 0 var(--accent); }
+    table.bc-matrix tr.req-one td:first-child { box-shadow: inset 4px 0 0 var(--warn); }
+    table.bc-verdict td, table.bc-verdict th { text-align: center; white-space: nowrap; padding: 6px 8px; }
+    table.bc-verdict td:first-child, table.bc-verdict th:first-child { text-align: left; position: sticky; left: 0; background: var(--surface); z-index: 1; border-right: 1px solid var(--border); }
+    table.bc-verdict thead th:first-child { background: var(--surface-2); }
+    .vbtn { border: 1px solid var(--border); background: var(--surface); border-radius: 8px; padding: 2px 8px; cursor: pointer; min-width: 64px; line-height: 1.35; }
+    .vbtn:hover { border-color: var(--accent); }
+    .vbtn.is-active { outline: 2px solid var(--accent); }
+    .vbtn .v { font-size: 1.05rem; font-weight: 700; display: block; }
+    .vbtn .p { font-size: .72rem; color: var(--text-muted); display: block; }
+    .vbtn.ok .v { color: var(--ok); } .vbtn.accent .v { color: var(--accent); } .vbtn.warn .v { color: var(--warn); } .vbtn.bad .v { color: var(--bad); }
+    .cov { height: 4px; background: var(--surface-2); border-radius: 999px; overflow: hidden; margin-top: 2px; }
+    .cov > span { display: block; height: 100%; background: var(--accent); }
+    .sku { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; border-radius: var(--radius-sm); margin: 10px 0; border: 1px solid var(--border); background: var(--surface-2); }
+    .sku .big { font-size: 1.6rem; line-height: 1.2; font-weight: 700; }
+    .sku.ok { background: var(--ok-soft); border-color: transparent; } .sku.ok .big { color: var(--ok); }
+    .sku.warn { background: var(--warn-soft); border-color: transparent; } .sku.warn .big { color: var(--warn); }
+    .sku.bad { background: var(--bad-soft); border-color: transparent; } .sku.bad .big { color: var(--bad); }
+    .sku p { margin: 2px 0; }
+    #detail h4 { margin: 0 0 6px; }
+    #detail ul { margin: 4px 0; padding-left: 1.2em; }
+    .mono { font-family: var(--mono); }
+    .empty-note { color: var(--text-muted); font-size: .9rem; padding: 8px 0; }
+  </style>
+</head>
+<body data-root="../" data-layout="wide">
+<div class="page">
+<main>
+  <header class="chapter-hero">
+    <div class="eyebrow">TOOL</div>
+    <h1>バンド共通化チェッカー</h1>
+    <p class="lead">輸出先の国を選ぶと、各国の主要事業者が使っているLTEバンドを一覧にし、候補モジュールが何％カバーできるか・1つの製品仕様（1SKU）でまとめられるかを判定します。</p>
+    <div class="goals"><h2>このツールでわかること</h2><ul>
+      <li>輸出先すべてで必要なバンドと、特定の国だけで必要なバンドの区別</li>
+      <li>候補モジュールごとの国別カバー率と判定（◎ ○ △ ×）</li>
+      <li>「1機種で全部の国に行けるか」「行けないなら最少で何機種か」の目安</li>
+    </ul></div>
+  </header>
+
+  <div class="callout warn"><span class="title">使う前に</span>
+    <p>このツールは<b>初期検討用の目安</b>です。バンドの情報は公開情報（2026-09時点）をもとにまとめたもので、事業者の周波数再編・合併・停波で変わります。「対応バンドが合う」ことは「その国で売れる」ことを意味しません。電波認証・キャリア認証・SIM契約は別に確認が必要です（→ <a href="../chapters/09-certification.html">9章</a>・<a href="../chapters/10-asia.html">10章</a>）。</p>
+  </div>
+
+  <!-- STEP 1 -->
+  <section class="bc-panel" aria-labelledby="s1">
+    <h3 id="s1"><span class="bc-step">STEP 1</span>輸出先を選ぶ</h3>
+    <div class="btn-row" id="presets"></div>
+    <div id="countryChips"></div>
+    <div class="bc-row">
+      <label><input type="checkbox" id="optSub"> サブブランド・小規模事業者も判定に含める</label>
+      <label>表の列: <select id="optMode"><option value="country">国ごと</option><option value="operator">事業者ごと</option></select></label>
+    </div>
+  </section>
+
+  <!-- STEP 2 -->
+  <section class="bc-panel" aria-labelledby="s2">
+    <h3 id="s2"><span class="bc-step">STEP 2</span>必要なバンドを周波数の軸で見る</h3>
+    <p class="small muted" style="margin:2px 0 6px">横軸は周波数（対数目盛）。FDDは<b>下り（DL）</b>の帯域、TDDは送受共用の帯域を描いています。色で「全輸出先で必要」か「一部の国だけ」かを区別します。</p>
+    <div class="bc-legend">
+      <span><i style="background:var(--ok)"></i>全輸出先で必要</span>
+      <span><i style="background:var(--accent)"></i>2か国以上で必要</span>
+      <span><i style="background:var(--warn)"></i>1か国のみ</span>
+      <span><i style="background:var(--c3);height:4px"></i>選択中モジュールの対応範囲</span>
+    </div>
+    <div class="bc-row"><label>軸に重ねるモジュール: <select id="optOverlay"></select></label></div>
+    <div id="axis" role="img" aria-label="必要バンドの周波数軸"></div>
+  </section>
+
+  <!-- STEP 3 -->
+  <section class="bc-panel" aria-labelledby="s3">
+    <h3 id="s3"><span class="bc-step">STEP 3</span>バンド × 国（事業者）の行列</h3>
+    <p class="small muted" style="margin:2px 0">国ごと表示では「そのバンドを使う事業者数／主要事業者数」を表示。濃い色は<b>カバレッジの要（core）</b>になっている事業者がいるバンドです。右側には STEP 4 で選んだモジュールの対応（<span style="color:var(--ok);font-weight:700">✓</span> 対応 / <span style="color:var(--warn);font-weight:700">≈</span> 上位集合バンドで代替可・要確認 / <span style="color:var(--bad)">✗</span> 非対応）が並びます。</p>
+    <div class="table-wrap" id="matrixWrap"></div>
+  </section>
+
+  <!-- STEP 4 -->
+  <section class="bc-panel" aria-labelledby="s4">
+    <h3 id="s4"><span class="bc-step">STEP 4</span>候補モジュールを選んで比較する</h3>
+    <div id="moduleChips"></div>
+    <div class="btn-row"><button class="btn" id="modAll">全モジュールを選択</button><button class="btn" id="modNone">選択解除</button></div>
+    <div class="table-wrap" id="verdictWrap"></div>
+    <div class="hs-panel" id="detail" aria-live="polite">判定セルをクリック（タップ）すると、事業者ごとの内訳と不足バンドが表示されます。</div>
+  </section>
+
+  <!-- SUMMARY -->
+  <section class="bc-panel" aria-labelledby="s5">
+    <h3 id="s5"><span class="bc-step">結果</span>1SKUで行けるか？</h3>
+    <div id="summary"></div>
+  </section>
+
+  <h2>結果の読み方</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>判定</th><th>意味</th><th>ロボット開発での受け止め方</th></tr></thead>
+    <tbody>
+      <tr><td class="center"><span class="badge ok">◎</span></td><td>その国の主要事業者すべてについて、事業者が運用しているLTEバンドをすべてサポート</td><td>電波的には最良。あとは認証とSIM次第</td></tr>
+      <tr><td class="center"><span class="badge accent">○</span></td><td>全主要事業者の<b>カバレッジの要（core）</b>バンドはサポート。容量用バンド（例: 3.5GHz帯、日本の1.5GHz帯）の一部が非対応</td><td>多くのIoT用途では実用上問題なし。都市部の最高速度は出ない</td></tr>
+      <tr><td class="center"><span class="badge warn">△</span></td><td>一部の事業者・一部のバンドでしかつながらない</td><td>「特定キャリアのSIM限定」なら使えることも。郊外・屋内で圏外リスク</td></tr>
+      <tr><td class="center"><span class="badge bad">×</span></td><td>主要事業者のバンドに一つも合わない（LTE-M/NB-IoTは商用網が確認できない場合も×）</td><td>その国向けには別モジュールが必要</td></tr>
+    </tbody>
+  </table></div>
+  <ul>
+    <li><b>カバー率（％）</b>は、判定対象の事業者が使うバンドの合計（重複除く）のうち、モジュールが対応している割合です。％が高くても、要のローバンド（例: 日本のB19・B18、欧州のB20）が抜けていれば ○ になりません。</li>
+    <li><b>≈（上位集合バンド）</b>: 例えば B26（814–849/859–894MHz）は B5・B18・B19 の範囲を含みます。B26対応端末が MFBI（Multiple Frequency Band Indicator：1つの周波数を複数のバンド番号で報知する仕組み）によって B18 のセルに接続できる場合がありますが、網側の設定と端末の実装次第なので「要確認」扱いにしています。</li>
+    <li><b>LTE-M / NB-IoT モジュール</b>は、その国の事業者が LTE-M / NB-IoT を商用提供しているかを先に確認し、提供している事業者だけで判定します。運用バンドが分かっている事業者はそのバンドで、それ以外は core バンドで近似しています。</li>
+    <li><b>認証の記載</b>: 判定の詳細欄では、モジュールのデータシートにその国の認証名（例: 日本=JATE/TELEC、中国=CCC/SRRC、韓国=KC、台湾=NCC）が載っているかも表示します。載っていても最終製品の認証は別途必要です。</li>
+  </ul>
+
+  <div class="callout robot"><span class="title">私たちのロボットの場合</span>
+    <p>まずは「日本＋最初の2〜3か国」で STEP 4 を試し、◎/○ になる<b>グローバル版</b>と<b>地域版</b>の両方の候補を残しておくのがおすすめです。次に中国を加えてみてください。多くのグローバル版はバンドとしては○でも、中国の認証（CCC/SRRC/NAL）の記載がなく、<b>中国だけ別SKU</b>になるのが典型パターンです。考え方の詳細は <a href="../chapters/11-commonization.html">11章 国ごとの部品共通化戦略</a> を参照してください。</p>
+  </div>
+
+  <h2>注意事項（必ず読んでください）</h2>
+  <ul>
+    <li><b>データは古くなります。</b>事業者の合併（例: 台湾・タイ・インドネシア・マレーシアで近年相次いだ統合）、3G/2G停波、周波数の再割当てで運用バンドは変わります。量産判断の前に、事業者の公式情報・当局の周波数割当表で再確認してください。</li>
+    <li><b>キャリア認証は別物です。</b>日本・韓国・米国などでは、事業者ごとの端末認証（相互接続性試験）を通さないと回線契約や大量導入ができない場合があります。</li>
+    <li><b>LTE-M / NB-IoT の提供は国と事業者で大きく違います。</b>中国・インド・インドネシアは LTE-M が主要事業者で未展開（NB-IoT中心）とされています。「不明（null）」の事業者は判定に含めていません。</li>
+    <li><b>モジュールの対応バンドは型番・ファームウェア版で変わることがあります。</b>必ず購入予定の型番の最新データシートで確認してください。一部の認証記載は代理店資料に基づき「要確認」としています。</li>
+    <li><b>電波が合っても通信品質は保証されません。</b>アンテナ性能（特にローバンド）、筐体の金属、設置場所の影響が大きいです（→ <a href="../chapters/06-hardware.html">6章</a>）。</li>
+  </ul>
+
+  <section class="sources"><h2>参考・出典</h2>
+    <p>各国の事業者・バンド（データ内に記載の出典）:</p>
+    <ul id="srcCountries"></ul>
+    <p>モジュールの対応バンド（メーカー／代理店のデータシート・製品ページ）:</p>
+    <ul id="srcModules"></ul>
+    <ul>
+      <li><a href="https://www.3gpp.org/dynareport/36101.htm">3GPP TS 36.101 E-UTRA; User Equipment (UE) radio transmission and reception（バンド定義）</a></li>
+      <li><a href="https://www.gsma.com/solutions-and-impact/technologies/internet-of-things/mobile-iot-commercial-launches/">GSMA Mobile IoT Commercial Launches（LTE-M / NB-IoT の商用状況）</a></li>
+    </ul>
+    <p>データ更新: <span id="updated"></span>／確認日: 2026-09</p>
+  </section>
+</main>
+</div>
+<script src="../assets/data/bands.js"></script>
+<script src="../assets/app.js"></script>
+<script>
+(function () {
+  "use strict";
+  const D = window.LTE_BANDS, U = D.util, L = window.LTE;
+  const esc = L.esc, store = L.store, KEY = "tools.bandChecker";
+  const $ = (id) => document.getElementById(id);
+  const byCode = {}; D.countries.forEach((c) => { byCode[c.code] = c; });
+  const byMod = {}; D.modules.forEach((m) => { byMod[m.id] = m; });
+
+  const PRESETS = [
+    { label: "日本＋アジア主要5", codes: ["JP", "CN", "KR", "TW", "TH", "IN"] },
+    { label: "ASEAN", codes: ["SG", "TH", "VN", "ID", "MY", "PH"] },
+    { label: "中国を除くアジア全部", codes: ["JP", "KR", "TW", "HK", "SG", "TH", "VN", "ID", "MY", "PH", "IN"] },
+    { label: "アジア全部", codes: ["JP", "CN", "KR", "TW", "HK", "SG", "TH", "VN", "ID", "MY", "PH", "IN"] },
+    { label: "クリア", codes: [] },
+  ];
+  const ASIA = ["JP", "CN", "KR", "TW", "HK", "SG", "TH", "VN", "ID", "MY", "PH", "IN"];
+
+  const saved = store.get(KEY, {}) || {};
+  const state = {
+    countries: Array.isArray(saved.countries) ? saved.countries.filter((c) => byCode[c]) : ["JP", "KR", "TW", "TH"],
+    modules: Array.isArray(saved.modules) ? saved.modules.filter((m) => byMod[m]) : ["eg25g", "ec25j", "ec25eux", "eg915ueu"],
+    includeSub: !!saved.includeSub,
+    mode: saved.mode === "operator" ? "operator" : "country",
+    overlay: saved.overlay && (saved.overlay === "none" || byMod[saved.overlay]) ? saved.overlay : "auto",
+    focus: null,
+  };
+  const save = () => store.set(KEY, { countries: state.countries, modules: state.modules, includeSub: state.includeSub, mode: state.mode, overlay: state.overlay });
+
+  const selCountries = () => ASIA.concat(D.countries.map((c) => c.code).filter((c) => !ASIA.includes(c))).filter((c) => state.countries.includes(c)).map((c) => byCode[c]);
+  const selModules = () => D.modules.filter((m) => state.modules.includes(m.id));
+  const bandsOf = (m) => U.isIoT(m) ? Array.from(new Set((m.ltem || []).concat(m.nbiot || []))) : (m.lte || []);
+  const rangeOf = (b) => U.range(b, "dl") || [0, 0];
+
+  // ---------- chips ----------
+  function chip(label, on, onClick, sub) {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "chip"; b.setAttribute("aria-pressed", String(on));
+    b.innerHTML = label + (sub ? `<span class="sub">${esc(sub)}</span>` : "");
+    b.addEventListener("click", onClick);
+    return b;
+  }
+  function renderPresets() {
+    const box = $("presets"); box.innerHTML = "";
+    PRESETS.forEach((p) => {
+      const b = document.createElement("button"); b.className = "btn"; b.type = "button"; b.textContent = p.label;
+      b.addEventListener("click", () => { state.countries = p.codes.slice(); state.focus = null; update(); });
+      box.append(b);
+    });
+  }
+  function renderCountryChips() {
+    const box = $("countryChips"); box.innerHTML = "";
+    const groups = [["アジア", D.countries.filter((c) => ASIA.includes(c.code))], ["比較用", D.countries.filter((c) => !ASIA.includes(c.code))]];
+    groups.forEach(([g, list]) => {
+      box.insertAdjacentHTML("beforeend", `<div class="bc-group">${g}</div>`);
+      const wrap = document.createElement("div"); wrap.className = "chips";
+      list.forEach((c) => {
+        const on = state.countries.includes(c.code);
+        wrap.append(chip(`${c.flag} ${esc(c.name)}`, on, () => {
+          state.countries = on ? state.countries.filter((x) => x !== c.code) : state.countries.concat(c.code);
+          state.focus = null; update();
+        }));
+      });
+      box.append(wrap);
+    });
+  }
+  function renderModuleChips() {
+    const box = $("moduleChips"); box.innerHTML = "";
+    const cats = [];
+    D.modules.forEach((m) => { if (!cats.includes(m.category)) cats.push(m.category); });
+    cats.forEach((cat) => {
+      box.insertAdjacentHTML("beforeend", `<div class="bc-group">${esc(cat)}</div>`);
+      const wrap = document.createElement("div"); wrap.className = "chips";
+      D.modules.filter((m) => m.category === cat).forEach((m) => {
+        const on = state.modules.includes(m.id);
+        wrap.append(chip(esc(m.name), on, () => {
+          state.modules = on ? state.modules.filter((x) => x !== m.id) : state.modules.concat(m.id);
+          state.focus = null; update();
+        }, m.vendor));
+      });
+      box.append(wrap);
+    });
+    const sel = $("optOverlay");
+    sel.innerHTML = `<option value="auto">自動（STEP 4 の先頭）</option><option value="none">重ねない</option>` +
+      D.modules.map((m) => `<option value="${m.id}">${esc(m.vendor + " " + m.name)}</option>`).join("");
+    sel.value = state.overlay;
+  }
+
+  // ---------- 必要バンドの集計 ----------
+  function needMap(countries) {
+    // band -> { countries: Set(code), core: Set(code), ops: [{code, op, core}] }
+    const map = new Map();
+    countries.forEach((c) => {
+      U.ops(c, state.includeSub).forEach((o) => {
+        o.lte.forEach((b) => {
+          if (!map.has(b)) map.set(b, { countries: new Set(), core: new Set(), ops: [] });
+          const e = map.get(b);
+          e.countries.add(c.code);
+          if (o.core.includes(b)) e.core.add(c.code);
+          e.ops.push({ code: c.code, op: o, core: o.core.includes(b) });
+        });
+      });
+    });
+    return map;
+  }
+  function sortedBands(map) { return Array.from(map.keys()).sort((a, b) => rangeOf(a)[0] - rangeOf(b)[0] || a - b); }
+  function reqClass(e, n) { const k = e.countries.size; return k === n && n > 1 ? "req-all" : k >= 2 ? "req-multi" : n === 1 ? "req-all" : "req-one"; }
+
+  // ---------- 周波数軸 SVG ----------
+  function renderAxis(map, countries) {
+    const box = $("axis");
+    if (!countries.length) { box.innerHTML = `<p class="empty-note">STEP 1 で輸出先を選ぶと表示されます。</p>`; return; }
+    const W = Math.max(320, Math.min(1100, box.clientWidth || 800));
+    const padL = 12, padR = 12, F0 = 580, F1 = 3900;
+    const x = (f) => padL + (Math.log(Math.max(F0, Math.min(F1, f))) - Math.log(F0)) / (Math.log(F1) - Math.log(F0)) * (W - padL - padR);
+    const n = countries.length;
+    const list = sortedBands(map);
+    // レーン割り当て（ラベル幅も考慮して重なり回避）
+    const lanes = [];
+    const items = list.map((b) => {
+      const r = rangeOf(b); const x0 = x(r[0]), x1 = Math.max(x(r[1]), x0 + 3);
+      const labelEnd = Math.max(x1, x0 + 30);
+      let lane = lanes.findIndex((end) => end + 4 < x0);
+      if (lane < 0) { lane = lanes.length; lanes.push(labelEnd); } else lanes[lane] = labelEnd;
+      return { b, x0, x1, lane, e: map.get(b) };
+    });
+    const laneH = 34, top = 8;
+    const bandsH = top + lanes.length * laneH;
+    const ov = overlayModule();
+    const ovH = ov ? 40 : 0;
+    const axisY = bandsH + ovH + 8;
+    const H = axisY + 34;
+    let s = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" aria-hidden="true">`;
+    items.forEach((it) => {
+      const k = it.e.countries.size;
+      const col = (k === n) ? "var(--ok)" : k >= 2 ? "var(--accent)" : "var(--warn)";
+      const y = top + it.lane * laneH;
+      const d = D.bands[it.b] || {};
+      const tdd = d.duplex === "TDD";
+      s += `<g><title>B${it.b} ${esc(d.freq || "")} ${esc(d.duplex || "")} DL ${esc(d.dl || "")}MHz — ${k}/${n}か国で使用</title>`;
+      s += `<rect x="${it.x0.toFixed(1)}" y="${y}" width="${(it.x1 - it.x0).toFixed(1)}" height="12" rx="2" fill="${col}" ${tdd ? `fill-opacity=".55" stroke="${col}" stroke-width="1.5"` : ""}/>`;
+      s += `<text x="${it.x0.toFixed(1)}" y="${y + 27}" style="font-size:12px;font-weight:700">B${it.b}</text></g>`;
+    });
+    if (ov) {
+      const oy = bandsH + 6;
+      s += `<text x="${padL}" y="${oy + 10}" class="t-muted" style="font-size:12px">${esc(ov.name)} の対応範囲</text>`;
+      bandsOf(ov).forEach((b) => {
+        const r = U.range(b, "dl"); if (!r) return;
+        s += `<rect x="${x(r[0]).toFixed(1)}" y="${oy + 18}" width="${Math.max(2, x(r[1]) - x(r[0])).toFixed(1)}" height="6" rx="1" fill="var(--c3)"><title>B${b}</title></rect>`;
+      });
+    }
+    s += `<line x1="${padL}" x2="${W - padR}" y1="${axisY}" y2="${axisY}" class="line"/>`;
+    const ticks = W < 520 ? [600, 800, 1000, 1500, 2000, 2600, 3500] : [600, 700, 800, 900, 1000, 1500, 1800, 2100, 2600, 3500];
+    ticks.forEach((f) => {
+      s += `<line x1="${x(f).toFixed(1)}" x2="${x(f).toFixed(1)}" y1="${axisY}" y2="${axisY + 5}" class="line"/>`;
+      s += `<text x="${x(f).toFixed(1)}" y="${axisY + 19}" text-anchor="middle" class="t-muted" style="font-size:12px">${f >= 1000 ? (f / 1000) + "G" : f}</text>`;
+    });
+    s += `<text x="${W - padR}" y="${axisY + 32}" text-anchor="end" class="t-muted" style="font-size:12px">MHz（対数目盛）</text>`;
+    s += `</svg>`;
+    box.innerHTML = s;
+  }
+  function overlayModule() {
+    if (state.overlay === "none") return null;
+    if (state.overlay !== "auto") return byMod[state.overlay] || null;
+    return selModules()[0] || null;
+  }
+
+  // ---------- 行列 ----------
+  function renderMatrix(map, countries) {
+    const wrap = $("matrixWrap");
+    if (!countries.length) { wrap.innerHTML = `<p class="empty-note" style="padding:10px 14px">輸出先が選ばれていません。</p>`; return; }
+    const n = countries.length;
+    const mods = selModules();
+    const cols = [];
+    countries.forEach((c) => {
+      if (state.mode === "operator") U.ops(c, state.includeSub).forEach((o) => cols.push({ c, o }));
+      else cols.push({ c });
+    });
+    let h = `<table class="bc-matrix"><thead><tr><th>バンド</th>`;
+    cols.forEach((col) => {
+      h += col.o ? `<th title="${esc(col.c.name)}">${col.c.flag}<br><span class="small">${esc(col.o.name)}</span></th>` : `<th>${col.c.flag}<br><span class="small">${esc(col.c.name.replace(/（.*）/, ""))}</span></th>`;
+    });
+    h += `<th>必要国数</th>`;
+    mods.forEach((m, i) => { h += `<th class="${i === 0 ? "modcol" : ""}">${esc(m.name)}<br><span class="small muted">${esc(m.category)}</span></th>`; });
+    h += `</tr></thead><tbody>`;
+    sortedBands(map).forEach((b) => {
+      const e = map.get(b), d = D.bands[b] || {};
+      h += `<tr class="${reqClass(e, n)}"><td><span class="bn">B${b}</span> <span class="badge">${esc(d.duplex || "?")}</span><span class="fq">${esc(d.freq || "")}MHz</span></td>`;
+      cols.forEach((col) => {
+        if (col.o) {
+          const use = col.o.lte.includes(b), core = col.o.core.includes(b);
+          h += use ? `<td class="use ${core ? "core" : ""}" title="${core ? "カバレッジの要" : "使用"}">${core ? "●" : "○"}</td>` : `<td class="none">·</td>`;
+        } else {
+          const os = U.ops(col.c, state.includeSub);
+          const using = os.filter((o) => o.lte.includes(b));
+          const core = using.some((o) => o.core.includes(b));
+          h += using.length ? `<td class="use ${core ? "core" : ""}" title="${esc(using.map((o) => o.name).join("、"))}">${using.length}/${os.length}</td>` : `<td class="none">·</td>`;
+        }
+      });
+      const k = e.countries.size;
+      h += `<td>${k === n ? `<span class="badge ok">全${n}か国</span>` : k >= 2 ? `<span class="badge accent">${k}か国</span>` : `<span class="badge warn">${esc(byCode[Array.from(e.countries)[0]].name.replace(/（.*）/, ""))}のみ</span>`}</td>`;
+      mods.forEach((m, i) => {
+        const s = U.supports(bandsOf(m), b);
+        h += `<td class="m-${s} ${i === 0 ? "modcol" : ""}">${s === "yes" ? "✓" : s === "alt" ? "≈" : "✗"}</td>`;
+      });
+      h += `</tr>`;
+    });
+    h += `</tbody></table>`;
+    wrap.innerHTML = h;
+  }
+
+  // ---------- 判定 ----------
+  function evalAll(mods, countries) {
+    return mods.map((m) => ({ m, rs: countries.map((c) => U.evaluate(m, c, { includeSub: state.includeSub })) }));
+  }
+  function renderVerdicts(countries) {
+    const wrap = $("verdictWrap");
+    const mods = selModules();
+    if (!countries.length || !mods.length) { wrap.innerHTML = `<p class="empty-note" style="padding:10px 14px">${!countries.length ? "輸出先" : "モジュール"}を選ぶと判定表が表示されます。</p>`; return; }
+    const res = evalAll(mods, countries);
+    let h = `<table class="bc-verdict"><thead><tr><th>モジュール</th>`;
+    countries.forEach((c) => { h += `<th>${c.flag}<br><span class="small">${esc(c.name.replace(/（.*）/, ""))}</span></th>`; });
+    h += `<th>1SKU</th></tr></thead><tbody>`;
+    res.forEach(({ m, rs }) => {
+      h += `<tr><td><b>${esc(m.name)}</b><br><span class="small muted">${esc(m.vendor)}・${esc(m.category)}</span></td>`;
+      rs.forEach((r, i) => {
+        const v = U.VERDICT[r.verdict];
+        const pct = Math.round(r.coverage * 100);
+        const act = state.focus && state.focus[0] === m.id && state.focus[1] === countries[i].code ? " is-active" : "";
+        h += `<td><button type="button" class="vbtn ${v.cls}${act}" data-m="${m.id}" data-c="${countries[i].code}" title="${esc(v.label)}"><span class="v">${r.verdict}</span><span class="p">${pct}%</span><span class="cov"><span style="width:${pct}%"></span></span></button></td>`;
+      });
+      const min = Math.min.apply(null, rs.map((r) => U.VERDICT[r.verdict].rank));
+      h += `<td>${min >= 2 ? `<span class="badge ok">可</span>` : min === 1 ? `<span class="badge warn">条件付き</span>` : `<span class="badge bad">不可</span>`}</td></tr>`;
+    });
+    h += `</tbody></table>`;
+    wrap.innerHTML = h;
+    wrap.querySelectorAll(".vbtn").forEach((b) => b.addEventListener("click", () => { state.focus = [b.dataset.m, b.dataset.c]; renderVerdicts(countries); renderDetail(); }));
+  }
+  function renderDetail() {
+    const box = $("detail");
+    if (!state.focus || !byMod[state.focus[0]] || !state.countries.includes(state.focus[1])) {
+      box.classList.add("empty");
+      box.textContent = "判定セルをクリック（タップ）すると、事業者ごとの内訳と不足バンドが表示されます。";
+      return;
+    }
+    box.classList.remove("empty");
+    const m = byMod[state.focus[0]], c = byCode[state.focus[1]];
+    const r = U.evaluate(m, c, { includeSub: state.includeSub });
+    const v = U.VERDICT[r.verdict];
+    const bl = (arr) => arr.length ? arr.map((b) => `<span class="mono">B${b}</span>`).join(" ") : "なし";
+    let h = `<h4>${esc(m.name)} × ${c.flag} ${esc(c.name)}：<span class="badge ${v.cls}">${r.verdict} ${esc(v.label)}</span></h4>`;
+    h += `<p class="small">判定方式: ${esc(r.tech)}${r.iot ? "（LTE-M/NB-IoT を提供している事業者のみで判定）" : ""}　カバー率 ${Math.round(r.coverage * 100)}%</p>`;
+    if (r.reason) h += `<p>${esc(r.reason)}。</p>`;
+    if (r.operators.length) {
+      h += `<ul>`;
+      r.operators.forEach((o) => {
+        const st = o.all ? `<span class="badge ok">全バンド</span>` : o.core ? `<span class="badge accent">要バンドOK</span>` : o.any ? `<span class="badge warn">一部</span>` : `<span class="badge bad">不可</span>`;
+        h += `<li>${esc(o.name)} ${st}　${o.missing.length ? "不足: " + bl(o.missing) : "不足なし"}</li>`;
+      });
+      h += `</ul>`;
+    }
+    if (r.alt.length) h += `<p class="small">≈ 上位集合バンドで代替（要確認）: ${bl(r.alt)}</p>`;
+    if (r.unknown && r.unknown.length) h += `<p class="small">LTE-M/NB-IoT の提供状況が未確認のため判定から除外: ${esc(r.unknown.join("、"))}</p>`;
+    const listed = U.certListed(m, c.code);
+    h += `<p class="small">モジュールの認証記載（${esc((U.CERT_KEYS[c.code] || []).join("/") || "—")}）: ${listed ? `<span class="badge ok">記載あり</span>` : `<span class="badge warn">データシート上の記載なし・要確認</span>`}</p>`;
+    h += `<p class="small muted">${esc(c.notes)}</p>`;
+    if (m.note) h += `<p class="small muted">モジュール備考: ${esc(m.note)}</p>`;
+    box.innerHTML = h;
+  }
+
+  // ---------- 1SKU サマリー ----------
+  function greedy(countries, pool) {
+    // ○以上になる国の集合で貪欲に被覆
+    // 中国はバンドだけでなく CCC/SRRC の記載があるモジュールに限定して数える
+    const good = pool.map((m) => ({ m, set: countries.filter((c) => U.VERDICT[U.evaluate(m, c, { includeSub: state.includeSub }).verdict].rank >= 2 && (c.code !== "CN" || U.certListed(m, "CN"))).map((c) => c.code) }));
+    let left = countries.map((c) => c.code), pick = [];
+    while (left.length) {
+      good.sort((a, b) => b.set.filter((x) => left.includes(x)).length - a.set.filter((x) => left.includes(x)).length);
+      const best = good[0];
+      const gain = best ? best.set.filter((x) => left.includes(x)) : [];
+      if (!gain.length) break;
+      pick.push({ m: best.m, codes: gain });
+      left = left.filter((x) => !gain.includes(x));
+    }
+    return { pick, left };
+  }
+  function renderSummary(countries) {
+    const box = $("summary");
+    if (!countries.length) { box.innerHTML = `<p class="empty-note">輸出先を選んでください。</p>`; return; }
+    const names = (codes) => codes.map((k) => byCode[k].flag + esc(byCode[k].name.replace(/（.*）/, ""))).join("、");
+    const mods = selModules();
+    let h = "";
+    // 選択モジュールで1SKU
+    const bandOk = mods.filter((m) => countries.every((c) => U.VERDICT[U.evaluate(m, c, { includeSub: state.includeSub }).verdict].rank >= 2));
+    const hasCN = countries.some((c) => c.code === "CN");
+    const oneSel = bandOk.filter((m) => !hasCN || U.certListed(m, "CN"));
+    const allOk = D.modules.filter((m) => countries.every((c) => U.VERDICT[U.evaluate(m, c, { includeSub: state.includeSub }).verdict].rank >= 2));
+    const lte = D.modules.filter((m) => !U.isIoT(m));
+    const g = greedy(countries, lte);
+    if (oneSel.length) {
+      h += `<div class="sku ok"><div class="big">◎</div><div><p><b>選択中のモジュールで1SKU化の見込みあり</b></p><p>${oneSel.map((m) => `<b>${esc(m.name)}</b>`).join("、")} は、選んだ ${countries.length} か国すべてで ○ 以上です。</p></div></div>`;
+    } else if (bandOk.length) {
+      h += `<div class="sku warn"><div class="big">○</div><div><p><b>バンド上は1SKU可。ただし中国の認証記載なし</b></p><p>${bandOk.map((m) => `<b>${esc(m.name)}</b>`).join("、")} はバンドでは全か国 ○ 以上ですが、データシートに CCC/SRRC がありません。中国だけ別SKUにするか、中国認証のあるモジュールを選んでください。</p></div></div>`;
+    } else if (mods.length) {
+      h += `<div class="sku warn"><div class="big">△</div><div><p><b>選択中のモジュールだけでは1SKUになりません</b></p><p>すべての国で ○ 以上になるモジュールが選択肢の中にありません。下の候補や、地域版の組み合わせを検討してください。</p></div></div>`;
+    }
+    h += `<h4 style="margin:14px 0 4px">データセット全体から見た候補</h4>`;
+    if (allOk.length) {
+      h += `<p>全 ${countries.length} か国で ○ 以上になるモジュール: ${allOk.map((m) => `<span class="badge ${U.isIoT(m) ? "warn" : "ok"}">${esc(m.name)}</span>`).join(" ")}</p>`;
+    } else {
+      h += `<p>全 ${countries.length} か国を1モジュールで ○ 以上にできる候補は、データセット内にありません。</p>`;
+    }
+    if (g.pick.length) {
+      h += `<p><b>LTE（Cat-1/Cat-4等）で最少SKUの一例</b>（貪欲法による目安）: ` +
+        g.pick.map((p) => `<b>${esc(p.m.name)}</b>（${names(p.codes)}）`).join(" ＋ ") + ` = <b>${g.pick.length} SKU</b>` +
+        (countries.some((c) => c.code === "CN") ? `<br><span class="small muted">※中国は CCC/SRRC の記載があるモジュールだけで数えています。</span>` : "") + `</p>`;
+    }
+    if (g.left.length) h += `<p class="small">○以上にできない国: ${names(g.left)}（LTE-M/NB-IoTや5G系、別の地域版を検討）</p>`;
+    // 認証の注意
+    const cn = countries.some((c) => c.code === "CN");
+    if (cn && allOk.length) {
+      const noCn = allOk.filter((m) => !U.certListed(m, "CN"));
+      if (noCn.length) h += `<div class="callout warn"><span class="title">中国を含む場合</span><p>${noCn.map((m) => esc(m.name)).join("、")} はバンド上は○以上でも、データシートに CCC/SRRC の記載がありません。中国向けは国内認証取得済みの中国版モジュール（例: EG915U-CN）で別SKUにするのが一般的です。</p></div>`;
+    }
+    const iotSel = mods.filter((m) => U.isIoT(m));
+    if (iotSel.length) h += `<p class="small muted">LTE-M/NB-IoT モジュールは、商用網が未確認の国では×になります。ロボットの遠隔監視など低速用途なら有力ですが、映像伝送などには向きません（→ <a href="../chapters/05-categories.html">5章</a>）。</p>`;
+    box.innerHTML = h;
+  }
+
+  function renderSources() {
+    const cs = new Set(); D.countries.forEach((c) => c.sources.forEach((u) => cs.add(u)));
+    $("srcCountries").innerHTML = Array.from(cs).map((u) => `<li><a href="${esc(u)}">${esc(u)}</a></li>`).join("");
+    const ms = new Map(); D.modules.forEach((m) => { if (!ms.has(m.source)) ms.set(m.source, []); ms.get(m.source).push(m.name); });
+    $("srcModules").innerHTML = Array.from(ms).map(([u, n]) => `<li>${esc(n.join(" / "))}: <a href="${esc(u)}">${esc(u.replace(/^https?:\/\//, "").slice(0, 70))}${u.length > 78 ? "…" : ""}</a></li>`).join("");
+    $("updated").textContent = D.updated;
+  }
+
+  function update() {
+    save();
+    const countries = selCountries();
+    const map = needMap(countries);
+    renderCountryChips();
+    renderModuleChips();
+    renderAxis(map, countries);
+    renderMatrix(map, countries);
+    renderVerdicts(countries);
+    renderDetail();
+    renderSummary(countries);
+  }
+
+  $("optSub").checked = state.includeSub;
+  $("optSub").addEventListener("change", (e) => { state.includeSub = e.target.checked; update(); });
+  $("optMode").value = state.mode;
+  $("optMode").addEventListener("change", (e) => { state.mode = e.target.value; update(); });
+  $("optOverlay").addEventListener("change", (e) => { state.overlay = e.target.value; update(); });
+  $("modAll").addEventListener("click", () => { state.modules = D.modules.map((m) => m.id); update(); });
+  $("modNone").addEventListener("click", () => { state.modules = []; state.focus = null; update(); });
+  let rt = null;
+  window.addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(() => { const cs = selCountries(); renderAxis(needMap(cs), cs); }, 150); });
+
+  function init() { renderPresets(); renderSources(); update(); }
+  // app.js のレイアウト構築（DOMContentLoaded）後に描画して、正しい幅で周波数軸を描く
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init); else init();
+})();
+</script>
+</body>
+</html>

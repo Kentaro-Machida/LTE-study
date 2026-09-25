@@ -1,0 +1,505 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LTEネットワークの全体像｜LTE Study</title>
+  <link rel="stylesheet" href="../assets/style.css">
+  <style>
+    .fig-narrow > svg { max-width: 560px; margin: 0 auto; }
+    .ln-up { stroke: var(--c4); stroke-width: 3; fill: none; transition: opacity .25s; }
+    .ln-cp { stroke: var(--c5); stroke-width: 2.2; stroke-dasharray: 6 4; fill: none; transition: opacity .25s; }
+    .ln-radio { stroke: var(--c1); stroke-width: 2.2; fill: none; }
+    .lb { font-size: 12px; transition: opacity .25s; }
+    .lb-up { fill: var(--c4); }
+    .lb-cp { fill: var(--c5); }
+    .net-fig[data-plane="up"] .ln-cp, .net-fig[data-plane="up"] .lb-cp { opacity: .12; }
+    .net-fig[data-plane="cp"] .ln-up, .net-fig[data-plane="cp"] .lb-up { opacity: .12; }
+    .dots-up, .dots-cp { display: none; }
+    .net-fig[data-plane="up"] .dots-up, .net-fig[data-plane="cp"] .dots-cp { display: inline; }
+    .plane-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; }
+    .plane-bar .chips { margin: 0; }
+    .plane-note { font-size: .88rem; color: var(--text-muted); min-height: 1.6em; margin: 0 0 6px; }
+    .legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: .82rem; color: var(--text-muted); margin-top: 6px; }
+    .legend i { display: inline-block; width: 26px; height: 0; vertical-align: middle; margin-right: 5px; }
+    .legend .l-up { border-top: 3px solid var(--c4); }
+    .legend .l-cp { border-top: 2px dashed var(--c5); }
+    .legend .l-radio { border-top: 2px solid var(--c1); }
+  </style>
+</head>
+<body data-root="../" data-chapter="02">
+<div class="page">
+<main>
+  <header class="chapter-hero">
+    <div class="eyebrow">CHAPTER 02</div>
+    <h1>LTEネットワークの全体像</h1>
+    <p class="lead">ロボットのLTEモジュールから出た電波は、基地局・コア網を経てインターネットや社内サーバに届きます。途中にいる「登場人物」と、その役割分担を地図のように頭に入れましょう。</p>
+    <div class="goals"><h2>この章のゴール</h2><ul>
+      <li>UE・eNodeB・MME・S-GW・P-GW・HSS・PCRF がそれぞれ何をしているか説明できる</li>
+      <li>「データの通り道（ユーザープレーン）」と「制御の通り道（コントロールプレーン）」の違いがわかる</li>
+      <li>ロボットが移動したときのセル切り替え（ハンドオーバー）の流れがわかる</li>
+      <li>APN・IPアドレス・CGNATの関係と、ロボットを遠隔操作・監視するための接続方式を選べる</li>
+      <li>MNOとMVNOの違い、5G（NSA/SA）とLTEの関係を大まかに説明できる</li>
+    </ul></div>
+  </header>
+
+  <h2>1. 登場人物を「物流網」にたとえる</h2>
+  <p>LTEのネットワークは大きく3つのブロックに分かれます。<strong>端末（UE：User Equipment）</strong>、基地局の集まりである<strong>無線アクセス網（E-UTRAN：Evolved Universal Terrestrial Radio Access Network）</strong>、そして携帯事業者の建物の中にある<strong>コア網（EPC：Evolved Packet Core）</strong>です。EPCの先に、インターネットや企業のネットワークがつながっています。</p>
+  <p>いきなり略語が並ぶと覚えにくいので、宅配便の物流網にたとえてみます。</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>LTEの要素</th><th>物流網でいうと</th><th>ひとことで</th></tr></thead>
+    <tbody>
+      <tr><td>UE（端末）</td><td>荷物を出す・受け取るお客さん</td><td>ロボットに載ったLTEモジュール＋SIM</td></tr>
+      <tr><td>eNodeB（基地局）</td><td>近所の営業所</td><td>電波で端末と直接やり取りする窓口</td></tr>
+      <tr><td>MME</td><td>受付・配車センター（司令塔）</td><td>本人確認、居場所の管理、通り道の手配</td></tr>
+      <tr><td>HSS</td><td>会員名簿</td><td>契約情報と認証の元データ</td></tr>
+      <tr><td>S-GW</td><td>地域の集配センター</td><td>基地局からのデータを束ねて中継</td></tr>
+      <tr><td>P-GW</td><td>外部への出入口（ゲート）</td><td>IPアドレスを配り、インターネット等へ出す</td></tr>
+      <tr><td>PCRF</td><td>料金表・ルール係</td><td>速度制限や課金ルールを決める</td></tr>
+    </tbody>
+  </table></div>
+  <p>ポイントは、<strong>「荷物（データ）を運ぶ係」と「段取り（制御）をする係」が分かれている</strong>ことです。MMEやHSSは荷物に触れず、手配だけをします。S-GWやP-GWは手配どおりに荷物を運びます。この分業が次の節の主役です。</p>
+
+  <h2>2. LTEネットワーク構成図</h2>
+  <p>下の図は、ロボット（UE）からインターネット・企業網までの主要な装置と、装置どうしをつなぐインターフェース（接続点の名前。S1-U、S11 などの記号）を示しています。箱をクリックすると役割の解説が出ます。上のボタンで<strong>データの流れ</strong>と<strong>制御の流れ</strong>を切り替えると、それぞれの経路を小さな玉が流れます。</p>
+
+  <figure class="figure fig-narrow net-fig" id="netfig" data-plane="all" data-hotspots data-hs-default="ue">
+    <div class="plane-bar">
+      <div class="chips" role="group" aria-label="表示する経路">
+        <button class="chip" data-plane-btn="all" aria-pressed="true">全体</button>
+        <button class="chip" data-plane-btn="up" aria-pressed="false">データの流れ（U-plane）</button>
+        <button class="chip" data-plane-btn="cp" aria-pressed="false">制御の流れ（C-plane）</button>
+      </div>
+      <button class="btn anim-pause" type="button">⏸ 止める</button>
+    </div>
+    <p class="plane-note" aria-live="polite"></p>
+    <div class="hint">箱（装置）をクリック／タップすると解説が表示されます。ボタンで経路を切り替えられます。</div>
+    <svg viewBox="0 0 420 540" role="img" aria-label="LTEネットワーク構成図：UE、eNodeB、EPC（MME、HSS、S-GW、P-GW、PCRF）、インターネットと企業網">
+      <!-- EPC region -->
+      <rect x="4" y="112" width="412" height="322" rx="12" fill="none" stroke="var(--c3)" stroke-width="1.5" stroke-dasharray="6 5"/>
+      <text x="14" y="132" font-size="12" font-weight="700" fill="var(--c3)" style="fill:var(--c3)">EPC（コア網）</text>
+      <text x="200" y="14" font-size="12" text-anchor="middle" class="t-muted">LTE無線</text>
+
+      <!-- links -->
+      <path class="ln-radio" d="M170,50 l7,-8 l8,16 l8,-16 l8,16 l8,-16 l8,16 l7,-8 l6,0"/>
+      <line class="ln-cp" x1="280" y1="80" x2="280" y2="145"/>
+      <text class="lb lb-cp" x="286" y="104">S1-MME</text>
+      <line class="ln-up" x1="375" y1="80" x2="375" y2="255"/>
+      <text class="lb lb-up" x="381" y="175">S1-U</text>
+      <line class="ln-cp" x1="170" y1="171" x2="220" y2="171"/>
+      <text class="lb lb-cp" x="195" y="163" text-anchor="middle">S6a</text>
+      <line class="ln-cp" x1="280" y1="197" x2="280" y2="255"/>
+      <text class="lb lb-cp" x="286" y="231">S11</text>
+      <line class="ln-up" x1="310" y1="307" x2="310" y2="365"/>
+      <text class="lb lb-up" x="316" y="341">S5</text>
+      <line class="ln-cp" x1="170" y1="391" x2="220" y2="391"/>
+      <text class="lb lb-cp" x="195" y="383" text-anchor="middle">Gx</text>
+      <line class="ln-up" x1="340" y1="417" x2="340" y2="470"/>
+      <text class="lb lb-up" x="346" y="452">SGi</text>
+      <line class="ln-up" x1="245" y1="417" x2="150" y2="470"/>
+      <text class="lb lb-up" x="176" y="452">SGi</text>
+
+      <!-- nodes -->
+      <g data-hs="ue">
+        <rect x="10" y="20" width="160" height="60" rx="10" fill="var(--surface-2)" stroke="var(--c1)" stroke-width="2"/>
+        <text x="90" y="46" font-size="14" font-weight="700" text-anchor="middle">ロボット（UE）</text>
+        <text x="90" y="67" font-size="12" text-anchor="middle" class="t-muted">LTEモジュール＋SIM</text>
+      </g>
+      <g data-hs="enb">
+        <rect x="230" y="20" width="170" height="60" rx="10" fill="var(--surface-2)" stroke="var(--c2)" stroke-width="2"/>
+        <text x="315" y="46" font-size="14" font-weight="700" text-anchor="middle">eNodeB（基地局）</text>
+        <text x="315" y="67" font-size="12" text-anchor="middle" class="t-muted">E-UTRAN</text>
+      </g>
+      <g data-hs="hss">
+        <rect x="20" y="145" width="150" height="52" rx="8" fill="var(--surface-2)" stroke="var(--c5)" stroke-width="2"/>
+        <text x="95" y="167" font-size="14" font-weight="700" text-anchor="middle">HSS</text>
+        <text x="95" y="186" font-size="12" text-anchor="middle" class="t-muted">加入者DB・認証</text>
+      </g>
+      <g data-hs="mme">
+        <rect x="220" y="145" width="120" height="52" rx="8" fill="var(--surface-2)" stroke="var(--c3)" stroke-width="2"/>
+        <text x="280" y="167" font-size="14" font-weight="700" text-anchor="middle">MME</text>
+        <text x="280" y="186" font-size="12" text-anchor="middle" class="t-muted">制御の司令塔</text>
+      </g>
+      <g data-hs="sgw">
+        <rect x="220" y="255" width="180" height="52" rx="8" fill="var(--surface-2)" stroke="var(--c3)" stroke-width="2"/>
+        <text x="310" y="277" font-size="14" font-weight="700" text-anchor="middle">S-GW</text>
+        <text x="310" y="296" font-size="12" text-anchor="middle" class="t-muted">データの中継点</text>
+      </g>
+      <g data-hs="pcrf">
+        <rect x="20" y="365" width="150" height="52" rx="8" fill="var(--surface-2)" stroke="var(--c3)" stroke-width="2"/>
+        <text x="95" y="387" font-size="14" font-weight="700" text-anchor="middle">PCRF</text>
+        <text x="95" y="406" font-size="12" text-anchor="middle" class="t-muted">ポリシー・課金</text>
+      </g>
+      <g data-hs="pgw">
+        <rect x="220" y="365" width="180" height="52" rx="8" fill="var(--surface-2)" stroke="var(--c3)" stroke-width="2"/>
+        <text x="310" y="387" font-size="14" font-weight="700" text-anchor="middle">P-GW</text>
+        <text x="310" y="406" font-size="12" text-anchor="middle" class="t-muted">出入口・IP割当</text>
+      </g>
+      <g data-hs="corp">
+        <rect x="20" y="470" width="150" height="56" rx="10" fill="var(--surface-2)" stroke="var(--c4)" stroke-width="2"/>
+        <text x="95" y="494" font-size="14" font-weight="700" text-anchor="middle">企業網（閉域）</text>
+        <text x="95" y="514" font-size="12" text-anchor="middle" class="t-muted">社内サーバ</text>
+      </g>
+      <g data-hs="inet">
+        <rect x="220" y="470" width="180" height="56" rx="10" fill="var(--surface-2)" stroke="var(--c4)" stroke-width="2"/>
+        <text x="310" y="494" font-size="14" font-weight="700" text-anchor="middle">インターネット</text>
+        <text x="310" y="514" font-size="12" text-anchor="middle" class="t-muted">クラウド等</text>
+      </g>
+
+      <!-- animated packets -->
+      <g class="dots-up" aria-hidden="true">
+        <circle r="6" fill="var(--c4)"><animateMotion dur="4.5s" repeatCount="indefinite" begin="0s" path="M170,50 H375 V281 H310 V391 H340 V498"/></circle>
+        <circle r="6" fill="var(--c4)"><animateMotion dur="4.5s" repeatCount="indefinite" begin="-1.5s" path="M170,50 H375 V281 H310 V391 H340 V498"/></circle>
+        <circle r="6" fill="var(--c4)"><animateMotion dur="4.5s" repeatCount="indefinite" begin="-3s" path="M170,50 H375 V281 H310 V391 H340 V498"/></circle>
+      </g>
+      <g class="dots-cp" aria-hidden="true">
+        <circle r="6" fill="var(--c5)"><animateMotion dur="6s" repeatCount="indefinite" begin="0s" path="M170,50 H280 V171 H95 H280 V281"/></circle>
+        <circle r="6" fill="var(--c5)"><animateMotion dur="6s" repeatCount="indefinite" begin="-3s" path="M170,50 H280 V171 H95 H280 V281"/></circle>
+      </g>
+    </svg>
+    <div class="legend"><span><i class="l-radio"></i>無線区間（データも制御も）</span><span><i class="l-up"></i>ユーザープレーン（データ）</span><span><i class="l-cp"></i>コントロールプレーン（制御）</span></div>
+    <div class="hs-panel"></div>
+    <template data-hs-content="ue"><h4>UE（User Equipment：端末）</h4><p>私たちのロボットでは、基板に載せる<strong>LTEモジュール</strong>と<strong>SIM</strong>の組み合わせがUEです。電波の送受信、基地局の探索、認証の計算（SIMの中で実行）などを担当します。ロボット本体のCPU（ホスト）は、モジュールをATコマンドなどで操作する「持ち主」の立場です（第8章）。</p></template>
+    <template data-hs-content="enb"><h4>eNodeB（evolved Node B：LTE基地局）</h4><p>アンテナ塔やビルの屋上にある基地局です。端末と電波でやり取りし、「どの端末に、いつ、どの周波数の時間枠を使わせるか」（スケジューリング）を1ミリ秒単位で決めています。基地局の集まりをE-UTRANと呼びます。隣の基地局とはX2インターフェースで直接話ができ、ハンドオーバーの引き継ぎに使います。</p></template>
+    <template data-hs-content="mme"><h4>MME（Mobility Management Entity）</h4><p>制御の司令塔です。端末からの接続要求（アタッチ）を受け、HSSに問い合わせて<strong>認証</strong>し、端末がどのエリア（トラッキングエリア）にいるかを管理し、S-GWに「この端末用の通り道（ベアラ）を用意して」と指示します。ユーザーデータそのものは通しません。</p></template>
+    <template data-hs-content="hss"><h4>HSS（Home Subscriber Server）</h4><p>加入者の「会員名簿」です。SIMに書き込まれたIMSI（加入者番号）ごとに、契約内容（使えるAPN、速度など）と、SIMと同じ秘密鍵 K にもとづく認証データを持ちます。秘密鍵 K 自体はネットワークを流れません。認証の詳しい流れは<a href="03-attach.html">第3章</a>で扱います。</p></template>
+    <template data-hs-content="sgw"><h4>S-GW（Serving Gateway）</h4><p>基地局から上がってくるユーザーデータを受け取り、P-GWへ中継する集配センターです。端末が基地局をまたいで移動しても、S-GWが基地局側の経路を付け替えることでデータの流れを保ちます（ハンドオーバー時の「アンカー」）。端末が待ち受け状態のときに届いた下りデータを一時的に保持し、MMEに呼び出し（ページング）を頼むのもS-GWです。</p></template>
+    <template data-hs-content="pgw"><h4>P-GW（PDN Gateway）</h4><p>コア網の<strong>出入口</strong>です。端末に<strong>IPアドレスを割り当て</strong>、インターネットや企業網（PDN：Packet Data Network）へデータを出します。どのP-GW＝どの出口を使うかは<strong>APN</strong>で決まります。キャリアのNAT（CGNAT）やファイアウォールは、たいていこの出口の先に置かれています。</p></template>
+    <template data-hs-content="pcrf"><h4>PCRF（Policy and Charging Rules Function）</h4><p>「この加入者は月◯GBを超えたら低速」「このAPNは動画を優先しない」といった<strong>通信品質（QoS）と課金のルール</strong>を決め、Gxインターフェース経由でP-GWに適用させます。IoT向け料金プランの速度制限なども、この仕組みで実現されています。</p></template>
+    <template data-hs-content="inet"><h4>インターネット</h4><p>一般的な回線（APN）では、P-GWの先がインターネットです。ロボットがクラウド（AWS、Azure、自社サーバなど）にデータを送るときはこの経路を通ります。ただし多くの場合、端末はキャリアのNATの内側にいるため、<strong>インターネット側からロボットへ直接は接続できません</strong>（第5節）。</p></template>
+    <template data-hs-content="corp"><h4>企業網（閉域網）</h4><p>専用APNや閉域接続サービスを契約すると、P-GW（または事業者側の接続装置）から専用線やVPNで<strong>自社のネットワークへ直結</strong>できます。インターネットを経由しないため、ロボットと社内サーバの間を安全に、プライベートIPのまま通信できます。</p></template>
+    <figcaption>図2-1　LTEネットワーク（EPS：Evolved Packet System）の主要構成。インターフェース名は3GPP TS 23.401に基づく。ローミング時はS-GWとP-GWの間がS8になる。</figcaption>
+  </figure>
+
+  <div class="callout tip"><span class="title">用語の整理：EPS = E-UTRAN + EPC</span>
+    <p>無線部分（E-UTRAN）とコア網（EPC）を合わせたLTEのシステム全体を<strong>EPS（Evolved Packet System）</strong>と呼びます。「LTE」は本来は無線方式の名前ですが、日常的にはシステム全体を指して使われます。</p>
+  </div>
+
+  <h2>3. ユーザープレーンとコントロールプレーン</h2>
+  <p>図のボタンで経路を切り替えると、2種類の流れがまったく違う道を通っていることがわかります。</p>
+  <ul>
+    <li><strong>ユーザープレーン（U-plane）</strong>：ロボットのセンサー値、カメラ映像、クラウドからの指令など、<em>アプリが送りたい中身</em>が通る道。UE → eNodeB → S-GW → P-GW → 外部。</li>
+    <li><strong>コントロールプレーン（C-plane）</strong>：接続の申し込み、認証、居場所の報告、「通り道を作って／消して」といった<em>段取りの会話</em>が通る道。UE ⇄ eNodeB ⇄ MME ⇄ HSS／S-GW など。</li>
+  </ul>
+  <p>電話で言えば、C-planeは「呼び出し音を鳴らして相手を探し、回線をつなぐ交換手」、U-planeは「つながった後の会話そのもの」です。分けておくことで、データ量が増えたらS-GW／P-GWだけを増強し、端末数が増えたらMMEを増強する、というように独立して設計・拡張できます。</p>
+  <p>ユーザーデータは、S-GWやP-GWの間では<strong>GTP-U（GPRS Tunnelling Protocol for User Plane）</strong>という「トンネル」に包まれて運ばれます。ロボットのIPパケットをそのまま別の封筒に入れて運ぶイメージで、この封筒の単位（端末とP-GWをつなぐ論理的な通り道）を<strong>ベアラ（EPS Bearer）</strong>と呼びます。LTEでは接続（アタッチ）した時点で既定の通り道＝<strong>デフォルトベアラ</strong>が作られるため、電源を入れて登録が済めば、すぐにIP通信ができる「常時接続」になります。</p>
+
+  <div class="table-wrap"><table>
+    <thead><tr><th>インターフェース</th><th>つなぐもの</th><th>種類</th><th>運ぶもの</th></tr></thead>
+    <tbody>
+      <tr><td>LTE-Uu</td><td>UE ⇄ eNodeB</td><td>無線</td><td>データと制御の両方</td></tr>
+      <tr><td>S1-MME</td><td>eNodeB ⇄ MME</td><td><span class="badge warn">制御</span></td><td>接続・認証・ハンドオーバーの指示（S1AP）、端末とMMEの会話（NAS）</td></tr>
+      <tr><td>S1-U</td><td>eNodeB ⇄ S-GW</td><td><span class="badge accent">データ</span></td><td>ユーザーデータ（GTP-U）</td></tr>
+      <tr><td>S11</td><td>MME ⇄ S-GW</td><td><span class="badge warn">制御</span></td><td>ベアラの作成・変更（GTP-C）</td></tr>
+      <tr><td>S6a</td><td>MME ⇄ HSS</td><td><span class="badge warn">制御</span></td><td>認証データ・契約情報（Diameter）</td></tr>
+      <tr><td>S5 / S8</td><td>S-GW ⇄ P-GW</td><td>両方</td><td>ユーザーデータ＋ベアラ制御。S8は他社網（ローミング）をまたぐ場合</td></tr>
+      <tr><td>Gx</td><td>PCRF ⇄ P-GW</td><td><span class="badge warn">制御</span></td><td>QoS・課金ルール</td></tr>
+      <tr><td>SGi</td><td>P-GW ⇄ 外部網</td><td><span class="badge accent">データ</span></td><td>普通のIPパケット（ここからは一般のネットワーク）</td></tr>
+      <tr><td>X2</td><td>eNodeB ⇄ eNodeB</td><td>両方</td><td>ハンドオーバーの引き継ぎ、転送データ</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="callout robot"><span class="title">私たちのロボットにとっての意味</span>
+    <p>開発者が直接触るのは、ほぼ<strong>UE（モジュール）とP-GWの先（クラウドや社内サーバ）</strong>だけです。とはいえ「つながらない」ときにモジュールが返すエラー（認証失敗、APN拒否など）は、MMEやHSS、P-GWとの会話の結果です。どの装置で止まっているかを想像できると、原因切り分けが格段に速くなります（第3章のトラブルシュート図を参照）。</p>
+  </div>
+
+  <h2>4. セルとハンドオーバー：走るロボットはどう乗り換える？</h2>
+  <p>1つの基地局の電波が届く範囲を<strong>セル</strong>と呼びます。実際には1つの基地局が複数の方向・周波数にアンテナを持ち、複数のセルを作っています。セルの大きさは周波数や設置場所で大きく変わり、都市部では数百m、郊外では数km以上になることもあります。隣り合うセルは少しずつ重なるように配置され、端末はその重なりの中で乗り換えます。</p>
+  <p>乗り換えには2種類あります。</p>
+  <ul>
+    <li><strong>待ち受け中（RRC Idle）</strong>：端末が自分で電波の強いセルを選び直します（<strong>セル再選択</strong>）。ネットワークには細かく報告せず、複数のセルをまとめた<strong>トラッキングエリア（TA）</strong>をまたいだときだけ位置登録（TAU：Tracking Area Update）を行います。</li>
+    <li><strong>通信中（RRC Connected）</strong>：ネットワークが主導して乗り換えさせます。これが<strong>ハンドオーバー</strong>です。下のステップで流れを見てみましょう。</li>
+  </ul>
+
+  <figure class="figure fig-narrow" data-stepper data-interval="3500">
+    <svg viewBox="0 0 520 330" role="img" aria-label="ハンドオーバーの流れ：ロボットが基地局Aのセルから基地局Bのセルへ移動する">
+      <circle cx="150" cy="175" r="120" fill="var(--c2)" fill-opacity=".08" stroke="var(--c2)" stroke-width="1.5"/>
+      <circle cx="370" cy="175" r="120" fill="var(--c2)" fill-opacity=".08" stroke="var(--c2)" stroke-width="1.5"/>
+      <rect x="185" y="8" width="150" height="40" rx="8" fill="var(--surface-2)" stroke="var(--c3)" stroke-width="2"/>
+      <text x="260" y="33" font-size="13" font-weight="700" text-anchor="middle">コア網（MME/S-GW）</text>
+      <line class="line dash" x1="230" y1="48" x2="152" y2="128"/>
+      <line class="line dash" x1="290" y1="48" x2="368" y2="128"/>
+      <polygon points="150,128 138,162 162,162" fill="var(--c2)"/>
+      <polygon points="370,128 358,162 382,162" fill="var(--c2)"/>
+      <text x="150" y="182" font-size="14" font-weight="700" text-anchor="middle">基地局A</text>
+      <text x="370" y="182" font-size="14" font-weight="700" text-anchor="middle">基地局B</text>
+
+      <!-- data path highlights -->
+      <line data-show-at="1,2,3,4" x1="230" y1="48" x2="152" y2="128" stroke="var(--c4)" stroke-width="4"/>
+      <line data-show-from="5" x1="290" y1="48" x2="368" y2="128" stroke="var(--c4)" stroke-width="4"/>
+      <!-- X2 -->
+      <g data-show-at="3,4">
+        <line x1="165" y1="140" x2="355" y2="140" stroke="var(--c2)" stroke-width="2.5" stroke-dasharray="6 4"/>
+        <text x="260" y="132" font-size="13" text-anchor="middle" fill="var(--c2)" style="fill:var(--c2)">X2で引き継ぎ</text>
+      </g>
+
+      <!-- robot per step -->
+      <g data-show-at="1">
+        <line x1="80" y1="232" x2="150" y2="162" stroke="var(--c1)" stroke-width="2.5"/>
+        <g transform="translate(80,0)"><rect x="-14" y="236" width="28" height="20" rx="4" fill="var(--c1)"/><circle cx="0" cy="229" r="6" fill="var(--c1)"/><circle cx="-8" cy="259" r="3" fill="var(--c6)"/><circle cx="8" cy="259" r="3" fill="var(--c6)"/></g>
+      </g>
+      <g data-show-at="2">
+        <line x1="230" y1="232" x2="150" y2="162" stroke="var(--c1)" stroke-width="2.5"/>
+        <line x1="230" y1="232" x2="370" y2="162" stroke="var(--c1)" stroke-width="1.5" stroke-dasharray="3 4"/>
+        <g transform="translate(230,0)"><rect x="-14" y="236" width="28" height="20" rx="4" fill="var(--c1)"/><circle cx="0" cy="229" r="6" fill="var(--c1)"/><circle cx="-8" cy="259" r="3" fill="var(--c6)"/><circle cx="8" cy="259" r="3" fill="var(--c6)"/></g>
+        <text x="230" y="284" font-size="13" text-anchor="middle">「Bの方が強い」と測定報告</text>
+      </g>
+      <g data-show-at="3">
+        <line x1="250" y1="232" x2="150" y2="162" stroke="var(--c1)" stroke-width="2.5"/>
+        <g transform="translate(250,0)"><rect x="-14" y="236" width="28" height="20" rx="4" fill="var(--c1)"/><circle cx="0" cy="229" r="6" fill="var(--c1)"/><circle cx="-8" cy="259" r="3" fill="var(--c6)"/><circle cx="8" cy="259" r="3" fill="var(--c6)"/></g>
+      </g>
+      <g data-show-at="4">
+        <line x1="270" y1="232" x2="150" y2="162" stroke="var(--c1)" stroke-width="1.5" stroke-dasharray="3 4"/>
+        <line x1="270" y1="232" x2="370" y2="162" stroke="var(--c1)" stroke-width="2.5"/>
+        <g transform="translate(270,0)"><rect x="-14" y="236" width="28" height="20" rx="4" fill="var(--c1)"/><circle cx="0" cy="229" r="6" fill="var(--c1)"/><circle cx="-8" cy="259" r="3" fill="var(--c6)"/><circle cx="8" cy="259" r="3" fill="var(--c6)"/></g>
+        <text x="270" y="284" font-size="13" text-anchor="middle">B局へ乗り換え（RACH）</text>
+      </g>
+      <g data-show-at="5">
+        <line x1="290" y1="232" x2="370" y2="162" stroke="var(--c1)" stroke-width="2.5"/>
+        <g transform="translate(290,0)"><rect x="-14" y="236" width="28" height="20" rx="4" fill="var(--c1)"/><circle cx="0" cy="229" r="6" fill="var(--c1)"/><circle cx="-8" cy="259" r="3" fill="var(--c6)"/><circle cx="8" cy="259" r="3" fill="var(--c6)"/></g>
+        <text x="370" y="72" font-size="13" text-anchor="middle" fill="var(--c4)" style="fill:var(--c4)">経路をBへ切替</text>
+      </g>
+      <g data-show-at="6">
+        <line x1="420" y1="232" x2="370" y2="162" stroke="var(--c1)" stroke-width="2.5"/>
+        <g transform="translate(420,0)"><rect x="-14" y="236" width="28" height="20" rx="4" fill="var(--c1)"/><circle cx="0" cy="229" r="6" fill="var(--c1)"/><circle cx="-8" cy="259" r="3" fill="var(--c6)"/><circle cx="8" cy="259" r="3" fill="var(--c6)"/></g>
+      </g>
+
+      <!-- status line -->
+      <text data-show-at="1" x="260" y="320" font-size="14" font-weight="700" text-anchor="middle">① A局のセルで通信中</text>
+      <text data-show-at="2" x="260" y="320" font-size="14" font-weight="700" text-anchor="middle">② 境界に近づき、測定結果を報告</text>
+      <text data-show-at="3" x="260" y="320" font-size="14" font-weight="700" text-anchor="middle">③ A局がハンドオーバーを決定・B局が準備</text>
+      <text data-show-at="4" x="260" y="320" font-size="14" font-weight="700" text-anchor="middle">④ 端末がB局へ乗り換え</text>
+      <text data-show-at="5" x="260" y="320" font-size="14" font-weight="700" text-anchor="middle">⑤ コア網の経路をB局へ付け替え</text>
+      <text data-show-at="6" x="260" y="320" font-size="14" font-weight="700" text-anchor="middle">⑥ 完了。IPアドレスはそのまま</text>
+    </svg>
+    <div class="stepper-controls-slot"></div>
+    <div class="step" data-title="A局で通信中"><h4>① A局のセルで通信中</h4><p>ロボットは基地局Aとつながり（RRC Connected）、クラウドへ映像を送っています。データの道はロボット → A局 → S-GW → P-GW（オレンジ色の太線）。この間もモジュールは、基地局の指示に従って<strong>周りのセルの電波の強さ（RSRP）や品質（RSRQ）を測り続けています</strong>。</p></div>
+    <div class="step" data-title="測定報告"><h4>② 境界に近づき、測定結果を報告（Measurement Report）</h4><p>ロボットがセルの境目に近づくと、B局の電波がA局より一定以上強くなります。あらかじめA局から指示されていた条件（例：「隣のセルが自セルより3dB強い状態が一定時間続いたら報告」）を満たしたので、モジュールはA局に<strong>測定報告</strong>を送ります。</p></div>
+    <div class="step" data-title="HO準備"><h4>③ A局がハンドオーバーを決定し、B局が準備</h4><p>乗り換えを決めるのは<strong>端末ではなく基地局A</strong>です。A局は隣のB局に、X2インターフェースで「この端末を引き受けて」と依頼（Handover Request）し、B局は無線リソースを確保して了承します。X2がない場合は、MME経由で同じことを行います（S1ハンドオーバー）。</p></div>
+    <div class="step" data-title="乗り換え"><h4>④ 端末がB局へ乗り換え</h4><p>A局から「B局に移って」という指示（RRC Connection Reconfiguration）を受けたモジュールは、B局にランダムアクセス（RACH）で名乗り出て接続を完了します。この間にA局へ届いてしまったデータはX2でB局へ転送され、取りこぼしを防ぎます。無線が途切れるのは通常ごく短時間（数十ミリ秒程度）です。</p></div>
+    <div class="step" data-title="経路切替"><h4>⑤ コア網の経路をB局へ付け替え（Path Switch）</h4><p>B局はMMEに「この端末は今こちらにいます」と通知し、MMEはS-GWに下りデータの送り先をB局に変えるよう指示します。<strong>P-GWは一切動きません</strong>。そのためロボットのIPアドレスは変わりません。</p></div>
+    <div class="step" data-title="完了"><h4>⑥ 完了：IPアドレスもTCP接続もそのまま</h4><p>A局は古いリソースを解放して終了です。アプリから見ると、ほんの一瞬パケットが遅れた程度で、MQTTやWebSocketのセッションは切れずに続きます。これがセルラー通信の大きな強みで、Wi-Fiのアクセスポイント間ローミングより一般にシームレスです。</p></div>
+    <figcaption>図2-2　X2ハンドオーバーの流れ（概略）。3GPP TS 36.300 の手順を簡略化。</figcaption>
+  </figure>
+
+  <div class="callout robot"><span class="title">移動ロボットで気をつけること</span>
+    <ul>
+      <li><strong>セル境界での品質低下</strong>：境目では電波が弱く干渉も多いため、速度が落ちたり遅延が増えたりします。遠隔操縦の映像はビットレートを動的に下げられる設計にしましょう。</li>
+      <li><strong>電波の「穴」</strong>：エレベーター、地下、金属棚の多い倉庫などでは圏外になり得ます。ハンドオーバーでは救えないので、再接続とデータの再送（キューイング）をアプリ側で必ず用意します。</li>
+      <li><strong>アンテナの配置</strong>：ロボットの金属筐体の内側にアンテナを置くと、セル端での受信が一気に悪化します（第6章）。</li>
+    </ul>
+  </div>
+
+  <h2>5. APN・IPアドレス・CGNAT：ロボットに「外から」つなげたいとき</h2>
+  <h3>APN：どの出口から出るかの「行き先指定」</h3>
+  <p><strong>APN（Access Point Name）</strong>は、端末が接続時に「どのネットワークにつなぎたいか」を示す名前です。例えば <code>internet.example</code> のような文字列で、コア網はAPNを見て使うP-GW（出口）と、そこから先の接続先（インターネットか、ある企業の閉域網か）を決めます。SIMの契約で使えるAPNはHSSに登録されており、<strong>APNの設定が間違っていると、電波はつかんでいてもデータ通信ができません</strong>。これは「つながらない」原因の代表格です。</p>
+  <p>APNごとにP-GWが<strong>IPアドレス</strong>を割り当てます。IPv4、IPv6、あるいは両方（IPv4v6）が選べる回線もあります。ここで問題になるのが、そのIPアドレスの「種類」です。</p>
+
+  <h3>CGNAT：多くの回線で端末はNATの内側にいる</h3>
+  <p>IPv4アドレスは世界的に枯渇しているため、多くのモバイル回線では端末に<strong>プライベートIPアドレス</strong>（10.x.x.x など）や、キャリア用に予約された<strong>共有アドレス（100.64.0.0/10、RFC 6598）</strong>を割り当て、出口で<strong>CGNAT（Carrier-Grade NAT：キャリアグレードNAT）</strong>によって少数のグローバルIPに変換しています。マンションの各部屋に内線番号だけがあり、外線は代表番号1本しかない状態を想像してください。</p>
+  <ul>
+    <li>ロボットから外へ電話をかける（<strong>アウトバウンド接続</strong>）→ 代表番号から発信され、折り返しも正しい部屋に戻ってくる。<strong>できる</strong>。</li>
+    <li>外からロボットへ電話をかける（<strong>インバウンド接続</strong>）→ 代表番号にかけても、どの部屋か指定できない。<strong>できない</strong>。</li>
+  </ul>
+
+  <figure class="figure fig-narrow" data-tabs>
+    <div class="tab-list"><button data-tab="in">外からロボットへ接続</button><button data-tab="out">ロボットから外へ接続</button></div>
+    <div data-tab-panel="in">
+      <svg viewBox="0 0 520 200" role="img" aria-label="外部からの接続はCGNATで止まる">
+        <rect x="4" y="44" width="330" height="104" rx="10" fill="none" stroke="var(--c3)" stroke-dasharray="5 4"/>
+        <text x="12" y="36" font-size="12" class="t-muted">キャリアの網の中</text>
+        <rect x="14" y="60" width="116" height="70" rx="8" fill="var(--surface-2)" stroke="var(--c1)" stroke-width="2"/>
+        <text x="72" y="88" font-size="14" font-weight="700" text-anchor="middle">ロボット</text>
+        <text x="72" y="110" font-size="12" text-anchor="middle" class="t-muted">10.x.x.x</text>
+        <rect x="200" y="60" width="124" height="70" rx="8" fill="var(--surface-2)" stroke="var(--c3)" stroke-width="2"/>
+        <text x="262" y="88" font-size="14" font-weight="700" text-anchor="middle">キャリアNAT</text>
+        <text x="262" y="110" font-size="12" text-anchor="middle" class="t-muted">（CGNAT）</text>
+        <rect x="392" y="60" width="120" height="70" rx="8" fill="var(--surface-2)" stroke="var(--c4)" stroke-width="2"/>
+        <text x="452" y="88" font-size="14" font-weight="700" text-anchor="middle">社内PC</text>
+        <text x="452" y="110" font-size="12" text-anchor="middle" class="t-muted">SSHしたい</text>
+        <line x1="392" y1="95" x2="334" y2="95" stroke="var(--bad)" stroke-width="3"/>
+        <polygon points="326,95 338,88 338,102" fill="var(--bad)"/>
+        <text x="362" y="84" font-size="18" font-weight="700" text-anchor="middle" fill="var(--bad)" style="fill:var(--bad)">✕</text>
+        <line x1="130" y1="95" x2="200" y2="95" class="line dash"/>
+        <text x="165" y="85" font-size="12" text-anchor="middle" class="t-muted">?</text>
+        <text x="260" y="182" font-size="13" text-anchor="middle">宛先のロボットを特定できず、NATで破棄される</text>
+      </svg>
+      <p class="small">外部から見えるのはNATの共有グローバルIPだけで、その裏に何千台もの端末がいます。ポート開放の設定もキャリア側にしかできないため、自宅ルータのように「ポートフォワード」はできません。</p>
+    </div>
+    <div data-tab-panel="out">
+      <svg viewBox="0 0 520 200" role="img" aria-label="ロボットからの接続はCGNATを通過できる">
+        <rect x="4" y="44" width="330" height="104" rx="10" fill="none" stroke="var(--c3)" stroke-dasharray="5 4"/>
+        <text x="12" y="36" font-size="12" class="t-muted">キャリアの網の中</text>
+        <rect x="14" y="60" width="116" height="70" rx="8" fill="var(--surface-2)" stroke="var(--c1)" stroke-width="2"/>
+        <text x="72" y="88" font-size="14" font-weight="700" text-anchor="middle">ロボット</text>
+        <text x="72" y="110" font-size="12" text-anchor="middle" class="t-muted">10.x.x.x</text>
+        <rect x="200" y="60" width="124" height="70" rx="8" fill="var(--surface-2)" stroke="var(--c3)" stroke-width="2"/>
+        <text x="262" y="88" font-size="14" font-weight="700" text-anchor="middle">キャリアNAT</text>
+        <text x="262" y="110" font-size="12" text-anchor="middle" class="t-muted">変換表に記録</text>
+        <rect x="392" y="60" width="120" height="70" rx="8" fill="var(--surface-2)" stroke="var(--c4)" stroke-width="2"/>
+        <text x="452" y="88" font-size="14" font-weight="700" text-anchor="middle">クラウド</text>
+        <text x="452" y="110" font-size="12" text-anchor="middle" class="t-muted">MQTTブローカー等</text>
+        <line x1="130" y1="80" x2="192" y2="80" stroke="var(--ok)" stroke-width="3"/>
+        <polygon points="200,80 188,73 188,87" fill="var(--ok)"/>
+        <line x1="324" y1="80" x2="384" y2="80" stroke="var(--ok)" stroke-width="3"/>
+        <polygon points="392,80 380,73 380,87" fill="var(--ok)"/>
+        <line x1="392" y1="112" x2="332" y2="112" stroke="var(--ok)" stroke-width="2" stroke-dasharray="5 4"/>
+        <polygon points="324,112 336,106 336,118" fill="var(--ok)"/>
+        <line x1="200" y1="112" x2="140" y2="112" stroke="var(--ok)" stroke-width="2" stroke-dasharray="5 4"/>
+        <polygon points="132,112 144,106 144,118" fill="var(--ok)"/>
+        <text x="260" y="176" font-size="13" text-anchor="middle">ロボットから張った接続なら、返事も指令も同じ道で届く</text>
+        <text x="260" y="194" font-size="12" text-anchor="middle" class="t-muted">（MQTT・WebSocket・VPNなど）</text>
+      </svg>
+      <p class="small">ロボットが起動時にクラウドへ接続を張り、つなぎっぱなしにしておけば、クラウドからの指令はその接続の「返信」として届きます。ただしNATの変換表は無通信が続くと消えるため、定期的なキープアライブ（MQTTのKeep Aliveなど）が必要です。消えるまでの時間はキャリアによって異なるので、実回線で測りましょう。</p>
+    </div>
+    <figcaption>図2-3　CGNAT配下の端末：インバウンドは届かず、アウトバウンドは通る（タブで切替）。</figcaption>
+  </figure>
+
+  <h3>遠隔からロボットにアクセスする方法の比較</h3>
+  <p>「ロボットの状態をいつでも見たい」「現場に行かずにログを取りたい・設定を変えたい」という要望はほぼ必ず出てきます。代表的な方法を比較します。</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>方式</th><th>仕組み</th><th>良い点</th><th>注意点</th></tr></thead>
+    <tbody>
+      <tr><td><strong>MQTT等のアウトバウンド常時接続</strong></td><td>ロボットからクラウドのブローカー（AWS IoT Core、Azure IoT Hub、自前のMQTTサーバ等）へTLSで接続し続ける</td><td>どの国・どの回線でも動く。回線の種類に依存しない。通信量が小さい</td><td>キープアライブ設計が必要。SSHのような「直接ログイン」ではない（コマンドをメッセージとして送る）</td></tr>
+      <tr><td><strong>端末からのVPN</strong></td><td>ロボットがWireGuard・IPsec・OpenVPNなどで自社のVPNサーバに接続し、社内網の一員になる</td><td>SSHやWeb管理画面など既存の手段がそのまま使える</td><td>VPNサーバの運用が必要。暗号化のオーバーヘッドで通信量がやや増える</td></tr>
+      <tr><td><strong>閉域網（閉域APN）</strong></td><td>キャリア／MVNOの閉域サービスで、P-GWの先を専用線・VPNで自社網へ直結</td><td>インターネットに出ないので安全。端末のIPを固定・指定できることが多い</td><td>国ごと・事業者ごとの契約になり、海外展開では同じ仕組みを揃えにくい。費用が高め</td></tr>
+      <tr><td><strong>グローバル固定IP</strong></td><td>オプション契約で端末にインターネットから到達可能な固定IPを付与</td><td>仕組みが単純。外から直接アクセスできる</td><td>インターネットから攻撃される入口にもなる。提供している事業者・国が限られる</td></tr>
+      <tr><td><strong>事業者のリモートアクセス機能</strong></td><td>一部のIoT向けMVNOが提供する、必要なときだけ一時的に外部から端末へ到達させる仕組み（例：SORACOM Napter）</td><td>ポートを常時開けずに済む。導入が手軽</td><td>その事業者の回線に縛られる。対応国・料金を確認</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="callout robot"><span class="title">おすすめの基本設計</span>
+    <p>輸出先の国ごとに回線事業者が変わる可能性が高いので、<strong>「ロボットからクラウドへTLSのアウトバウンド接続（MQTTなど）」を標準</strong>にし、回線の種類に依存しない設計にするのが安全です。保守用のシェルアクセスが必要なら、その上に<strong>必要なときだけ張るVPN</strong>や事業者のリモートアクセス機能を追加します。固定グローバルIPで常時ポートを開けるのは、セキュリティ上おすすめしません。</p>
+  </div>
+  <div class="callout warn"><span class="title">IPv6なら直接届く？</span>
+    <p>IPv6ではNATなしでグローバルアドレスが割り当てられる回線もあります。ただし多くの事業者は外部からの着信をファイアウォールで遮断しており、また全ての国・回線でIPv6が使えるとは限りません。「IPv6なら外から届くはず」と前提にせず、実回線で確認してください。</p>
+  </div>
+
+  <h2>6. MNOとMVNO：回線は誰から買う？</h2>
+  <p><strong>MNO（Mobile Network Operator：移動体通信事業者）</strong>は、国から周波数の免許を受け、自前で基地局とコア網を持つ事業者です。日本ならNTTドコモ、KDDI（au）、ソフトバンク、楽天モバイルがこれにあたります。</p>
+  <p><strong>MVNO（Mobile Virtual Network Operator：仮想移動体通信事業者）</strong>は、MNOの無線網を借りてサービスを提供する事業者です。「どこまで自前の設備を持つか」によって、できることが変わります。</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>設備</th><th class="center">MNO</th><th class="center">ライトMVNO<br><span class="small muted">（日本のL2接続型など）</span></th><th class="center">フルMVNO</th></tr></thead>
+    <tbody>
+      <tr><td>周波数免許・基地局（E-UTRAN）</td><td class="center"><span class="badge ok">自前</span></td><td class="center"><span class="badge">借りる</span></td><td class="center"><span class="badge">借りる</span></td></tr>
+      <tr><td>MME・S-GW</td><td class="center"><span class="badge ok">自前</span></td><td class="center"><span class="badge">借りる</span></td><td class="center"><span class="badge">借りる</span></td></tr>
+      <tr><td>P-GW相当（出口・IP割当）</td><td class="center"><span class="badge ok">自前</span></td><td class="center"><span class="badge ok">自前</span></td><td class="center"><span class="badge ok">自前</span></td></tr>
+      <tr><td>HSS（加入者管理）・SIM発行</td><td class="center"><span class="badge ok">自前</span></td><td class="center"><span class="badge">借りる</span></td><td class="center"><span class="badge ok">自前</span></td></tr>
+      <tr><td>料金・顧客管理</td><td class="center"><span class="badge ok">自前</span></td><td class="center"><span class="badge ok">自前</span></td><td class="center"><span class="badge ok">自前</span></td></tr>
+    </tbody>
+  </table></div>
+  <p>出口（P-GW相当）を自前で持つMVNOは、閉域網接続やIoT向けの独自機能（管理画面からのSIMの停止・再開、通信量の監視など）を提供しやすくなります。HSSまで自前で持つ<strong>フルMVNO</strong>は、自社の加入者番号（IMSI）でSIMを発行できるため、「出荷前は課金しない」「現地の回線に切り替える」といった柔軟な運用が可能になります（日本ではIIJが2018年にフルMVNOとしてのサービスを開始）。</p>
+  <p>海外展開で重要なのが<strong>ローミング</strong>です。ロボットが日本のSIMのまま海外で通信するとき、現地のMNOの基地局とS-GWを使い、S8インターフェースで日本側（ホーム網）のP-GWへ戻る方式（ホームルーティング）が一般的です。IPアドレスや閉域網の設定は日本と同じまま使える一方、通信経路が長くなり遅延が増えます。現地回線とローミングのどちらを選ぶか、各国の規制（恒久的なローミングを制限する国もあります）は<a href="07-sim.html">第7章</a>・<a href="10-asia.html">第10章</a>で扱います。</p>
+
+  <div class="callout robot"><span class="title">IoT向け回線を選ぶ観点</span>
+    <p>ロボット用途では、スマホ向けの料金プランよりも、<strong>IoT向けのMVNO・MNOプラン</strong>が向いていることが多いです。①複数国で使えるか（グローバルSIM）、②閉域網・VPN・リモートアクセスの機能、③SIMの一括管理（API・管理画面）、④低容量プランや休止状態の料金、⑤対応するLTEカテゴリ（LTE-M／NB-IoTに対応しているか）を比較しましょう。</p>
+  </div>
+
+  <h2>7. 5Gとの関係：NSAとSA</h2>
+  <p>5Gの導入方式には2つあります。</p>
+  <ul>
+    <li><strong>NSA（Non-Standalone）</strong>：LTEの基地局とEPCを土台として、5Gの無線（NR：New Radio）を<strong>速度の上乗せ</strong>として追加する方式です（EN-DC：E-UTRA–NR Dual Connectivity）。接続や制御はLTE側が担うため、<strong>LTEの電波が前提</strong>です。</li>
+    <li><strong>SA（Standalone）</strong>：5G専用のコア網<strong>5GC（5G Core）</strong>で独立して動く方式です。ネットワークスライシングや低遅延など5G本来の機能はSAで実現されます。</li>
+  </ul>
+  <p>5GCはEPCの役割を分割・再編した構成になっています。大まかな対応関係は次のとおりです。</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>LTE（EPC）</th><th>5G（5GC）</th><th>役割</th></tr></thead>
+    <tbody>
+      <tr><td>eNodeB</td><td>gNB</td><td>基地局</td></tr>
+      <tr><td>MME</td><td>AMF（＋SMF）</td><td>接続・移動の管理（セッション管理はSMFへ分離）</td></tr>
+      <tr><td>S-GW / P-GW（データ部分）</td><td>UPF</td><td>ユーザーデータの転送・出入口</td></tr>
+      <tr><td>P-GW（制御部分）</td><td>SMF</td><td>セッション管理・IPアドレス割当</td></tr>
+      <tr><td>HSS</td><td>UDM / AUSF</td><td>加入者データ・認証</td></tr>
+      <tr><td>PCRF</td><td>PCF</td><td>ポリシー制御</td></tr>
+      <tr><td>APN</td><td>DNN</td><td>接続先ネットワークの名前</td></tr>
+    </tbody>
+  </table></div>
+  <div class="callout robot"><span class="title">ロボットはLTEで大丈夫？</span>
+    <p>IoT向けのLTE（Cat-1、LTE-M、NB-IoTなど）は、5G時代にも継続して使われることを前提に3GPPで位置付けられています（LTE-MとNB-IoTは5Gの要件を満たす技術として扱われています）。また、各国で4Gの網は5Gの土台として当面運用が続く見込みです。ただし2G/3Gのように、将来LTEが縮小する国が出る可能性はあるので、製品寿命（10年以上？）と各国の動向は定期的に確認しましょう。カテゴリの選び方は<a href="05-categories.html">第5章</a>で比較します。</p>
+  </div>
+
+  <h2>まとめ</h2>
+  <ul>
+    <li>LTEは <strong>UE → eNodeB（E-UTRAN）→ EPC → 外部網</strong> の構成。EPCの主要装置は MME・HSS・S-GW・P-GW・PCRF。</li>
+    <li><strong>データ（U-plane）</strong>は eNodeB → S-GW → P-GW を、<strong>制御（C-plane）</strong>は eNodeB → MME ⇄ HSS／S-GW を通る。MMEはデータを運ばない。</li>
+    <li>通信中のセル移動は基地局主導の<strong>ハンドオーバー</strong>。P-GWが固定点なので<strong>IPアドレスは変わらず</strong>、セッションも維持される。</li>
+    <li><strong>APN</strong>で出口（P-GW）と接続先が決まる。多くの回線は<strong>CGNAT</strong>配下で外から届かない。遠隔アクセスは<strong>アウトバウンド接続（MQTT等）を基本</strong>に、VPN・閉域網を組み合わせる。</li>
+    <li><strong>MNO</strong>は免許と網を持つ事業者、<strong>MVNO</strong>は網を借りる事業者。どこまで自前か（出口・HSS）で機能が変わる。</li>
+    <li>5G <strong>NSA</strong>はLTE＋EPCが土台、<strong>SA</strong>は5GCで独立。</li>
+  </ul>
+
+  <h2>用語</h2>
+  <dl class="terms">
+    <dt>UE</dt><dd>User Equipment。端末。ロボットではLTEモジュール＋SIM。</dd>
+    <dt>eNodeB</dt><dd>evolved Node B。LTEの基地局。無線リソースの割り当てとハンドオーバーの判断を行う。</dd>
+    <dt>E-UTRAN</dt><dd>Evolved Universal Terrestrial Radio Access Network。LTEの無線アクセス網（基地局の集まり）。</dd>
+    <dt>EPC</dt><dd>Evolved Packet Core。LTEのコア網。</dd>
+    <dt>EPS</dt><dd>Evolved Packet System。E-UTRANとEPCを合わせたシステム全体。</dd>
+    <dt>MME</dt><dd>Mobility Management Entity。認証・位置管理・ベアラ制御などを担う制御装置。</dd>
+    <dt>HSS</dt><dd>Home Subscriber Server。加入者情報と認証データのデータベース。</dd>
+    <dt>S-GW</dt><dd>Serving Gateway。基地局とP-GWの間でユーザーデータを中継する。</dd>
+    <dt>P-GW</dt><dd>PDN Gateway。IPアドレスを割り当て、外部網との出入口になる。</dd>
+    <dt>PCRF</dt><dd>Policy and Charging Rules Function。QoS・課金ルールを決める。</dd>
+    <dt>U-plane / C-plane</dt><dd>ユーザープレーン（データの道）とコントロールプレーン（制御の道）。</dd>
+    <dt>ベアラ</dt><dd>端末とP-GWの間の論理的な通り道。アタッチ時にデフォルトベアラが作られる。</dd>
+    <dt>GTP</dt><dd>GPRS Tunnelling Protocol。コア網内でデータ（GTP-U）や制御（GTP-C）を運ぶトンネル方式。</dd>
+    <dt>ハンドオーバー</dt><dd>通信中の端末を別のセルへ切り替えること。</dd>
+    <dt>TA / TAU</dt><dd>Tracking Area（位置登録の単位となるセルの集まり）と、その更新手続き。</dd>
+    <dt>APN</dt><dd>Access Point Name。接続先ネットワーク（どのP-GWから出るか）を指定する名前。</dd>
+    <dt>CGNAT</dt><dd>Carrier-Grade NAT。キャリアが多数の端末のアドレスを少数のグローバルIPに変換する仕組み。</dd>
+    <dt>MNO / MVNO</dt><dd>自前の網を持つ移動体通信事業者／網を借りる仮想移動体通信事業者。</dd>
+    <dt>NSA / SA</dt><dd>5Gの導入方式。LTE＋EPCを土台にするか、5GCで独立するか。</dd>
+    <dt>5GC</dt><dd>5G Core。5Gのコア網（AMF・SMF・UPFなど）。</dd>
+  </dl>
+
+  <h2>確認クイズ</h2>
+  <div class="quiz" data-quiz="02"></div>
+
+  <section class="sources"><h2>参考・出典</h2><ul>
+    <li><a href="https://www.3gpp.org/DynaReport/23401.htm">3GPP TS 23.401 — GPRS enhancements for E-UTRAN access（EPCのアーキテクチャ・インターフェース・手順）</a></li>
+    <li><a href="https://www.3gpp.org/DynaReport/36300.htm">3GPP TS 36.300 — E-UTRA and E-UTRAN; Overall description（無線アクセス網・X2ハンドオーバー）</a></li>
+    <li><a href="https://www.3gpp.org/DynaReport/23501.htm">3GPP TS 23.501 — System architecture for the 5G System（5GC）</a></li>
+    <li><a href="https://www.3gpp.org/technologies/lte">3GPP — LTE（技術概要）</a></li>
+    <li><a href="https://www.rfc-editor.org/rfc/rfc6598">RFC 6598 — IANA-Reserved IPv4 Prefix for Shared Address Space（100.64.0.0/10）</a></li>
+    <li><a href="https://docs.oasis-open.org/mqtt/mqtt/v5.0/mqtt-v5.0.html">OASIS — MQTT Version 5.0（Keep Alive 等）</a></li>
+    <li><a href="https://www.soumu.go.jp/joho_tsusin/eidsystem/mvno.html">総務省 — MVNO支援コーナー</a></li>
+    <li><a href="https://www.iij.ad.jp/dev/report/iir/038/02.html">IIJ — Internet Infrastructure Review Vol.38「フルMVNOとは何か」</a></li>
+    <li><a href="https://www.iij.ad.jp/news/pressrelease/2018/0315-2.html">IIJ プレスリリース（2018-03-15）フルMVNOとして法人向けサービス提供開始</a></li>
+  </ul><p>確認日: 2026-09</p></section>
+</main>
+</div>
+<script src="../assets/data/quiz/ch02.js"></script>
+<script src="../assets/app.js"></script>
+<script>
+(function () {
+  "use strict";
+  var fig = document.getElementById("netfig");
+  if (!fig) return;
+  var svg = fig.querySelector("svg");
+  var btns = fig.querySelectorAll("[data-plane-btn]");
+  var note = fig.querySelector(".plane-note");
+  var pauseBtn = fig.querySelector(".anim-pause");
+  var notes = {
+    all: "全体表示：オレンジの実線がデータの道、ピンクの点線が制御の道です。",
+    up: "データの流れ：UE → eNodeB → S-GW → P-GW → インターネット。MMEやHSSは通りません。",
+    cp: "制御の流れ：UE → eNodeB → MME ⇄ HSS（認証）→ MME → S-GW（通り道の手配）。"
+  };
+  function setPlane(m) {
+    fig.dataset.plane = m;
+    btns.forEach(function (b) { b.setAttribute("aria-pressed", String(b.dataset.planeBtn === m)); });
+    note.textContent = notes[m];
+  }
+  btns.forEach(function (b) { b.addEventListener("click", function () { setPlane(b.dataset.planeBtn); }); });
+  var paused = false;
+  function setPaused(p) {
+    paused = p;
+    if (svg && svg.pauseAnimations) { if (p) svg.pauseAnimations(); else svg.unpauseAnimations(); }
+    pauseBtn.textContent = p ? "⏵ 動かす" : "⏸ 止める";
+  }
+  pauseBtn.addEventListener("click", function () { setPaused(!paused); });
+  try { if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) setPaused(true); } catch (e) { }
+  setPlane("all");
+})();
+</script>
+</body>
+</html>

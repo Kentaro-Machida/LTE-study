@@ -1,0 +1,751 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>アジア各国の認証とバンド｜LTE Study</title>
+  <link rel="stylesheet" href="../assets/style.css">
+  <style>
+    /* ---- 第10章ページ専用（CSS変数のみ使用） ---- */
+    .tile rect.tile-bg { fill: var(--surface-2); stroke-width: 2.5; }
+    .tile.d-easy rect.tile-bg { stroke: var(--ok); }
+    .tile.d-mid rect.tile-bg { stroke: var(--warn); }
+    .tile.d-hard rect.tile-bg { stroke: var(--bad); }
+    .tile.d-base rect.tile-bg { stroke: var(--accent); }
+    .tile.d-ref rect.tile-bg { stroke: var(--c6); stroke-dasharray: 5 4; }
+    .tile text.name { font-size: 14px; font-weight: 700; }
+    .tile text.sub { font-size: 12px; fill: var(--text-muted); }
+    .cc-grid { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; font-size: .92rem; line-height: 1.6; margin: 8px 0 0; }
+    .cc-grid dt { font-weight: 700; color: var(--text-muted); }
+    .cc-grid dd { margin: 0; }
+    @media (max-width: 600px) { .cc-grid { grid-template-columns: 1fr; } .cc-grid dd { margin-bottom: 6px; } }
+    .cmp-controls { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin: 8px 0; }
+    .cmp-controls .label { font-size: .85rem; color: var(--text-muted); font-weight: 600; }
+    #cmp-table tr.is-hidden { display: none; }
+    #cmp-count { font-size: .85rem; color: var(--text-muted); }
+    .yn { font-weight: 700; }
+    .yn.y { color: var(--bad); }
+    .yn.p { color: var(--warn); }
+    .yn.n { color: var(--ok); }
+    .planner { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; box-shadow: var(--shadow); margin: 20px 0; }
+    .planner h3 { margin-top: 0; }
+    .planner .opts label { display: flex; gap: 8px; align-items: flex-start; font-size: .92rem; margin: 4px 0; }
+    .planner .opts input { margin-top: .4em; accent-color: var(--accent); }
+    .pl-summary { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin: 14px 0; }
+    .pl-summary .stat { background: var(--surface-2); border-radius: var(--radius-sm); padding: 8px 12px; }
+    .pl-summary .stat b { display: block; font-size: 1.3rem; font-family: var(--mono); color: var(--accent); }
+    .pl-summary .stat span { font-size: .8rem; color: var(--text-muted); }
+    .pl-country { border-top: 1px solid var(--border); padding: 10px 0; }
+    .pl-country h4 { margin: 0 0 4px; font-size: 1rem; display: flex; gap: 8px; flex-wrap: wrap; align-items: baseline; }
+    .pl-country ul { margin: 4px 0; padding-left: 1.2em; font-size: .9rem; }
+    .pl-bar { position: relative; height: 14px; background: var(--surface-2); border-radius: 999px; margin: 6px 0 2px; }
+    .pl-bar .min { position: absolute; left: 0; top: 0; bottom: 0; background: var(--accent); border-radius: 999px; }
+    .pl-bar .max { position: absolute; left: 0; top: 0; bottom: 0; background: color-mix(in srgb, var(--accent) 35%, var(--surface-2)); border-radius: 999px; }
+    .pl-scale { display: flex; justify-content: space-between; font-size: .72rem; color: var(--text-muted); font-family: var(--mono); }
+    .pl-empty { color: var(--text-muted); padding: 10px 0; }
+  </style>
+</head>
+<body data-root="../" data-chapter="10">
+<div class="page">
+<main>
+  <header class="chapter-hero">
+    <div class="eyebrow">CHAPTER 10</div>
+    <h1>アジア各国の認証とバンド</h1>
+    <p class="lead">LTE を載せたロボットを日本からアジアへ出すとき、国ごとに「どの役所の、どんな認証が要るか」「誰が申請者になれるか」「どの周波数・どの通信方式が使えるか」が違います。この章では 12 の国・地域（＋参考のオーストラリア）を、同じ物差しで比較できるように整理します。</p>
+    <div class="goals"><h2>この章のゴール</h2><ul>
+      <li>各国の無線・通信機器の認証制度の名前と役割（誰が、何を確認するのか）を言える</li>
+      <li>「現地法人・現地代理人が必要か」「現地で試験が要るか」という、スケジュールを左右する2つの条件を国ごとに把握する</li>
+      <li>中国の SRRC → CTA（進網許可）→ CCC の流れと、データ・回線の特殊事情を説明できる</li>
+      <li>各国の主要キャリアと主なLTEバンド、LTE-M / NB-IoT、2G/3G停波の状況を踏まえて、仕様の「当たり」を付けられる</li>
+      <li>輸出先の組み合わせから、必要な認証と準備期間の目安を見積もれる</li>
+    </ul></div>
+  </header>
+
+  <div class="callout warn"><span class="title">この章の情報の扱いについて（必ずお読みください）</span>
+    <p>各国の認証制度・手数料・期間・停波予定は<strong>頻繁に変わります</strong>。本章は 2026年9月時点で公開情報を調べてまとめた<strong>学習用の概観</strong>であり、法的助言ではありません。期間は「書類がそろってから証明が出るまで」のおおよその<strong>目安</strong>で、試験の待ち行列・翻訳・修正対応で大きく伸びることがあります。実際の申請前には、必ず各国規制当局の最新情報と認証代行機関（試験所・コンサルタント）に確認してください。本文中の「要確認」は、情報源によって記述が分かれている、または製品分類次第で結論が変わる箇所です。</p>
+  </div>
+
+  <h2>1. アジア輸出で越える「3つの壁」</h2>
+  <p>第9章で見たとおり、LTE 端末が市場に出るまでには「規格に合っているか（3GPP・GCF/PTCRB）」「その国の電波ルールに合っているか（無線の型式認証）」「通信事業者のネットワークにつないでよいか（網接続・キャリア認証）」という複数の関門があります。アジア各国を横並びで見ると、国によって特に重いポイントが違うので、次の3つの壁に分けて考えると整理しやすくなります。</p>
+  <div class="card-grid">
+    <div class="card"><h3>壁1：無線の型式認証</h3><p>電波を出す機器が、その国の周波数・出力・スプリアス（不要な電波）の基準を守っているかの確認です。日本の「技適」にあたるもので、<strong>どの国でも必須</strong>です。中国のSRRC、韓国のKC、台湾のNCC、インドのWPC/TECなどがこれに該当します。</p></div>
+    <div class="card"><h3>壁2：通信網への接続</h3><p>公衆の携帯網につなぐ端末として問題ないかの確認です。中国の<strong>進網許可（CTA/NAL）</strong>、日本の<strong>端末機器の技術基準適合認定</strong>、韓国・日本のキャリアによる接続試験、各国の<strong>IMEI（端末識別番号）登録</strong>などが入ります。国によって「国の制度」だったり「キャリアの要求」だったりします。</p></div>
+    <div class="card"><h3>壁3：安全・EMC・現地特有ルール</h3><p>電気安全や電磁両立性（EMC：他の機器に妨害を与えず、妨害にも耐えること）、ACアダプタ・リチウムイオン電池の強制認証、インドネシアの<strong>TKDN（国産化率）</strong>、中国の<strong>データ規制</strong>など。ロボットの場合、無線より<strong>本体・電源側の認証</strong>で時間を取られることも珍しくありません。</p></div>
+  </div>
+
+  <h3>スケジュールを左右する2つの質問</h3>
+  <p>国ごとの制度名を丸暗記するより、まず次の2つを押さえるのが実務的です。この2つの答えで、準備期間と費用がほぼ決まるからです。</p>
+  <ol>
+    <li><strong>申請者は誰でもいいのか？</strong> ── 多くのアジアの国では、認証の名義人（証明書の持ち主）が<strong>その国に登記された会社</strong>であることを求めます。自社に現地法人がなければ、輸入代理店や認証代行会社に「現地代理人（ローカルレプ、Local Representative/Nominee）」を頼む必要があり、契約・費用・証明書の名義管理が発生します。</li>
+    <li><strong>試験は海外で済ませていいのか？</strong> ── 日本や欧州の試験所で取ったレポートをそのまま使える国（シンガポール、香港など）と、その国の指定試験所に<strong>実機サンプルを送って試験し直す</strong>国（中国、韓国、インドネシア、インドのTECなど）があります。後者はサンプルの輸送・通関・試験待ちで数週間〜数か月が上乗せされます。</li>
+  </ol>
+  <p>ここで出てくる「海外試験レポートの受け入れ」の根拠になるのが、ISO/IEC 17025（試験所の能力に関する国際規格）の認定や、国同士の相互承認協定（MRA：Mutual Recognition Agreement）、APEC TEL MRA などの枠組みです。「17025認定ラボのレポートなら受け付ける」国は比較的楽、と覚えておけば十分です。</p>
+
+  <div class="callout robot"><span class="title">うちのロボットで考えると</span>
+    <p>ロボットには LTE モジュールのほかに、Wi-Fi / Bluetooth、ACアダプタ（充電器）、リチウムイオン電池、モーター類が載ります。「LTEモジュールは認証済みを買うから大丈夫」と思いがちですが、<strong>モジュールの認証を最終製品にそのまま流用できる国（モジュラー認証）ばかりではありません</strong>。流用できない国では、ロボット本体を1台の無線機器として試験・申請し直すことになります。どの国が流用可かは次節の比較表で確認しましょう。</p>
+  </div>
+
+  <h2>2. 地図で見る：国ごとの認証プロフィール</h2>
+  <p>下の図は正確な地図ではなく、位置関係だけをおおまかに表した「タイル地図」です。枠の色は、現地代理人の要否・現地試験の要否・特別要件の多さから見た<strong>手続きの重さの目安</strong>です（緑＝比較的軽い、橙＝中程度、赤＝重い）。タイルをクリックすると、その国の認証・申請者・試験・期間・ラベル・主要キャリアとバンド・LPWA・停波状況・特記事項が表示されます。</p>
+
+  <figure class="figure" data-hotspots data-hs-default="cn">
+    <div class="hint">国のタイルをクリック（タップ）すると国カードが開きます。キーボードでは Tab で移動して Enter。</div>
+    <svg viewBox="0 0 480 440" role="img" aria-label="アジア各国のタイル地図">
+      <text x="240" y="18" text-anchor="middle" class="t-muted" font-size="12">簡略タイル地図（位置関係はおおよそ）</text>
+      <!-- row0 -->
+      <g data-hs="cn" class="tile d-hard"><rect class="tile-bg" x="102" y="30" width="180" height="52" rx="8"/><text class="name" x="192" y="52" text-anchor="middle">中国</text><text class="sub" x="192" y="71" text-anchor="middle">SRRC / CTA / CCC</text></g>
+      <g data-hs="kr" class="tile d-hard"><rect class="tile-bg" x="290" y="30" width="86" height="52" rx="8"/><text class="name" x="333" y="52" text-anchor="middle">韓国</text><text class="sub" x="333" y="71" text-anchor="middle">KC (RRA)</text></g>
+      <g data-hs="jp" class="tile d-base"><rect class="tile-bg" x="384" y="30" width="86" height="114" rx="8"/><text class="name" x="427" y="80" text-anchor="middle">日本</text><text class="sub" x="427" y="99" text-anchor="middle">技適 / 端末</text><text class="sub" x="427" y="115" text-anchor="middle">（基準）</text></g>
+      <!-- row1 -->
+      <g data-hs="in" class="tile d-hard"><rect class="tile-bg" x="8" y="92" width="86" height="114" rx="8"/><text class="name" x="51" y="140" text-anchor="middle">インド</text><text class="sub" x="51" y="159" text-anchor="middle">WPC / TEC</text><text class="sub" x="51" y="175" text-anchor="middle">/ BIS</text></g>
+      <g data-hs="hk" class="tile d-easy"><rect class="tile-bg" x="196" y="92" width="86" height="52" rx="8"/><text class="name" x="239" y="114" text-anchor="middle">香港</text><text class="sub" x="239" y="133" text-anchor="middle">OFCA</text></g>
+      <g data-hs="tw" class="tile d-mid"><rect class="tile-bg" x="290" y="92" width="86" height="52" rx="8"/><text class="name" x="333" y="114" text-anchor="middle">台湾</text><text class="sub" x="333" y="133" text-anchor="middle">NCC</text></g>
+      <!-- row2 -->
+      <g data-hs="th" class="tile d-mid"><rect class="tile-bg" x="102" y="154" width="86" height="52" rx="8"/><text class="name" x="145" y="176" text-anchor="middle">タイ</text><text class="sub" x="145" y="195" text-anchor="middle">NBTC</text></g>
+      <g data-hs="vn" class="tile d-mid"><rect class="tile-bg" x="196" y="154" width="86" height="52" rx="8"/><text class="name" x="239" y="176" text-anchor="middle">ベトナム</text><text class="sub" x="239" y="195" text-anchor="middle">MST</text></g>
+      <g data-hs="ph" class="tile d-easy"><rect class="tile-bg" x="290" y="154" width="86" height="52" rx="8"/><text class="name" x="333" y="176" text-anchor="middle">フィリピン</text><text class="sub" x="333" y="195" text-anchor="middle">NTC</text></g>
+      <!-- row3 -->
+      <g data-hs="my" class="tile d-mid"><rect class="tile-bg" x="102" y="216" width="86" height="52" rx="8"/><text class="name" x="145" y="238" text-anchor="middle">マレーシア</text><text class="sub" x="145" y="257" text-anchor="middle">SIRIM/MCMC</text></g>
+      <text x="286" y="248" text-anchor="middle" class="t-muted" font-size="12">（南シナ海）</text>
+      <!-- row4 -->
+      <g data-hs="sg" class="tile d-easy"><rect class="tile-bg" x="102" y="278" width="86" height="52" rx="8"/><text class="name" x="145" y="300" text-anchor="middle">シンガポール</text><text class="sub" x="145" y="319" text-anchor="middle">IMDA</text></g>
+      <g data-hs="id" class="tile d-hard"><rect class="tile-bg" x="196" y="278" width="180" height="52" rx="8"/><text class="name" x="286" y="300" text-anchor="middle">インドネシア</text><text class="sub" x="286" y="319" text-anchor="middle">Komdigi(SDPPI) / TKDN</text></g>
+      <!-- row5 -->
+      <g data-hs="au" class="tile d-ref"><rect class="tile-bg" x="196" y="346" width="180" height="52" rx="8"/><text class="name" x="286" y="368" text-anchor="middle">オーストラリア（参考）</text><text class="sub" x="286" y="387" text-anchor="middle">ACMA / RCM</text></g>
+      <!-- legend -->
+      <g aria-hidden="true">
+        <rect x="8" y="346" width="12" height="12" rx="2" fill="none" stroke="var(--ok)" stroke-width="2.5"/><text x="26" y="357" font-size="12">比較的軽い</text>
+        <rect x="8" y="366" width="12" height="12" rx="2" fill="none" stroke="var(--warn)" stroke-width="2.5"/><text x="26" y="377" font-size="12">中程度</text>
+        <rect x="8" y="386" width="12" height="12" rx="2" fill="none" stroke="var(--bad)" stroke-width="2.5"/><text x="26" y="397" font-size="12">重い</text>
+        <rect x="8" y="406" width="12" height="12" rx="2" fill="none" stroke="var(--accent)" stroke-width="2.5"/><text x="26" y="417" font-size="12">日本（基準）</text>
+      </g>
+    </svg>
+    <div class="hs-panel" aria-live="polite"></div>
+    <figcaption>枠の色は本章で独自に付けた「手続きの重さ」の目安で、公式な分類ではありません。バンドは主なものだけを抜粋しています。詳しい照合は <a href="../tools/band-checker.html">バンド共通化チェッカー</a> を使ってください。</figcaption>
+
+    <template data-hs-content="jp"><h4>日本（比較の基準）</h4>
+      <dl class="cc-grid">
+        <dt>認証</dt><dd>電波法の<strong>技術基準適合証明・工事設計認証（いわゆる技適）</strong>＋電気通信事業法の<strong>端末機器の技術基準適合認定</strong>。セルラー端末は両方が必要。加えて docomo / KDDI / SoftBank などキャリアの<strong>相互接続性試験（IOT）</strong>が事実上求められることが多い。</dd>
+        <dt>申請者</dt><dd>海外メーカーも登録証明機関へ直接申請可（現地法人は必須ではない）。</dd>
+        <dt>試験</dt><dd>登録証明機関（国内機関のほか、MRAに基づく海外の認定機関も可）。</dd>
+        <dt>期間目安</dt><dd>認証済みモジュールを使い表示で対応：短期／本体で取得：4〜8週程度。キャリアIOTは別途 1〜3か月程度。</dd>
+        <dt>ラベル</dt><dd>技適マーク＋認証番号（画面などへの電磁的表示も可）。</dd>
+        <dt>主要キャリアと主なバンド</dt><dd>docomo：B1/B3/B19/B21/B28/B42、KDDI(au)：B1/B3/B18/B26/B28/B41/B42、SoftBank：B1/B3/B8/B28/B41/B42、楽天：B3/B28（一部 au ローミング B18/B26）。</dd>
+        <dt>LTE-M / NB-IoT</dt><dd>LTE-M：3大キャリアが提供。NB-IoT：KDDI・SoftBank などが提供（提供範囲は要確認）。</dd>
+        <dt>2G/3G</dt><dd>2G は2012年までに終了。3G は au 2022年3月、SoftBank 2024年7月、docomo（FOMA）2026年3月31日に終了し、<strong>国内の3Gはすべて停波</strong>。</dd>
+        <dt>特記</dt><dd>日本の認証は他国では使えない（逆も同じ）。ただし「日本で取った試験データ」は他国の申請資料として再利用できることがある。</dd>
+      </dl>
+    </template>
+    <template data-hs-content="cn"><h4>中国（本土）</h4>
+      <dl class="cc-grid">
+        <dt>認証</dt><dd>① <strong>SRRC 型式核准</strong>（無線電発射設備型式核准。MIIT＝工業情報化部の無線管理）、② <strong>CTA 進網許可（NAL：Network Access License）</strong>＝公衆網に接続する電気通信設備の許可、③ 対象品目なら <strong>CCC（中国強制認証）</strong>。詳しくは第4節のステッパーで。</dd>
+        <dt>申請者</dt><dd>海外メーカー名義でも申請できるが、中文書類の作成・当局とのやり取りのため<strong>中国国内の代理人が実務上ほぼ必須</strong>。</dd>
+        <dt>試験</dt><dd><strong>中国国内の指定試験所で実施</strong>（海外レポートでの代替は原則不可）。サンプルの中国への送付が必要。</dd>
+        <dt>期間目安</dt><dd>SRRC：2〜3か月、進網許可：2〜3か月（並行可）、CCC（該当時）：工場審査込みで2〜3か月。全体で3〜6か月を見込むのが無難。</dd>
+        <dt>ラベル</dt><dd>SRRC の <strong>CMIIT ID</strong> 表示、進網許可標志（電子ラベル可）、CCCマーク。中国語の表示・取説。</dd>
+        <dt>主要キャリアと主なバンド</dt><dd>中国移動：TD-LTE の B34/B38/B39/B40/B41 ＋ FDD B3/B8、中国電信：B1/B3/B5、中国聯通：B1/B3/B8、中国広電：5G（700MHz）中心。<strong>TDDバンド対応が中国の特徴</strong>。</dd>
+        <dt>LTE-M / NB-IoT</dt><dd>NB-IoT は3大キャリアとも大規模展開。LTE-M（eMTC）は限定的。中速IoTでは <strong>LTE Cat.1 bis</strong> が主流。</dd>
+        <dt>2G/3G</dt><dd>各社で段階的に縮退中（中国移動の TD-SCDMA 3G は停止済み、聯通・電信も2G/3Gを縮小）。GSMは一部に残存。新規設計は4G前提で。</dd>
+        <dt>特記</dt><dd>サイバーセキュリティ法・データ安全法・個人情報保護法（PIPL）により、個人情報や重要データの<strong>国外持ち出しに手続き</strong>が要る。回線は中国キャリアのIoT回線（実名登録）が基本で、海外SIMの恒久ローミングに頼る設計は避ける。海外クラウドへの接続品質・可否も要検討。</dd>
+      </dl>
+    </template>
+    <template data-hs-content="kr"><h4>韓国</h4>
+      <dl class="cc-grid">
+        <dt>認証</dt><dd>電波法に基づく<strong>KC 適合性評価</strong>（国立電波研究院 RRA、科学技術情報通信部の所管）。セルラー端末は「適合認証」区分。ACアダプタ等は別途 KC 電気安全。</dd>
+        <dt>申請者</dt><dd><strong>韓国内の申請者（現地法人・輸入者・代理人）</strong>が一般的。</dd>
+        <dt>試験</dt><dd><strong>韓国内の RRA 指定試験所で実施</strong>。海外レポートの代替は原則不可。</dd>
+        <dt>期間目安</dt><dd>試験込みで 10〜14週程度。</dd>
+        <dt>ラベル</dt><dd>KCマーク＋認証番号（R-C-… 形式）。韓国語の取説。</dd>
+        <dt>主要キャリアと主なバンド</dt><dd>SK Telecom：B1/B3/B5/B7、KT：B1/B3/B8、LG U+：B1/B5/B7。</dd>
+        <dt>LTE-M / NB-IoT</dt><dd>SKT が LTE-M、KT・LG U+ が NB-IoT を展開（最新の提供状況は要確認）。</dd>
+        <dt>2G/3G</dt><dd>2G は2021年までに全社終了。3G は SKT が2026年8月に新規受付を停止し、<strong>2027年末までの終了</strong>を計画。KT も終了を検討中。</dd>
+        <dt>特記</dt><dd>国の認証とは別に、<strong>キャリアの端末認証（網連動試験）</strong>を通らないと回線を開通できないケースがある。IoT回線契約の相談とセットで進める。</dd>
+      </dl>
+    </template>
+    <template data-hs-content="tw"><h4>台湾</h4>
+      <dl class="cc-grid">
+        <dt>認証</dt><dd><strong>NCC（国家通訊伝播委員会）</strong>の型式認証。LTE端末は「電信終端設備（PLMN）」、Wi-Fi/BT は「低功率射頻器材」として別区分。登録認証機関（RCB）を通じて取得。電源・電池は BSMI（経済部標準検験局）の対象になり得る。</dd>
+        <dt>申請者</dt><dd>原則として台湾の事業者（輸入者など）が名義人。海外メーカー名義で申請できるとする情報もある（要確認）。</dd>
+        <dt>試験</dt><dd>NCC認定試験所で実施。台湾国内が中心だが、一部NCC認定の海外試験所もある。</dd>
+        <dt>期間目安</dt><dd>6〜10週程度。</dd>
+        <dt>ラベル</dt><dd>NCCマーク＋審験合格番号（例：CCAx…）。</dd>
+        <dt>主要キャリアと主なバンド</dt><dd>中華電信：B1/B3/B7/B8、遠傳電信（亜太電信を合併）：B1/B3/B7/B28、台湾大哥大（台湾之星を合併）：B1/B3/B8/B28 など。</dd>
+        <dt>LTE-M / NB-IoT</dt><dd>中華電信が LTE-M・NB-IoT を提供。他社は要確認。</dd>
+        <dt>2G/3G</dt><dd>2G は2017年6月末、3G は2018年末に終了済み。<strong>4G以上が前提</strong>。</dd>
+        <dt>特記</dt><dd>中国本土と制度・バンド・キャリアがまったく別。「中華圏向け」を1つのSKU（製品バリエーション）で済ませられるとは限らない。</dd>
+      </dl>
+    </template>
+    <template data-hs-content="hk"><h4>香港</h4>
+      <dl class="cc-grid">
+        <dt>認証</dt><dd><strong>OFCA（通訊事務管理局辦公室）</strong>が定める HKCA 技術仕様への適合。OFCA の機器認証制度（HKTEC）は、端末では任意（ボランタリー）の認証が中心だが、適合していることは必要（区分の詳細は要確認）。</dd>
+        <dt>申請者</dt><dd>現地代理人を必須としない扱いが一般的。</dd>
+        <dt>試験</dt><dd>OFCA が認める試験機関（RTA、海外含む）のレポートで対応可。</dd>
+        <dt>期間目安</dt><dd>2〜6週程度。</dd>
+        <dt>ラベル</dt><dd>認証取得時は所定ラベルを貼付可（任意の場合あり）。</dd>
+        <dt>主要キャリアと主なバンド</dt><dd>HKT(csl)、SmarTone、3香港、中国移動香港(CMHK)。LTE は B1/B3/B7/B8 中心、TDD の B40 なども（要確認）。</dd>
+        <dt>LTE-M / NB-IoT</dt><dd>一部キャリアが提供（要確認）。</dd>
+        <dt>2G/3G</dt><dd>CMHK が2025年6月30日に3Gを終了、2026年6月に2Gも終了。SmarTone も2026年中の3G終了が承認済み。他社も縮小中。</dd>
+        <dt>特記</dt><dd>本土とは別の制度。SRRC/CTA を取っても香港では使えない（逆も同じ）。</dd>
+      </dl>
+    </template>
+    <template data-hs-content="sg"><h4>シンガポール</h4>
+      <dl class="cc-grid">
+        <dt>認証</dt><dd><strong>IMDA（情報通信メディア開発庁）</strong>の機器登録。セルラー端末は <strong>SER（簡易機器登録）</strong>区分で、IMDA 基準への適合を自己宣言して登録する。短距離無線は ESER、基地局などは GER。2026年8月27日から登録制度の更新あり。</dd>
+        <dt>申請者</dt><dd><strong>シンガポール登記企業で IMDA のディーラーライセンスを持つ者</strong>が必要（現地代理人必須）。</dd>
+        <dt>試験</dt><dd>海外の試験レポート（ISO/IEC 17025 認定ラボ等）で対応可。現地試験は不要。</dd>
+        <dt>期間目安</dt><dd>書類がそろえば 1〜4週程度。</dd>
+        <dt>ラベル</dt><dd>IMDA ラベル（「Complies with IMDA Standards」＋ディーラー番号）。</dd>
+        <dt>主要キャリアと主なバンド</dt><dd>Singtel、StarHub、M1、SIMBA。LTE は B1/B3/B7/B8/B28 など（要確認）。</dd>
+        <dt>LTE-M / NB-IoT</dt><dd>Singtel が両方、M1 が NB-IoT を提供。</dd>
+        <dt>2G/3G</dt><dd>2G は2017年4月、3G は2024年に終了。</dd>
+        <dt>特記</dt><dd>手続きは軽いが、名義人（ディーラー）の確保が前提。ASEAN の拠点国として最初の輸出先に選ばれやすい。</dd>
+      </dl>
+    </template>
+    <template data-hs-content="th"><h4>タイ</h4>
+      <dl class="cc-grid">
+        <dt>認証</dt><dd><strong>NBTC（国家放送通信委員会）</strong>の型式認証。出力や人体からの距離などで Class A / Class B に区分され、セルラー端末は Class A 扱いが一般的（区分は要確認）。電源・電池などは TISI（タイ工業規格局）の対象になり得る。</dd>
+        <dt>申請者</dt><dd><strong>タイ国内の法人（輸入者・代理人）</strong>が必要。</dd>
+        <dt>試験</dt><dd>海外の試験レポート（ISO/IEC 17025 ラボ等）を受け入れ。現地試験は原則不要。</dd>
+        <dt>期間目安</dt><dd>3〜8週程度。</dd>
+        <dt>ラベル</dt><dd>NBTC マーク＋登録番号、タイ語表示。</dd>
+        <dt>主要キャリアと主なバンド</dt><dd>AIS、True（2023年に dtac と合併）、NT。LTE は B1/B3/B8/B28/B40 など、TDD の B41 も（要確認）。</dd>
+        <dt>LTE-M / NB-IoT</dt><dd>AIS が LTE-M・NB-IoT、True が NB-IoT を提供。</dd>
+        <dt>2G/3G</dt><dd>NBTC が AIS・True に対し、<strong>2026年第3四半期まで</strong>の2G/3G段階的廃止を指示。</dd>
+        <dt>特記</dt><dd>申請窓口はオンライン化が進んでいる。名義人の確保と、取説・ラベルのタイ語化を早めに。</dd>
+      </dl>
+    </template>
+    <template data-hs-content="vn"><h4>ベトナム</h4>
+      <dl class="cc-grid">
+        <dt>認証</dt><dd>2025年3月に情報通信省（MIC）が科学技術省と統合し、<strong>科学技術省（MST）</strong>が所管。無線機器は<strong>型式認証（適合認証）＋適合宣言</strong>。2025年12月31日施行の通達 29/2025/TT-BKHCN で管理品目のルールが更新。輸入時の適合手続きもある。</dd>
+        <dt>申請者</dt><dd><strong>ベトナム法人（輸入者・子会社・代行会社）</strong>が名義人。</dd>
+        <dt>試験</dt><dd>APEC TEL MRA で認められた海外試験所のレポートは受け入れ。それ以外は現地試験。</dd>
+        <dt>期間目安</dt><dd>7〜10週程度。</dd>
+        <dt>ラベル</dt><dd>CR 適合マーク（従来の表示から移行。詳細は要確認）。</dd>
+        <dt>主要キャリアと主なバンド</dt><dd>Viettel、VinaPhone（VNPT）、MobiFone。LTE は B3 中心に B1/B8 など（要確認）。</dd>
+        <dt>LTE-M / NB-IoT</dt><dd>Viettel などが提供（要確認）。</dd>
+        <dt>2G/3G</dt><dd><strong>2026年9月15日に2Gを全国停止</strong>。900MHz帯は4G/5Gへ再割当予定。3Gは当面残るが、4G非対応端末は規制の方向。</dd>
+        <dt>特記</dt><dd>型式認証の有効期間は3年で、ISO 9001 認証の有効性に連動するとの情報あり。</dd>
+      </dl>
+    </template>
+    <template data-hs-content="id"><h4>インドネシア</h4>
+      <dl class="cc-grid">
+        <dt>認証</dt><dd>通信デジタル省（Komdigi、旧 Kominfo）のデジタルインフラ総局（DJID、旧 SDPPI）による<strong>機器証明</strong>。加えて、LTE/5G 対応の携帯電話・タブレット・ハンドヘルドPC・Wi-Fiモデム等には <strong>TKDN（国産化率）35%以上</strong>の証明が必要。</dd>
+        <dt>申請者</dt><dd><strong>インドネシア法人（輸入者登録のある事業者）</strong>が必要。</dd>
+        <dt>試験</dt><dd><strong>国内の指定試験所で試験が必須</strong>（海外レポートの代替不可）。</dd>
+        <dt>期間目安</dt><dd>証明だけで 8〜16週。TKDN が必要な製品分類だと、現地生産・部材調達の計画を含め<strong>数か月〜年単位</strong>の準備になり得る。</dd>
+        <dt>ラベル</dt><dd>証明番号・PLG ID を表示。</dd>
+        <dt>主要キャリアと主なバンド</dt><dd>Telkomsel、Indosat Ooredoo Hutchison、XLSmart（XL と Smartfren が2025年に統合）。LTE は B1/B3/B8/B40、一部 B5。</dd>
+        <dt>LTE-M / NB-IoT</dt><dd>Telkomsel・XL などが NB-IoT を提供（LTE-M は要確認）。</dd>
+        <dt>2G/3G</dt><dd>主要キャリアの3Gは2022〜2023年に終了。2Gは一部残存。</dd>
+        <dt>特記</dt><dd>携帯・PC・タブレット等は <strong>IMEI を CEIR（中央端末登録）に登録</strong>しないと国内網で使えない制度がある（ロボットが対象になるかは要確認）。証明書は3年で失効し、更新ではなく<strong>再試験</strong>が必要。</dd>
+      </dl>
+    </template>
+    <template data-hs-content="my"><h4>マレーシア</h4>
+      <dl class="cc-grid">
+        <dt>認証</dt><dd>規制当局は <strong>MCMC（通信マルチメディア委員会）</strong>、認証機関は <strong>SIRIM QAS</strong>。適合証明（Certificate of Conformity）を取得。ACアダプタ等は別途エネルギー委員会（ST）の対象。</dd>
+        <dt>申請者</dt><dd><strong>マレーシア登記会社（SSM登録）</strong>が名義人。現地法人がなければ Local Nominee を起用。</dd>
+        <dt>試験</dt><dd>海外レポートを受け入れるが、<strong>セルラー機器は現地での機能・検証試験</strong>が求められる。</dd>
+        <dt>期間目安</dt><dd>4〜8週程度。</dd>
+        <dt>ラベル</dt><dd>MCMC ラベル。SIRIM の自己ラベル制度（SLP）で、出荷前にシリアル/IMEI を登録。</dd>
+        <dt>主要キャリアと主なバンド</dt><dd>Maxis、CelcomDigi、U Mobile、unifi。LTE は B1/B3/B7/B8/B28 など（要確認）。</dd>
+        <dt>LTE-M / NB-IoT</dt><dd>Maxis などが提供（要確認）。</dd>
+        <dt>2G/3G</dt><dd>3G は2021〜2022年に終了。2G は縮小中（要確認）。</dd>
+        <dt>特記</dt><dd>証明書の有効期間は選択制（最長5年）。</dd>
+      </dl>
+    </template>
+    <template data-hs-content="ph"><h4>フィリピン</h4>
+      <dl class="cc-grid">
+        <dt>認証</dt><dd><strong>NTC（国家電気通信委員会）</strong>の型式承認（Type Approval）。2G/3G/4G 端末は CPE（顧客宅内機器）区分。</dd>
+        <dt>申請者</dt><dd>現地代理人を求めるとする情報が多い（不要とする資料もあり、要確認）。</dd>
+        <dt>試験</dt><dd>海外レポートを受け入れ（現地試験不要とする情報が多い）。</dd>
+        <dt>期間目安</dt><dd>4〜8週程度。</dd>
+        <dt>ラベル</dt><dd>NTC の型式承認番号を表示。</dd>
+        <dt>主要キャリアと主なバンド</dt><dd>Globe、Smart、DITO。LTE は B1/B3/B7/B28、TDD の B38/B40/B41 など。</dd>
+        <dt>LTE-M / NB-IoT</dt><dd>一部キャリアが提供（要確認）。</dd>
+        <dt>2G/3G</dt><dd>NTC が <strong>2026年12月31日までの3G全国停止</strong>を指示、2Gも段階的廃止の計画。</dd>
+        <dt>特記</dt><dd>SIM登録法（2022年）により、SIMは利用者登録が必要。IoT回線の契約形態を早めに確認。</dd>
+      </dl>
+    </template>
+    <template data-hs-content="in"><h4>インド</h4>
+      <dl class="cc-grid">
+        <dt>認証</dt><dd>① <strong>WPC の ETA</strong>（Wi-Fi/BT など免許不要帯の機器型式認証。Saral Sanchar ポータル）、② <strong>TEC の MTCTE</strong>（電気通信機器の強制試験・認証。対象品目を段階的に追加）、③ <strong>BIS の CRS</strong>（強制登録制度。ACアダプタ・リチウム電池・IT機器など対象品目）。</dd>
+        <dt>申請者</dt><dd><strong>在インドの代理人（AIR：Authorized Indian Representative）</strong>が必要。</dd>
+        <dt>試験</dt><dd>MTCTE と BIS は<strong>インド国内の指定試験所での試験が必須</strong>。WPC は ISO/IEC 17025 ラボの海外レポートを受け入れ。</dd>
+        <dt>期間目安</dt><dd>組み合わせで 12〜20週程度（現地試験の待ちで伸びやすい）。</dd>
+        <dt>ラベル</dt><dd>BIS 標章＋登録番号（R-xxxxxxxx）など。</dd>
+        <dt>主要キャリアと主なバンド</dt><dd>Jio：B3/B5/B40、Airtel：B1/B3/B8/B40、Vi：B1/B3/B8/B40、BSNL：4G整備中。<strong>B40（2.3GHz TDD）が重要</strong>。</dd>
+        <dt>LTE-M / NB-IoT</dt><dd>Jio・Vi などが NB-IoT を提供（LTE-M は要確認）。</dd>
+        <dt>2G/3G</dt><dd>3Gは2020〜2022年に終了。2G は Airtel・Vi で存続。Jio は当初から4Gのみ。</dd>
+        <dt>特記</dt><dd>2025年10月施行の電気通信サイバーセキュリティ改正規則で、<strong>IMEI を持つ機器（モジュール内蔵機器を含む）は販売前に政府ポータル（Device Setu / ICDR）への登録</strong>が求められる。IMEI の改ざん・重複は罰則対象。</dd>
+      </dl>
+    </template>
+    <template data-hs-content="au"><h4>オーストラリア（参考）</h4>
+      <dl class="cc-grid">
+        <dt>認証</dt><dd><strong>ACMA</strong> の規制に基づく供給者の自己宣言（適合宣言）と、国のデータベースへの責任者登録。表示は <strong>RCM マーク</strong>。電源は電気安全（EESS）制度も。</dd>
+        <dt>申請者</dt><dd>オーストラリアの事業者（ABN を持つ責任ある供給者）が必要。</dd>
+        <dt>試験</dt><dd>海外レポートで対応可。</dd>
+        <dt>期間目安</dt><dd>2〜4週程度。</dd>
+        <dt>ラベル</dt><dd>RCM マーク。</dd>
+        <dt>主要キャリアと主なバンド</dt><dd>Telstra：B1/B3/B7/B28、Optus：B1/B3/B7/B28/B40、TPG(Vodafone)：B1/B3/B5/B28。</dd>
+        <dt>LTE-M / NB-IoT</dt><dd>Telstra が両方、Optus が LTE-M を提供。</dd>
+        <dt>2G/3G</dt><dd>3G は2023〜2024年に全社終了。</dd>
+        <dt>特記</dt><dd>3G停波後の「緊急通報（000）が発信できない端末」問題を受け、音声対応端末には規制強化。データ専用IoTでも仕様確認を。</dd>
+      </dl>
+    </template>
+  </figure>
+
+  <p>国カードを眺めると、いくつかのパターンが見えてきます。</p>
+  <ul>
+    <li><strong>「全部自前型」</strong>：中国・韓国・インドネシア・インド（の一部）は、現地の指定試験所で試験をやり直し、現地の名義人を立てる必要があります。スケジュールの主役はこのグループです。</li>
+    <li><strong>「名義人は要るが試験は持ち込み可」</strong>：シンガポール・タイ・マレーシア・ベトナム（MRAラボ利用時）など。代理人さえ決まれば比較的短期間で進みます。</li>
+    <li><strong>「軽量型」</strong>：香港・フィリピン（要確認）・オーストラリアなど。海外レポートで済み、代理人の要件も軽めです。</li>
+  </ul>
+
+  <h2>3. 比較表：条件で絞り込む・並べ替える</h2>
+  <p>下の表は、国カードの要点を1行ずつにまとめたものです。チップを押すと条件に合う国だけに絞り込め（複数選ぶと「すべて満たす国」）、ボタンで並べ替えられます。「現地試験」の列の「一部」は、条件によって現地での試験・検証が要るという意味です。</p>
+
+  <div class="figure" id="cmp-box">
+    <div class="hint">チップで絞り込み、ボタンで並べ替え。</div>
+    <div class="cmp-controls">
+      <span class="label">絞り込み</span>
+      <div class="chips" id="cmp-chips">
+        <button class="chip" data-f="rep" aria-pressed="false">現地代理人・現地法人が必要</button>
+        <button class="chip" data-f="lt" aria-pressed="false">現地試験が必須</button>
+        <button class="chip" data-f="fr" aria-pressed="false">海外試験レポートを受け入れ</button>
+        <button class="chip" data-f="sp" aria-pressed="false">特別要件あり（IMEI・TKDN・データ規制など）</button>
+      </div>
+    </div>
+    <div class="cmp-controls">
+      <span class="label">並べ替え</span>
+      <div class="btn-row" id="cmp-sort" style="margin:0">
+        <button class="btn" data-sort="region">地域順</button>
+        <button class="btn" data-sort="weeks">期間が短い順</button>
+        <button class="btn" data-sort="diff">手続きが重い順</button>
+      </div>
+      <span id="cmp-count" aria-live="polite"></span>
+    </div>
+    <div class="table-wrap">
+      <table id="cmp-table">
+        <thead><tr><th>国・地域</th><th>主な認証</th><th>現地代理人</th><th>現地試験</th><th>期間目安<br><span class="small muted">（無線・通信分）</span></th><th>重さ</th><th>特記</th></tr></thead>
+        <tbody>
+          <tr data-order="0" data-rep="0" data-lt="0" data-fr="1" data-sp="0" data-weeks="6" data-diff="1"><td>日本（基準）</td><td>技適＋端末認定（＋キャリアIOT）</td><td><span class="yn n">不要</span></td><td><span class="yn n">不要</span></td><td>4〜8週</td><td><span class="badge accent">基準</span></td><td>3Gは全停波</td></tr>
+          <tr data-order="1" data-rep="1" data-lt="1" data-fr="0" data-sp="1" data-weeks="20" data-diff="3"><td>中国</td><td>SRRC＋CTA（進網許可）＋CCC（該当時）</td><td><span class="yn y">実務上必須</span></td><td><span class="yn y">必須</span></td><td>12〜24週</td><td><span class="badge bad">重い</span></td><td>データ越境規制・国内回線</td></tr>
+          <tr data-order="2" data-rep="1" data-lt="1" data-fr="0" data-sp="0" data-weeks="12" data-diff="3"><td>韓国</td><td>KC（RRA 適合認証）</td><td><span class="yn y">必要</span></td><td><span class="yn y">必須</span></td><td>10〜14週</td><td><span class="badge bad">重い</span></td><td>キャリア端末認証</td></tr>
+          <tr data-order="3" data-rep="1" data-lt="1" data-fr="0" data-sp="0" data-weeks="8" data-diff="2"><td>台湾</td><td>NCC（PLMN 電信終端設備）</td><td><span class="yn y">原則必要</span></td><td><span class="yn p">原則現地</span></td><td>6〜10週</td><td><span class="badge warn">中</span></td><td>2G/3G停波済み</td></tr>
+          <tr data-order="4" data-rep="0" data-lt="0" data-fr="1" data-sp="0" data-weeks="4" data-diff="1"><td>香港</td><td>OFCA（HKCA 仕様）</td><td><span class="yn n">不要</span></td><td><span class="yn n">不要</span></td><td>2〜6週</td><td><span class="badge ok">軽い</span></td><td>本土と別制度</td></tr>
+          <tr data-order="5" data-rep="1" data-lt="0" data-fr="1" data-sp="0" data-weeks="3" data-diff="1"><td>シンガポール</td><td>IMDA（SER 登録）</td><td><span class="yn y">必要</span></td><td><span class="yn n">不要</span></td><td>1〜4週</td><td><span class="badge ok">軽い</span></td><td>ディーラー免許者が名義人</td></tr>
+          <tr data-order="6" data-rep="1" data-lt="0" data-fr="1" data-sp="0" data-weeks="6" data-diff="2"><td>タイ</td><td>NBTC（Class A/B）</td><td><span class="yn y">必要</span></td><td><span class="yn n">不要</span></td><td>3〜8週</td><td><span class="badge warn">中</span></td><td>2026年Q3に2G/3G廃止</td></tr>
+          <tr data-order="7" data-rep="1" data-lt="0" data-fr="1" data-sp="1" data-weeks="9" data-diff="2"><td>ベトナム</td><td>MST 型式認証＋適合宣言</td><td><span class="yn y">必要</span></td><td><span class="yn p">一部</span></td><td>7〜10週</td><td><span class="badge warn">中</span></td><td>2G停止・4G非対応端末規制</td></tr>
+          <tr data-order="8" data-rep="1" data-lt="1" data-fr="0" data-sp="1" data-weeks="16" data-diff="3"><td>インドネシア</td><td>Komdigi（DJID/SDPPI）証明＋TKDN（該当時）</td><td><span class="yn y">必要</span></td><td><span class="yn y">必須</span></td><td>8〜16週＋TKDN</td><td><span class="badge bad">重い</span></td><td>TKDN・IMEI登録</td></tr>
+          <tr data-order="9" data-rep="1" data-lt="0" data-fr="1" data-sp="0" data-weeks="6" data-diff="2"><td>マレーシア</td><td>SIRIM QAS／MCMC</td><td><span class="yn y">必要</span></td><td><span class="yn p">一部（機能試験）</span></td><td>4〜8週</td><td><span class="badge warn">中</span></td><td>出荷前にIMEI/シリアル登録</td></tr>
+          <tr data-order="10" data-rep="1" data-lt="0" data-fr="1" data-sp="0" data-weeks="6" data-diff="1"><td>フィリピン</td><td>NTC 型式承認</td><td><span class="yn p">要確認</span></td><td><span class="yn n">不要</span></td><td>4〜8週</td><td><span class="badge ok">軽い</span></td><td>2026年末に3G停止</td></tr>
+          <tr data-order="11" data-rep="1" data-lt="1" data-fr="0" data-sp="1" data-weeks="18" data-diff="3"><td>インド</td><td>WPC(ETA)＋TEC(MTCTE)＋BIS(CRS)</td><td><span class="yn y">必要</span></td><td><span class="yn y">必須（TEC/BIS）</span></td><td>12〜20週</td><td><span class="badge bad">重い</span></td><td>IMEI登録義務</td></tr>
+          <tr data-order="12" data-rep="1" data-lt="0" data-fr="1" data-sp="0" data-weeks="3" data-diff="1"><td>オーストラリア（参考）</td><td>ACMA 自己宣言＋RCM</td><td><span class="yn y">必要</span></td><td><span class="yn n">不要</span></td><td>2〜4週</td><td><span class="badge ok">軽い</span></td><td>3G全停波</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="caption">期間は無線・通信認証の目安（書類完備から証明取得まで）。電源・電池・電気安全、キャリア試験、TKDNなどは含みません。フィリピンの代理人要否は資料により記述が分かれるため、絞り込みでは「必要」側に含めています。</div>
+  </div>
+
+  <div class="callout tip"><span class="title">モジュール認証はどこまで効く？</span>
+    <p>認証済みLTEモジュールを使う最大の効果は、<strong>「無線部分の試験データをモジュールメーカーから借りられる」</strong>ことです。日本・シンガポール・オーストラリアなどでは、条件付きでモジュールの認証を最終製品で活用しやすい一方、中国・マレーシア・フィリピン・タイなどでは最終製品での取得を求められることが多いとされます（国・製品分類によって扱いが変わるため要確認）。それでも、モジュールメーカーが各国で取得済みの試験レポートやデータは、最終製品の試験項目を減らす材料になります。モジュール選定時に「どの国の認証を取得済みか」「レポートを提供してもらえるか」を必ず確認しましょう（第11章も参照）。</p>
+  </div>
+
+  <h2>4. 中国向けの流れ：SRRC → CTA → CCC → 回線・データ</h2>
+  <p>中国は、アジアで最も手順が多く、しかも<strong>無線以外の論点（データ・回線）</strong>が絡む国です。順番に見ていきましょう。SRRC と進網許可は並行して進めることも多いですが、ここでは理解しやすいように1つずつ並べています。</p>
+
+  <figure class="figure" data-stepper data-interval="4500">
+    <svg viewBox="0 0 520 250" role="img" aria-label="中国向け認証と準備の流れ">
+      <defs><marker id="arr10" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--text-muted)"/></marker></defs>
+      <!-- highlight rings -->
+      <rect data-show-at="1" x="11" y="26" width="158" height="68" rx="12" fill="none" stroke="var(--accent)" stroke-width="3"/>
+      <rect data-show-at="2" x="181" y="26" width="158" height="68" rx="12" fill="none" stroke="var(--accent)" stroke-width="3"/>
+      <rect data-show-at="3" x="351" y="26" width="158" height="68" rx="12" fill="none" stroke="var(--accent)" stroke-width="3"/>
+      <rect data-show-at="4" x="351" y="146" width="158" height="68" rx="12" fill="none" stroke="var(--accent)" stroke-width="3"/>
+      <rect data-show-at="5" x="181" y="146" width="158" height="68" rx="12" fill="none" stroke="var(--accent)" stroke-width="3"/>
+      <rect data-show-at="6" x="11" y="146" width="158" height="68" rx="12" fill="none" stroke="var(--accent)" stroke-width="3"/>
+      <!-- boxes -->
+      <g data-show-from="1"><rect x="15" y="30" width="150" height="60" rx="10" fill="var(--surface-2)" stroke="var(--c1)" stroke-width="2"/><text x="90" y="55" text-anchor="middle" font-size="14" font-weight="700">① 中国仕様の準備</text><text x="90" y="75" text-anchor="middle" class="t-muted" font-size="12">バンド・代理人・中文書類</text></g>
+      <g data-show-from="2"><line class="line" x1="165" y1="60" x2="183" y2="60" marker-end="url(#arr10)"/><rect x="185" y="30" width="150" height="60" rx="10" fill="var(--surface-2)" stroke="var(--c2)" stroke-width="2"/><text x="260" y="55" text-anchor="middle" font-size="14" font-weight="700">② SRRC 型式核准</text><text x="260" y="75" text-anchor="middle" class="t-muted" font-size="12">電波の出し方 → CMIIT ID</text></g>
+      <g data-show-from="3"><line class="line" x1="335" y1="60" x2="353" y2="60" marker-end="url(#arr10)"/><rect x="355" y="30" width="150" height="60" rx="10" fill="var(--surface-2)" stroke="var(--c3)" stroke-width="2"/><text x="430" y="55" text-anchor="middle" font-size="14" font-weight="700">③ CTA 進網許可</text><text x="430" y="75" text-anchor="middle" class="t-muted" font-size="12">公衆網への接続許可</text></g>
+      <g data-show-from="4"><line class="line" x1="430" y1="90" x2="430" y2="148" marker-end="url(#arr10)"/><rect x="355" y="150" width="150" height="60" rx="10" fill="var(--surface-2)" stroke="var(--c4)" stroke-width="2"/><text x="430" y="175" text-anchor="middle" font-size="14" font-weight="700">④ CCC の要否判定</text><text x="430" y="195" text-anchor="middle" class="t-muted" font-size="12">本体・アダプタ・電池</text></g>
+      <g data-show-from="5"><line class="line" x1="355" y1="180" x2="337" y2="180" marker-end="url(#arr10)"/><rect x="185" y="150" width="150" height="60" rx="10" fill="var(--surface-2)" stroke="var(--c5)" stroke-width="2"/><text x="260" y="175" text-anchor="middle" font-size="14" font-weight="700">⑤ 回線とデータ</text><text x="260" y="195" text-anchor="middle" class="t-muted" font-size="12">国内SIM・越境データ</text></g>
+      <g data-show-from="6"><line class="line" x1="185" y1="180" x2="167" y2="180" marker-end="url(#arr10)"/><rect x="15" y="150" width="150" height="60" rx="10" fill="var(--surface-2)" stroke="var(--c6)" stroke-width="2"/><text x="90" y="175" text-anchor="middle" font-size="14" font-weight="700">⑥ 表示・出荷</text><text x="90" y="195" text-anchor="middle" class="t-muted" font-size="12">ラベル・変更管理</text></g>
+      <text x="260" y="240" text-anchor="middle" class="t-muted" font-size="12">※ ②と③は並行して進めることが多い</text>
+    </svg>
+    <div class="stepper-controls-slot"></div>
+    <div class="step" data-title="中国仕様の準備"><h4>① 中国仕様の準備</h4>
+      <p>中国移動は TD-LTE（TDD方式）の B34/B38/B39/B40/B41 を大量に使っているため、<strong>日本・東南アジア向けの FDD 中心のモジュールでは中国で十分に使えない</strong>ことがあります。中国向けには中国市場用のモジュール型番（中国キャリアでの接続実績があるもの）を選ぶのが定石です。LPWA なら NB-IoT、中速なら Cat.1 bis が現地の主流です。</p>
+      <p>同時に、中国国内の代理人（認証代行会社や現地パートナー）を決め、中国語の取扱説明書・回路図・部品表・アンテナ仕様などの書類を準備します。</p></div>
+    <div class="step" data-title="SRRC"><h4>② SRRC 型式核准（無線電発射設備型式核准）</h4>
+      <p>電波を出す機器すべてに必要な、中国の無線の型式認証です。周波数・出力・スプリアスなどを、中国国内の指定試験所で測定します。モジュール単体でSRRCを取っていても、<strong>ロボット本体としての取得を求められるのが原則</strong>と考えて計画します（モジュールのデータ活用で試験を減らせる場合あり、要確認）。Wi-Fi / Bluetooth も同じ申請で扱います。</p>
+      <p>承認されると <strong>CMIIT ID</strong>（型式核准コード）が発行され、製品への表示が義務になります。試験で 6〜8週、全体で 3か月程度を見込むのが一般的です。</p></div>
+    <div class="step" data-title="CTA 進網許可"><h4>③ CTA 進網許可（NAL：電信設備進網許可）</h4>
+      <p>公衆の電気通信網に接続する端末に必要な「網につないでよい」という許可で、MIIT が所管し、CTA（通信設備の認証を担う機関）が窓口になります。無線性能・ネットワーク互換性・安全などの試験に加え、工場の品質体系の確認があります。発行後は<strong>進網許可標志</strong>（ラベル。電子ラベルも可）を表示します。</p>
+      <p>2023年の制度改革で、試験項目の簡素化や審査期間の短縮（許可審査は15営業日目標）が行われました。どの製品分類が進網許可の対象になるかは、端末の種類や組込みモジュールの扱いで変わるため、<strong>ロボットが対象かどうかは代行機関に事前確認</strong>が必要です。</p></div>
+    <div class="step" data-title="CCC 判定"><h4>④ CCC（中国強制認証）の要否判定</h4>
+      <p>CCC は安全・EMC などを確認する強制認証で、<strong>目録に載っている品目だけ</strong>が対象です。移動通信端末や一部のIT機器は目録に含まれますが、ロボット本体が対象かは製品分類次第です。見落としやすいのが付属品で、2024年8月1日からは<strong>通信端末用のACアダプタ・充電器、携帯電子機器用のリチウムイオン電池</strong>もCCC必須になりました。</p>
+      <p>CCC は試験に加えて<strong>工場審査</strong>があり、毎年の追跡審査も続きます。付属品はCCC取得済みの市販品を採用すると負担を減らせます。</p></div>
+    <div class="step" data-title="回線とデータ"><h4>⑤ 回線とデータの論点</h4>
+      <p>認証が取れても、それだけでは運用できません。中国ではIoT回線も<strong>実名登録された中国キャリアの回線</strong>が基本で、海外SIMの恒久的なローミング利用に依存する設計はリスクがあります。</p>
+      <p>また、サイバーセキュリティ法・データ安全法・個人情報保護法（PIPL）により、カメラ映像や位置情報など個人情報を含むデータを国外のサーバへ送る場合、<strong>越境移転の手続き（安全評価・標準契約・認証のいずれか）</strong>が必要になることがあります。クラウドを中国リージョンに置く、国外接続の品質を事前に評価するといった設計判断が、ロボットのソフト構成（第8章）にまで影響します。</p></div>
+    <div class="step" data-title="表示・出荷"><h4>⑥ 表示・出荷・変更管理</h4>
+      <p>CMIIT ID、進網許可標志、CCCマーク（該当時）を表示し、中国語の表示・取説をそろえて出荷します。認証後にアンテナ・モジュール・筐体など無線に関わる部分を変更すると、<strong>変更申請や再試験</strong>が必要になることがあります。量産前にハード構成を凍結してから申請するのが鉄則です（第12章参照）。</p></div>
+    <figcaption>中国向けの典型的な流れ。期間・手順は製品分類と代行機関の段取りで変わります。</figcaption>
+  </figure>
+
+  <div class="callout robot"><span class="title">うちのロボットで考えると：中国は「別SKU」前提で</span>
+    <p>中国は TDD バンド、中国向けモジュール、中国キャリア回線、中国リージョンのクラウドと、<strong>ハード・ソフト・運用のすべてが他国と分岐</strong>しがちです。最初から「中国版」を別SKUとして設計し、日本・東南アジア向けの共通SKUとは切り分けて計画するほうが、結果的に早く安く済むことが多いでしょう。</p>
+  </div>
+
+  <h2>5. 要注意国の深掘り</h2>
+  <p>中国以外で、特にスケジュールや設計に影響しやすい国をタブで取り上げます。</p>
+
+  <div data-tabs>
+    <div class="tab-list">
+      <button data-tab="kr">韓国</button>
+      <button data-tab="in">インド</button>
+      <button data-tab="id">インドネシア</button>
+      <button data-tab="vn">ベトナム</button>
+      <button data-tab="sea">東南アジア共通</button>
+    </div>
+    <div data-tab-panel="kr">
+      <h3>韓国：現地試験＋キャリア認証の二段構え</h3>
+      <p>韓国の無線認証（KC）は、国立電波研究院（RRA）の指定を受けた<strong>韓国内の試験所</strong>で試験し、韓国の申請者が電子申請する流れです。海外で取った試験レポートでの代替は原則できないため、試作機を韓国へ送る段取りが要ります。期間は試験込みで10〜14週程度を見ておくとよいでしょう。</p>
+      <p>もう一つの関門が<strong>キャリアの端末認証</strong>です。国の認証とは別に、SK Telecom・KT・LG U+ が自社網への接続試験を行い、通らないとIoT回線を開通できないことがあります。回線をどのキャリアで契約するかを早めに決め、キャリアの要求仕様（対応バンド、VoLTE要否、ソフト更新の方式など）を入手しましょう。</p>
+      <p>バンド面では B1/B3/B5/B7/B8 が中心で、日本向けモジュールの多くと重なります。一方、3G は SKT が2027年末までの終了を計画しているので、<strong>3Gフォールバックを前提にした設計は避ける</strong>のが安全です。</p>
+    </div>
+    <div data-tab-panel="in">
+      <h3>インド：3つの制度と IMEI 登録</h3>
+      <p>インドは「3本柱」で考えると整理できます。<strong>WPC（無線計画調整局）のETA</strong>は、Wi-Fi・Bluetoothのような免許不要帯の無線機器に必要な型式認証で、ポータル上の申請で比較的短期間に出ます。<strong>TEC（電気通信技術センター）のMTCTE</strong>は、通信機器の強制試験・認証制度で、対象品目が「フェーズ」ごとに追加されてきました。対象品目に該当すると、<strong>インド国内の指定試験所（CAB）での試験</strong>が必要です。<strong>BIS（インド規格局）のCRS</strong>は、ACアダプタ・リチウム電池・IT機器などの強制登録で、これも国内のBIS認定ラボでの試験が前提です。</p>
+      <p>ロボット本体がMTCTEやCRSの対象品目に当たるかは品目リストとの照合が必要ですが、<strong>付属のアダプタや電池はBIS対象になりやすい</strong>点に注意しましょう。いずれも在インドの代理人（AIR）が必要です。</p>
+      <p>さらに2025年10月に施行された電気通信サイバーセキュリティ改正規則では、<strong>IMEIを持つ機器（モジュールを内蔵した機器を含む）を製造・輸入する者は、販売前にIMEIを政府ポータルへ登録</strong>することが求められています。LTEモジュールには必ずIMEIがあるので、量産時の<strong>IMEIリスト管理</strong>を生産工程に組み込む必要があります。</p>
+      <p>バンドでは B40（2.3GHz TDD）と B3・B5・B8 が重要です。B40 に対応していないモジュールだと Jio などで十分な品質が出ないことがあります。</p>
+    </div>
+    <div data-tab-panel="id">
+      <h3>インドネシア：TKDN と現地試験</h3>
+      <p>インドネシアの無線機器証明は、通信デジタル省（Komdigi）のデジタルインフラ総局（DJID、旧SDPPIとして知られる部署）が行います。申請は<strong>インドネシアの法人</strong>が行い、<strong>国内の指定試験所での試験</strong>が必要です。証明書の有効期間は3年で、期限が切れると更新ではなく新規扱いで再試験になる点も覚えておきましょう。</p>
+      <p>最大の特徴が <strong>TKDN（Tingkat Komponen Dalam Negeri：国産化率）</strong>です。LTE/5G に対応する携帯電話・タブレット・ハンドヘルドPC・Wi-Fiモデムなどでは、2022年4月以降、国産化率35%以上を示すTKDN証明を証明申請に添付することが求められています。TKDN は現地での製造・組立や、ソフトウェア・投資による評価の枠組みがあり、2025年には工業省の新規則でTKDN認証の手続き自体も改定されました。</p>
+      <p>ロボットのような産業機器がTKDN対象の端末区分に入るかは、製品の分類（HSコードや機器区分）次第です。<strong>「対象外」と判断できれば負担は大きく減る</strong>ため、早い段階で現地の代行機関に確認する価値があります。また、携帯電話・PC・タブレット等は IMEI を CEIR に登録しないと国内網で使えない制度もあるため、あわせて確認しましょう。</p>
+    </div>
+    <div data-tab-panel="vn">
+      <h3>ベトナム：省庁再編と2G停止</h3>
+      <p>ベトナムでは2025年3月に情報通信省（MIC）と科学技術省が統合され、通信機器の型式認証は<strong>科学技術省（MST）</strong>の所管になりました。管理対象品目のルールも通達 29/2025/TT-BKHCN（2025年12月31日施行）で更新されています。古い資料で「MIC認証」と書かれていても、現在の窓口は MST である点に注意しましょう。</p>
+      <p>申請者はベトナム法人で、APEC TEL MRA で認められた海外試験所のレポートを使えば現地試験を省けます。期間は7〜10週程度が目安です。</p>
+      <p>通信インフラ面では、<strong>2026年9月15日に2Gが全国で停止</strong>しました。4G非対応の端末には流通規制がかけられてきた経緯もあり、ベトナム向けは <strong>4G（LTE）対応が大前提</strong>です。</p>
+    </div>
+    <div data-tab-panel="sea">
+      <h3>東南アジア共通：名義人と現地語</h3>
+      <p>シンガポール・タイ・マレーシア・フィリピンは、海外試験レポートを受け入れる国が多く、<strong>試験そのものは日本や海外の試験所でまとめて実施できる</strong>のが利点です。その代わり、ほとんどの国で<strong>現地に登記された名義人</strong>が必要です。</p>
+      <p>名義人を販売代理店にすると、証明書が代理店名義になり、代理店を変えたときに<strong>認証を取り直す</strong>羽目になることがあります。長期的に販売するなら、現地法人か、名義管理を専門にする認証代行会社（独立系の Local Representative）に持たせるほうが自由度が保てます。</p>
+      <p>また、2G/3G の停波が進んでいる（タイは2026年Q3、フィリピンは2026年末に3G停止）ため、LTE 単独でつながること、できれば VoLTE を使わないデータ専用設計にするか、音声が必要なら VoLTE に確実に対応していることが大切です。</p>
+    </div>
+  </div>
+
+  <h2>6. 停波状況と LPWA（LTE-M / NB-IoT）の提供状況</h2>
+  <p>「どの世代の電波がまだ使えるか」は、モジュール選定と、ロボットが<strong>何年使われ続けるか</strong>に直結します。ロボットは10年近く現場で動くことも多いので、今残っている2G/3Gを当てにせず、<strong>4G（LTE）単独で完結する設計</strong>を基本にしましょう。LPWA（省電力広域通信）の LTE-M / NB-IoT は国ごとに提供状況がまちまちで、特に中国は NB-IoT 中心、東南アジアは国とキャリアによって差が大きい点に注意します。</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>国・地域</th><th>2G</th><th>3G</th><th>LTE-M</th><th>NB-IoT</th></tr></thead>
+      <tbody>
+        <tr><td>日本</td><td><span class="badge bad">終了</span></td><td><span class="badge bad">終了</span>（2026/3 docomo が最後）</td><td><span class="badge ok">あり</span></td><td><span class="badge ok">あり</span>（一部キャリア）</td></tr>
+        <tr><td>中国</td><td><span class="badge warn">縮退中</span></td><td><span class="badge warn">縮退中</span></td><td><span class="badge warn">限定的</span></td><td><span class="badge ok">大規模</span></td></tr>
+        <tr><td>韓国</td><td><span class="badge bad">終了</span></td><td><span class="badge warn">終了予定</span>（SKT 2027年末目標）</td><td><span class="badge ok">あり</span>（SKT）</td><td><span class="badge ok">あり</span>（KT・LG U+）</td></tr>
+        <tr><td>台湾</td><td><span class="badge bad">終了</span>（2017）</td><td><span class="badge bad">終了</span>（2018）</td><td><span class="badge ok">あり</span>（中華電信）</td><td><span class="badge ok">あり</span></td></tr>
+        <tr><td>香港</td><td><span class="badge warn">終了進行中</span></td><td><span class="badge warn">終了進行中</span></td><td><span class="badge">要確認</span></td><td><span class="badge">要確認</span></td></tr>
+        <tr><td>シンガポール</td><td><span class="badge bad">終了</span>（2017）</td><td><span class="badge bad">終了</span>（2024）</td><td><span class="badge ok">あり</span></td><td><span class="badge ok">あり</span></td></tr>
+        <tr><td>タイ</td><td colspan="2"><span class="badge warn">2026年Q3までに段階的廃止</span></td><td><span class="badge ok">あり</span>（AIS）</td><td><span class="badge ok">あり</span></td></tr>
+        <tr><td>ベトナム</td><td><span class="badge bad">終了</span>（2026/9）</td><td><span class="badge ok">運用中</span></td><td><span class="badge">要確認</span></td><td><span class="badge">要確認</span></td></tr>
+        <tr><td>インドネシア</td><td><span class="badge ok">一部運用</span></td><td><span class="badge bad">終了</span>（2022〜23）</td><td><span class="badge">要確認</span></td><td><span class="badge ok">あり</span></td></tr>
+        <tr><td>マレーシア</td><td><span class="badge warn">縮小中</span></td><td><span class="badge bad">終了</span>（2021〜22）</td><td><span class="badge">要確認</span></td><td><span class="badge">要確認</span></td></tr>
+        <tr><td>フィリピン</td><td><span class="badge warn">廃止計画</span></td><td><span class="badge warn">2026年末までに停止</span></td><td><span class="badge">要確認</span></td><td><span class="badge">要確認</span></td></tr>
+        <tr><td>インド</td><td><span class="badge ok">運用中</span>（Airtel・Vi）</td><td><span class="badge bad">終了</span></td><td><span class="badge">要確認</span></td><td><span class="badge ok">あり</span></td></tr>
+        <tr><td>オーストラリア</td><td><span class="badge bad">終了</span></td><td><span class="badge bad">終了</span>（2023〜24）</td><td><span class="badge ok">あり</span></td><td><span class="badge ok">あり</span>（Telstra）</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="small muted">「あり」は少なくとも1社が商用提供していることを示します。エリアの広さや新規契約の可否はキャリアごとに異なるので、実際の契約前に確認してください。LPWA の商用状況は GSMA の Mobile IoT 一覧が参考になります。</p>
+
+  <div class="callout robot"><span class="title">うちのロボットで考えると：カテゴリ選びへの影響</span>
+    <p>ロボットの遠隔監視やログ送信、ファームウェア更新（FOTA）まで考えると、<strong>LTE-M や NB-IoT だけに頼ると国によって「つながらない」「遅すぎる」</strong>事態が起こりえます。アジア複数国で1機種を目指すなら、どの国でも使える <strong>LTE Cat.1 / Cat.1 bis</strong>（中国は Cat.1 bis が主流）あるいは Cat.4 を軸にし、LPWA は電池駆動の周辺機器など用途を限定して検討する、というのが現実的な出発点です（第5章、<a href="../tools/module-selector.html">カテゴリ選定ウィザード</a>も参照）。</p>
+  </div>
+
+  <h2>7. 輸出先プランナー：必要な認証と準備期間を概算する</h2>
+  <p>最後に、輸出先の組み合わせから「どの認証が必要で、どのくらい時間がかかりそうか」を概算してみましょう。国を選び、製品構成のオプションを選ぶと、国ごとの必要手続きと期間の目安、全体のサマリーが表示されます。期間は<strong>書類・サンプルがそろってからの目安</strong>で、試作・設計凍結までの期間は含みません。</p>
+
+  <div class="planner" id="planner">
+    <h3>輸出先を選ぶ</h3>
+    <div class="chips" id="pl-countries" role="group" aria-label="輸出先"></div>
+    <div class="btn-row">
+      <button class="btn" id="pl-all">全部選ぶ</button>
+      <button class="btn" id="pl-none">クリア</button>
+      <button class="btn" id="pl-sample">例：日本＋ASEAN主要国</button>
+    </div>
+    <div class="opts">
+      <label><input type="checkbox" id="pl-wifi" checked><span>Wi-Fi / Bluetooth も搭載している</span></label>
+      <label><input type="checkbox" id="pl-psu" checked><span>ACアダプタ（充電器）やリチウムイオン電池を同梱・内蔵している</span></label>
+      <label><input type="checkbox" id="pl-carrier"><span>キャリアの接続試験・端末認証を見込む（日本・韓国など）</span></label>
+    </div>
+    <div class="pl-summary" id="pl-summary" aria-live="polite"></div>
+    <div id="pl-list"></div>
+    <p class="small muted">並行実施の目安＝各国の最短〜最長のうち最も長い国の値。直列合計＝1国ずつ順番に進めた場合の合計。どちらも学習用の粗い概算です。</p>
+  </div>
+
+  <h3>計画づくりのチェックリスト</h3>
+  <p>プランナーで当たりを付けたら、次の項目を順につぶしていきます。チェック状態はこのブラウザに保存されます。</p>
+  <ul data-checklist="ch10-plan">
+    <li>輸出先と優先順位（最初に出す1〜2か国）を決めた</li>
+    <li>各国の主要バンドをバンド共通化チェッカーで照合し、候補モジュールの対応を確認した</li>
+    <li>候補モジュールの各国認証の取得状況と、試験レポートの提供可否をメーカーに確認した</li>
+    <li>現地代理人（名義人）の候補を国ごとに洗い出し、名義の持ち方（現地法人／代理店／独立系代行）を決めた</li>
+    <li>ACアダプタ・電池は各国の強制認証（CCC・BIS・KC安全など）取得済み品を選んだ</li>
+    <li>現地試験が必要な国向けに、試験用サンプル台数と送付・通関の段取りを計画した</li>
+    <li>ラベル・取説の現地語化と、電子ラベル（画面表示）の可否を確認した</li>
+    <li>IMEI登録が必要な国（インド・インドネシア・マレーシアなど）向けに、量産時のIMEI管理方法を決めた</li>
+    <li>中国向けはデータ越境・クラウド配置・回線契約の方針を決めた</li>
+    <li>認証取得後の設計変更ルール（何を変えたら再申請か）を社内で合意した</li>
+  </ul>
+
+  <h2>まとめ</h2>
+  <ul>
+    <li>アジア輸出の壁は「無線の型式認証」「通信網への接続」「安全・EMC・現地特有ルール」の3つ。ロボットでは電源・電池側の認証も重い。</li>
+    <li>スケジュールを決めるのは「<strong>現地の名義人が必要か</strong>」と「<strong>現地で試験し直すか</strong>」。中国・韓国・インドネシア・インドは現地試験が必要で重く、シンガポール・香港などは海外レポートで進めやすい。</li>
+    <li>中国は SRRC（無線）→ CTA 進網許可（網接続）→ CCC（該当品目・付属品）に加え、国内回線とデータ越境の論点があり、別SKUとして計画するのが現実的。</li>
+    <li>インドは WPC・TEC・BIS の3本柱と IMEI 登録、インドネシアは TKDN と現地試験、ベトナムは省庁再編と2G停止に注意。</li>
+    <li>2G/3G は多くの国で停波済み・停波間近。LTE 単独で完結する設計を基本にし、LPWA は国ごとの提供状況を確かめてから採用する。</li>
+    <li>制度は頻繁に変わる。本章は概観であり、最終判断は各国当局と認証代行機関に確認する。</li>
+  </ul>
+
+  <h2>用語</h2>
+  <dl class="terms">
+    <dt>SRRC</dt><dd>State Radio Regulation of China。中国の無線機器の型式核准（無線電発射設備型式核准）。承認されると CMIIT ID が発行される。</dd>
+    <dt>CTA / NAL</dt><dd>中国の電信設備進網許可（Network Access License）。公衆網に接続する通信機器に必要な許可。CTA はその認証業務を担う機関の略称として使われる。</dd>
+    <dt>CCC</dt><dd>China Compulsory Certification。中国強制認証。目録に載った品目（安全・EMC）が対象で、工場審査がある。</dd>
+    <dt>KC / RRA</dt><dd>韓国の適合性評価マーク（Korea Certification）と、その無線分野を担う国立電波研究院（National Radio Research Agency）。</dd>
+    <dt>NCC</dt><dd>台湾の国家通訊伝播委員会（National Communications Commission）。無線・通信機器の型式認証を所管。</dd>
+    <dt>OFCA / HKCA</dt><dd>香港の通訊事務管理局辦公室と、その技術仕様（HKCA 規格）。</dd>
+    <dt>IMDA</dt><dd>シンガポールの情報通信メディア開発庁。通信機器の登録（ESER/SER/GER）を所管。</dd>
+    <dt>NBTC</dt><dd>タイの国家放送通信委員会。無線機器の型式認証を所管。</dd>
+    <dt>MST</dt><dd>ベトナム科学技術省。2025年に旧情報通信省（MIC）を統合し、通信機器の認証を所管。</dd>
+    <dt>SDPPI / DJID</dt><dd>インドネシアの機器証明を担う部署。旧 SDPPI、現在は通信デジタル省（Komdigi）のデジタルインフラ総局（DJID）。</dd>
+    <dt>TKDN</dt><dd>インドネシアの国産化率（Tingkat Komponen Dalam Negeri）。LTE/5G 端末の一部に35%以上が求められる。</dd>
+    <dt>SIRIM / MCMC</dt><dd>マレーシアの認証機関（SIRIM QAS）と規制当局（通信マルチメディア委員会）。</dd>
+    <dt>NTC</dt><dd>フィリピンの国家電気通信委員会。型式承認を所管。</dd>
+    <dt>WPC / ETA</dt><dd>インドの無線計画調整局と、その機器型式認証（Equipment Type Approval）。</dd>
+    <dt>TEC / MTCTE</dt><dd>インドの電気通信技術センターと、通信機器の強制試験・認証制度（Mandatory Testing and Certification of Telecom Equipment）。</dd>
+    <dt>BIS / CRS</dt><dd>インド規格局と、電子機器の強制登録制度（Compulsory Registration Scheme）。</dd>
+    <dt>IMEI</dt><dd>International Mobile Equipment Identity。携帯端末・モジュールごとの識別番号。インド・インドネシアなどで登録制度がある。</dd>
+    <dt>MRA</dt><dd>Mutual Recognition Agreement。相互承認協定。相手国の試験結果・認証を受け入れる取り決め。</dd>
+    <dt>ISO/IEC 17025</dt><dd>試験所・校正機関の能力に関する国際規格。多くの国が、この認定を受けたラボのレポートを受け入れる。</dd>
+    <dt>現地代理人</dt><dd>Local Representative / Nominee。現地で証明書の名義人・当局との窓口になる会社。</dd>
+    <dt>SKU</dt><dd>Stock Keeping Unit。在庫管理上の製品バリエーション。国別に仕様が分かれると SKU が増える。</dd>
+  </dl>
+
+  <h2>確認クイズ</h2>
+  <div class="quiz" data-quiz="10"></div>
+
+  <section class="sources"><h2>参考・出典</h2><ul>
+    <li><a href="https://www.tele.soumu.go.jp/j/adm/monitoring/summary/qa/giteki_mark/">総務省 電波利用ホームページ「技適マーク・技適制度」</a></li>
+    <li><a href="https://www.docomo.ne.jp/info/3g_closed/">NTTドコモ「FOMA」および「iモード」サービス終了のご案内</a></li>
+    <li><a href="https://www.appluslaboratories.com/global/en/what-we-do/service-sheet/china-radio-type-approval-(ccc,-srrc,-nal)">Applus+ Laboratories: China Mainland Radio Type Approval (CCC, SRRC, NAL)</a></li>
+    <li><a href="https://cetecomadvanced.com/en/news/china-updates-on-market-approval-requirements-for-ccc-and-miinal/">cetecom advanced: China updates CCC scope + MIIT/NAL reform 2023–2024</a></li>
+    <li><a href="https://www.china-certification.com/en/china-srrc-type-approval/">MPR China Certification: SRRC Certification for China</a></li>
+    <li><a href="https://ib-lenhardt.com/kb/rra-requirements">IB-Lenhardt: South Korea RRA Certification &amp; KC Mark Requirements</a></li>
+    <li><a href="https://www.koreajoongangdaily.com/business/sk-telecom-begins-3g-network-winddown/12834852">Korea JoongAng Daily: SK Telecom stops new 3G sign-ups ahead of 2027 network shutdown</a></li>
+    <li><a href="https://www.china-certification.com/en/ncc-certification/">MPR: NCC Certification for Taiwan</a> ／ <a href="https://micomlabs.com/taiwan-type-approval-ncc-certification/">MiCOM Labs: Taiwan Type Approval Guide</a></li>
+    <li><a href="https://www.ofca.gov.hk/en/consumer_focus/guide/general/use_of_the_2g_3g_mobile_services/index.html">OFCA: Users of 2G/3G Mobile Services to Upgrade</a> ／ <a href="https://www.info.gov.hk/gia/general/202504/28/P2025042800505.htm">香港政府: CA grants consent to CMHK to cease its 3G services</a></li>
+    <li><a href="https://www.imda.gov.sg/regulations-and-licensing-listing/equipment-registration">IMDA: Equipment Registration</a></li>
+    <li><a href="https://www.nemko.com/blog/changes-in-thailands-approval-requirements-for-telecom-equipment">Nemko: Thailand Updates Telecom Equipment Approval Requirements</a> ／ <a href="https://gma.caict.ac.cn/en/regulatory/TH">CAICT GMA: Thailand</a></li>
+    <li><a href="https://micomlabs.com/vietnam-type-approval-mic-certification/">MiCOM Labs: Vietnam Type Approval Guide for 2026</a> ／ <a href="https://c-prav.com/2026/01/04/vietnam-issues-circular-29-2025-tt-bkhcn-updated-rules-for-ict-and-telecom-equipment-management/">C-PRAV: Circular 29/2025/TT-BKHCN</a></li>
+    <li><a href="https://vietnamnet.vn/en/vietnam-to-shut-down-all-2g-networks-from-september-15-2026-2533864.html">VietNamNet: Vietnam to shut down all 2G networks from September 15, 2026</a></li>
+    <li><a href="https://gma.caict.ac.cn/en/regulatory/ID">CAICT GMA: Indonesia DJID (SDPPI)</a> ／ <a href="https://www.dimulti.id/blog/new-minimum-domestic-components-level-tkdn-requirement-for-subscriber-station-using-lte-and-or-5g/">DIMULTI: TKDN requirement for LTE/5G subscriber stations</a></li>
+    <li><a href="https://www.postel.go.id/berita-pemerintah-siap-kelola-sistem-ceir-27-5462">DJID (postel.go.id): CEIR 制度</a></li>
+    <li><a href="https://ib-lenhardt.com/type-approval/malaysia">IB-Lenhardt: Malaysia Type Approval (MCMC &amp; SIRIM QAS)</a> ／ <a href="https://www.sirim-qas.com.my/service/communication-multimedia-and-hybrid-product/">SIRIM QAS</a></li>
+    <li><a href="https://www.nanotechsol.com/post/philippines-ntc-type-approval-overview-and-market-entry-guide">NanoTech Solutions: Philippines NTC Type Approval</a> ／ <a href="http://www.baclcorp.com.cn/show.asp?para=en_2_49_7420">BACL: NTC orders 3G shutdown by 2026</a></li>
+    <li><a href="https://www.tec.gov.in/mandatory-testing-and-certification-of-telecom-equipments-mtcte">TEC: MTCTE</a> ／ <a href="https://micomlabs.com/india-type-approval-wpc-tec-certification-2025/">MiCOM Labs: India Type Approval Guide</a></li>
+    <li><a href="https://www.pib.gov.in/PressReleasePage.aspx?PRID=2190763">PIB（インド政府）: Mandatory IMEI Registration</a> ／ <a href="https://www.azbpartners.com/bank/telecommunications-telecom-cyber-security-amendment-rules-2025-notified/">AZB: Telecom Cyber Security Amendment Rules, 2025</a></li>
+    <li><a href="https://www.acma.gov.au/">ACMA（オーストラリア通信メディア庁）</a></li>
+    <li><a href="https://www.gsma.com/solutions-and-impact/technologies/internet-of-things/mobile-iot-commercial-launches/">GSMA: Mobile IoT (LTE-M &amp; NB-IoT) Commercial Launches</a></li>
+  </ul><p>確認日: 2026-09（各国の制度・停波予定は変更される可能性があります）</p></section>
+</main>
+</div>
+<script src="../assets/data/quiz/ch10.js"></script>
+<script src="../assets/app.js"></script>
+<script>
+(function () {
+  "use strict";
+  var LTE = window.LTE || {};
+  var esc = LTE.esc || function (s) { return String(s); };
+
+  /* ---------- 比較表：絞り込みと並べ替え ---------- */
+  var table = document.getElementById("cmp-table");
+  if (table) {
+    var tbody = table.tBodies[0];
+    var rows = Array.prototype.slice.call(tbody.rows);
+    var chips = document.querySelectorAll("#cmp-chips .chip");
+    var countEl = document.getElementById("cmp-count");
+    var applyFilter = function () {
+      var on = [];
+      chips.forEach(function (c) { if (c.getAttribute("aria-pressed") === "true") on.push(c.dataset.f); });
+      var shown = 0;
+      rows.forEach(function (r) {
+        var ok = on.every(function (f) { return r.dataset[f] === "1"; });
+        r.classList.toggle("is-hidden", !ok);
+        if (ok) shown++;
+      });
+      countEl.textContent = shown + " / " + rows.length + " か国・地域を表示";
+    };
+    chips.forEach(function (c) {
+      c.addEventListener("click", function () {
+        c.setAttribute("aria-pressed", c.getAttribute("aria-pressed") === "true" ? "false" : "true");
+        applyFilter();
+      });
+    });
+    var sortBtns = document.querySelectorAll("#cmp-sort .btn");
+    var sortBy = function (key) {
+      var sorted = rows.slice().sort(function (a, b) {
+        if (key === "weeks") return (+a.dataset.weeks - +b.dataset.weeks) || (+a.dataset.order - +b.dataset.order);
+        if (key === "diff") return (+b.dataset.diff - +a.dataset.diff) || (+b.dataset.weeks - +a.dataset.weeks);
+        return +a.dataset.order - +b.dataset.order;
+      });
+      sorted.forEach(function (r) { tbody.appendChild(r); });
+      sortBtns.forEach(function (b) { b.classList.toggle("primary", b.dataset.sort === key); });
+    };
+    sortBtns.forEach(function (b) { b.addEventListener("click", function () { sortBy(b.dataset.sort); }); });
+    sortBy("region");
+    applyFilter();
+  }
+
+  /* ---------- 輸出先プランナー ---------- */
+  // w: [最短週, 最長週]（目安）。when: "base"=常に, "wifi", "psu", "carrier"
+  var C = [
+    { id: "jp", name: "日本", rep: false, lt: false, items: [
+      { n: "技適（電波法）＋端末機器の技術基準適合認定", w: [2, 8], when: "base", note: "認証済みモジュールの表示で済めば短縮" },
+      { n: "キャリア相互接続性試験（IOT）", w: [4, 12], when: "carrier" },
+      { n: "PSE（電気用品安全法）対応のアダプタ採用・確認", w: [0, 4], when: "psu" } ] },
+    { id: "cn", name: "中国", rep: true, lt: true, items: [
+      { n: "SRRC 型式核准（Wi-Fi/BT含む）", w: [8, 12], when: "base" },
+      { n: "CTA 進網許可（NAL）※対象可否を要確認", w: [8, 14], when: "base" },
+      { n: "CCC（本体が目録該当なら）", w: [0, 12], when: "base", note: "該当しなければ不要" },
+      { n: "CCC：アダプタ・リチウム電池（取得済み品の採用推奨）", w: [0, 14], when: "psu" },
+      { n: "中国キャリアIoT回線・データ越境の方針決定", w: [2, 8], when: "base" } ] },
+    { id: "kr", name: "韓国", rep: true, lt: true, items: [
+      { n: "KC 適合認証（RRA、韓国内試験）", w: [10, 14], when: "base" },
+      { n: "キャリア端末認証（SKT/KT/LG U+）", w: [4, 10], when: "carrier" },
+      { n: "KC 電気安全（アダプタ・電池）", w: [4, 8], when: "psu" } ] },
+    { id: "tw", name: "台湾", rep: true, lt: true, items: [
+      { n: "NCC 型式認証（PLMN 電信終端設備）", w: [6, 10], when: "base" },
+      { n: "NCC 低功率射頻器材（Wi-Fi/BT）", w: [4, 6], when: "wifi" },
+      { n: "BSMI 検験（アダプタ・電池等）", w: [4, 8], when: "psu" } ] },
+    { id: "hk", name: "香港", rep: false, lt: false, items: [
+      { n: "OFCA / HKCA 仕様への適合・認証", w: [2, 6], when: "base" } ] },
+    { id: "sg", name: "シンガポール", rep: true, lt: false, items: [
+      { n: "IMDA 機器登録（セルラー＝SER）", w: [1, 4], when: "base" },
+      { n: "IMDA 短距離無線（ESER）", w: [1, 2], when: "wifi" },
+      { n: "安全規制品（アダプタ等）の登録", w: [2, 6], when: "psu" } ] },
+    { id: "th", name: "タイ", rep: true, lt: false, items: [
+      { n: "NBTC 型式認証", w: [3, 8], when: "base" },
+      { n: "TISI（アダプタ・電池等が対象の場合）", w: [6, 12], when: "psu" } ] },
+    { id: "vn", name: "ベトナム", rep: true, lt: false, items: [
+      { n: "MST 型式認証＋適合宣言（MRAラボ活用時）", w: [7, 10], when: "base" },
+      { n: "輸入時の適合手続き", w: [1, 3], when: "base" } ] },
+    { id: "id", name: "インドネシア", rep: true, lt: true, items: [
+      { n: "Komdigi（DJID/SDPPI）機器証明（国内試験）", w: [8, 16], when: "base" },
+      { n: "TKDN 証明（対象区分に該当する場合）", w: [8, 26], when: "base", note: "対象外なら不要。該当時は現地生産計画が必要" },
+      { n: "IMEI（CEIR）登録の要否確認・登録", w: [1, 4], when: "base" },
+      { n: "SNI（アダプタ等が対象の場合）", w: [8, 16], when: "psu" } ] },
+    { id: "my", name: "マレーシア", rep: true, lt: false, items: [
+      { n: "SIRIM QAS / MCMC 適合証明（セルラー機能試験あり）", w: [4, 8], when: "base" },
+      { n: "エネルギー委員会（ST）認可（アダプタ）", w: [4, 8], when: "psu" } ] },
+    { id: "ph", name: "フィリピン", rep: true, lt: false, items: [
+      { n: "NTC 型式承認", w: [4, 8], when: "base" },
+      { n: "製品安全認証（アダプタ等が対象の場合）", w: [6, 10], when: "psu" } ] },
+    { id: "in", name: "インド", rep: true, lt: true, items: [
+      { n: "TEC MTCTE（対象品目の場合、国内試験）", w: [10, 16], when: "base" },
+      { n: "WPC ETA（Wi-Fi/BT）", w: [2, 4], when: "wifi" },
+      { n: "BIS CRS（アダプタ・電池・対象機器、国内試験）", w: [8, 16], when: "psu" },
+      { n: "IMEI 登録（Device Setu / ICDR）", w: [1, 2], when: "base" } ] },
+    { id: "au", name: "オーストラリア（参考）", rep: true, lt: false, items: [
+      { n: "ACMA 適合宣言＋RCM 表示", w: [2, 4], when: "base" },
+      { n: "電気安全（EESS）登録（アダプタ）", w: [2, 6], when: "psu" } ] }
+  ];
+
+  var box = document.getElementById("planner");
+  if (!box) return;
+  var chipWrap = document.getElementById("pl-countries");
+  var sel = {};
+  var saved = null;
+  try { saved = LTE.store ? LTE.store.get("ch10planner", null) : null; } catch (e) { saved = null; }
+  var defaults = saved && Array.isArray(saved) ? saved : ["jp", "sg", "th"];
+  C.forEach(function (c) {
+    sel[c.id] = defaults.indexOf(c.id) >= 0;
+    var b = document.createElement("button");
+    b.className = "chip";
+    b.type = "button";
+    b.dataset.id = c.id;
+    b.textContent = c.name;
+    b.setAttribute("aria-pressed", String(sel[c.id]));
+    b.addEventListener("click", function () { sel[c.id] = !sel[c.id]; render(); });
+    chipWrap.appendChild(b);
+  });
+  var opt = function (id) { var el = document.getElementById(id); return el && el.checked; };
+  ["pl-wifi", "pl-psu", "pl-carrier"].forEach(function (id) { document.getElementById(id).addEventListener("change", render); });
+  document.getElementById("pl-all").addEventListener("click", function () { C.forEach(function (c) { sel[c.id] = true; }); render(); });
+  document.getElementById("pl-none").addEventListener("click", function () { C.forEach(function (c) { sel[c.id] = false; }); render(); });
+  document.getElementById("pl-sample").addEventListener("click", function () {
+    var s = ["jp", "sg", "th", "vn", "my", "ph", "id"];
+    C.forEach(function (c) { sel[c.id] = s.indexOf(c.id) >= 0; }); render();
+  });
+
+  function render() {
+    chipWrap.querySelectorAll(".chip").forEach(function (b) { b.setAttribute("aria-pressed", String(!!sel[b.dataset.id])); });
+    var chosen = C.filter(function (c) { return sel[c.id]; });
+    try { if (LTE.store) LTE.store.set("ch10planner", chosen.map(function (c) { return c.id; })); } catch (e) { /* 保存不可でも継続 */ }
+    var flags = { base: true, wifi: opt("pl-wifi"), psu: opt("pl-psu"), carrier: opt("pl-carrier") };
+    var list = document.getElementById("pl-list");
+    var sum = document.getElementById("pl-summary");
+    if (!chosen.length) {
+      sum.innerHTML = "";
+      list.innerHTML = '<p class="pl-empty">上のチップから輸出先を1つ以上選んでください。</p>';
+      return;
+    }
+    var results = chosen.map(function (c) {
+      var items = c.items.filter(function (it) { return flags[it.when]; });
+      // 同じ国の中の手続きは並行で進められる前提：最短＝各項目最短の最大、最長＝各項目最長の最大
+      var mn = 0, mx = 0, cnt = 0;
+      items.forEach(function (it) { mn = Math.max(mn, it.w[0]); mx = Math.max(mx, it.w[1]); cnt++; });
+      return { c: c, items: items, min: mn, max: mx, cnt: cnt };
+    });
+    var parMin = 0, parMax = 0, serMin = 0, serMax = 0, reps = 0, lts = 0, total = 0;
+    results.forEach(function (r) {
+      parMin = Math.max(parMin, r.min); parMax = Math.max(parMax, r.max);
+      serMin += r.min; serMax += r.max; total += r.cnt;
+      if (r.c.rep) reps++; if (r.c.lt) lts++;
+    });
+    var stat = function (v, label) { return '<div class="stat"><b>' + v + '</b><span>' + label + '</span></div>'; };
+    sum.innerHTML =
+      stat(chosen.length, "選んだ国・地域") +
+      stat(total, "必要（候補）な手続き数") +
+      stat(reps, "現地代理人が必要な国") +
+      stat(lts, "現地試験が必要な国") +
+      stat(parMin + "〜" + parMax + "週", "並行実施の目安") +
+      stat(serMin + "〜" + serMax + "週", "1国ずつ直列の合計");
+    var scale = Math.max(26, parMax);
+    results.sort(function (a, b) { return b.max - a.max; });
+    list.innerHTML = results.map(function (r) {
+      var badges = (r.c.rep ? '<span class="badge warn">現地代理人</span> ' : '<span class="badge ok">代理人不要</span> ') +
+        (r.c.lt ? '<span class="badge bad">現地試験</span>' : '<span class="badge ok">海外レポート可</span>');
+      var lis = r.items.map(function (it) {
+        return "<li>" + esc(it.n) + ' <span class="muted small">（' + it.w[0] + "〜" + it.w[1] + "週）" + (it.note ? "：" + esc(it.note) : "") + "</span></li>";
+      }).join("");
+      return '<div class="pl-country"><h4>' + esc(r.c.name) + " <span class=\"small muted\">目安 " + r.min + "〜" + r.max + "週</span> " + badges + "</h4>" +
+        '<div class="pl-bar" aria-hidden="true"><span class="max" style="width:' + (100 * r.max / scale) + '%"></span><span class="min" style="width:' + (100 * r.min / scale) + '%"></span></div>' +
+        '<div class="pl-scale" aria-hidden="true"><span>0週</span><span>' + scale + "週</span></div>" +
+        "<ul>" + lis + "</ul></div>";
+    }).join("");
+  }
+  render();
+})();
+</script>
+</body>
+</html>

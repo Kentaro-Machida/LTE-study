@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LTEカテゴリ選定ウィザード｜LTE Study</title>
+  <link rel="stylesheet" href="../assets/style.css">
+  <style>
+    .wz { max-width: 820px; }
+    .wz-top { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .wz-top .progress { flex: 1; min-width: 160px; }
+    .wz-top .txt { font-family: var(--mono); font-size: .85rem; color: var(--text-muted); }
+    .wz-q h2 { border: 0; margin: .6em 0 .2em; font-size: 1.25rem; }
+    .wz-q .help { color: var(--text-muted); font-size: .9rem; margin: 0 0 10px; }
+    .wz-opts { display: grid; gap: 8px; }
+    .wz-opt { text-align: left; border: 1px solid var(--border); background: var(--surface); border-radius: var(--radius-sm); padding: 10px 14px; cursor: pointer; line-height: 1.55; display: grid; grid-template-columns: 22px 1fr; gap: 8px; align-items: start; }
+    .wz-opt:hover { border-color: var(--accent); background: var(--accent-soft); }
+    .wz-opt .mk { width: 18px; height: 18px; margin-top: 3px; border: 2px solid var(--border); border-radius: 50%; }
+    .wz-opt.multi .mk { border-radius: 4px; }
+    .wz-opt[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+    .wz-opt[aria-pressed="true"] .mk { background: var(--accent); border-color: var(--accent); box-shadow: inset 0 0 0 3px var(--surface); }
+    .wz-opt b { display: block; }
+    .wz-opt small { color: var(--text-muted); }
+    .wz-nav { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+    .wz-nav .spacer { flex: 1; }
+    .res-item { border: 1px solid var(--border); background: var(--surface); border-radius: var(--radius); padding: 12px 16px; margin: 10px 0; }
+    .res-item.top { border: 2px solid var(--ok); }
+    .res-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+    .res-head .rank { font-family: var(--mono); font-weight: 700; color: var(--accent); }
+    .res-head .nm { font-weight: 700; font-size: 1.05rem; }
+    .res-head .sc { margin-left: auto; font-family: var(--mono); font-weight: 700; }
+    .res-bar { height: 12px; background: var(--surface-2); border-radius: 999px; overflow: hidden; margin: 6px 0; }
+    .res-bar > span { display: block; height: 100%; border-radius: 999px; transition: width .5s; }
+    .res-item ul { margin: .3em 0; padding-left: 1.2em; font-size: .9rem; line-height: 1.65; }
+    .res-item li.pro::marker { content: "✓ "; color: var(--ok); }
+    .res-item li.con::marker { content: "✗ "; color: var(--bad); }
+    .res-item li.note::marker { content: "！ "; color: var(--warn); }
+    .res-item details summary { cursor: pointer; font-size: .9rem; color: var(--accent); }
+    .ans-summary { display: flex; flex-wrap: wrap; gap: 6px; }
+  </style>
+</head>
+<body data-root="../" data-layout="wide">
+<div class="page">
+<main>
+  <div class="wz">
+  <header class="chapter-hero">
+    <div class="eyebrow">TOOL</div>
+    <h1>LTEカテゴリ選定ウィザード</h1>
+    <p class="lead">ロボットの用途・通信量・移動・電源・輸出先・数量などの質問に答えると、Cat-1bis / Cat-1 / Cat-4 / Cat-6以上 / LTE-M / NB-IoT / 5G RedCap / 5G eMBB を点数化して、おすすめ順と理由を表示します。</p>
+  </header>
+  <div class="callout warn"><span class="title">この結果は「当たりをつける」ためのものです</span><p>点数は単純なルールによる目安です。最終判断は、候補モジュールの評価ボードでの実網検証（<a href="../chapters/12-roadmap.html">第12章</a>）と、各国キャリアへの確認で行ってください。回答はこのブラウザに保存されます。</p></div>
+
+  <section class="card" id="wz" aria-live="polite"></section>
+
+  <h2>各選択肢のおさらい</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>方式</th><th>規格上の最大速度（下り/上り）の目安</th><th>得意なこと</th><th>苦手なこと</th></tr></thead>
+    <tbody>
+      <tr><td><b>Cat-1bis</b></td><td>約10 / 5 Mbps</td><td>アンテナ1本で小型・低コスト。テレメトリ＋軽い映像</td><td>上り映像を複数本は厳しい</td></tr>
+      <tr><td><b>Cat-1</b></td><td>約10 / 5 Mbps</td><td>実績が多く世界中のLTE網で使える</td><td>受信アンテナ2本が前提、上りはCat-1bisと同じ</td></tr>
+      <tr><td><b>Cat-4</b></td><td>約150 / 50 Mbps</td><td>HD映像の上り、遠隔操作に十分な帯域</td><td>消費電力・コストがCat-1系より高い</td></tr>
+      <tr><td><b>Cat-6以上（CA）</b></td><td>300 Mbps以上 / 50 Mbps程度〜</td><td>キャリアアグリゲーション（複数周波数の束ね）で下りが高速</td><td>ロボットの上り用途では過剰になりやすい。高価</td></tr>
+      <tr><td><b>LTE-M</b></td><td>約1 / 1 Mbps（実効は数百kbps）</td><td>省電力（PSM/eDRX）、移動中のハンドオーバー、VoLTE対応も可</td><td>映像は不可。国によって網がない</td></tr>
+      <tr><td><b>NB-IoT</b></td><td>数十〜百数十 kbps</td><td>超省電力・低コスト・電波の届きにくい場所に強い</td><td>移動中の通信・音声・低遅延が苦手</td></tr>
+      <tr><td><b>5G RedCap</b></td><td>下り100 Mbps級〜 / 上り数十 Mbps級（構成による）</td><td>5G SA網に載る中速IoT。将来性</td><td>5G SA網とRedCap対応が国・キャリアで限定的</td></tr>
+      <tr><td><b>5G eMBB</b></td><td>数百Mbps〜Gbps級</td><td>高解像度・多カメラ映像、低遅延</td><td>モジュールが高価・大電力・発熱</td></tr>
+    </tbody>
+  </table></div>
+  <p class="small muted">詳しくは <a href="../chapters/05-categories.html">第5章 LTEカテゴリとIoT向け規格</a>、部品は <a href="../chapters/06-hardware.html">第6章 ハードウェア構成</a>、国ごとの共通化は <a href="../chapters/11-commonization.html">第11章</a> と <a href="band-checker.html">バンド共通化チェッカー</a> を参照してください。</p>
+
+  <section class="sources"><h2>参考・出典</h2><ul>
+    <li><a href="https://www.gsma.com/solutions-and-impact/technologies/internet-of-things/deployment-map/">GSMA: Mobile IoT Deployment Map（LTE-M / NB-IoT の商用網）</a></li>
+    <li><a href="https://www.gsma.com/solutions-and-impact/technologies/internet-of-things/mobile-iot-commercial-launches/">GSMA: Mobile IoT Commercial Launches</a></li>
+    <li><a href="https://gsacom.com/paper/5g-redcap-september-2026-2/">GSA: 5G RedCap September 2026（43事業者・28か国地域が投資、モジュール34種など）</a></li>
+    <li><a href="https://www.telegraphic.jp/en/2025/10/1738/">TeleGraphic: 日本のRedCap商用化動向（ソフトバンクが2025年9月以降に開始）</a></li>
+    <li><a href="https://en.wikipedia.org/wiki/LTE-M">Wikipedia: LTE-M（中国・インドでは未展開とされる記述）</a></li>
+    <li><a href="https://www.3gpp.org/technologies/ue-category">3GPP: UE Category</a></li>
+  </ul><p>国別の利用可否は2026年9月時点の公開情報に基づく目安です。最新状況は必ず各キャリアに確認してください。確認日: 2026-09</p></section>
+  </div>
+</main>
+</div>
+<script src="../assets/app.js"></script>
+<script>
+(function () {
+  "use strict";
+  var L = window.LTE; if (!L) return;
+  var esc = L.esc, store = L.store;
+  var KEY = "tools.moduleSelector";
+
+  // ---- 選択肢（方式）----
+  // ul: 実効的な上り帯域の目安(Mbps), cost: 1(安)〜5(高)
+  // avail: 国・地域ごとの使いやすさ 2=広く利用可 1=一部事業者・要確認 0.5=試験/限定的 0=ほぼ無し（目安）
+  var OPTS = [
+    { id: "cat1bis", name: "LTE Cat-1bis", color: "--c1", ul: 3, cost: 2, avail: { jp: 2, cn: 2, kr: 2, tw: 2, sea: 2, in: 2 } },
+    { id: "cat1", name: "LTE Cat-1", color: "--c1", ul: 3, cost: 2.5, avail: { jp: 2, cn: 2, kr: 2, tw: 2, sea: 2, in: 2 } },
+    { id: "cat4", name: "LTE Cat-4", color: "--c2", ul: 20, cost: 3, avail: { jp: 2, cn: 2, kr: 2, tw: 2, sea: 2, in: 2 } },
+    { id: "cat6", name: "LTE Cat-6以上（CA）", color: "--c2", ul: 30, cost: 4, avail: { jp: 2, cn: 2, kr: 2, tw: 2, sea: 2, in: 2 } },
+    { id: "ltem", name: "LTE-M（Cat-M1）", color: "--c3", ul: 0.3, cost: 1.5, avail: { jp: 2, cn: 0, kr: 2, tw: 2, sea: 1, in: 0 } },
+    { id: "nbiot", name: "NB-IoT", color: "--c3", ul: 0.03, cost: 1, avail: { jp: 1, cn: 2, kr: 2, tw: 2, sea: 1, in: 1 } },
+    { id: "redcap", name: "5G RedCap", color: "--c4", ul: 30, cost: 3.5, avail: { jp: 1, cn: 2, kr: 0.5, tw: 0.5, sea: 0.5, in: 0.5 } },
+    { id: "embb", name: "5G eMBB（通常の5G）", color: "--c4", ul: 60, cost: 5, avail: { jp: 2, cn: 2, kr: 2, tw: 2, sea: 1, in: 2 } }
+  ];
+  var CN = { jp: "日本", cn: "中国", kr: "韓国", tw: "台湾", sea: "東南アジア", in: "インド" };
+
+  // ---- 質問 ----
+  var QS = [
+    { id: "use", title: "ロボットは何のためにLTEを使いますか？", help: "遠隔操作の映像を送るかどうかで、必要な上り（ロボット→クラウド）の帯域が1000倍近く変わります。",
+      opts: [
+        { v: "video", t: "遠隔操作・監視の映像を送る", s: "カメラ映像をリアルタイムでオペレーターに送る" },
+        { v: "tele", t: "テレメトリ（状態データ）だけ", s: "位置・バッテリー・エラー・稼働ログなど" },
+        { v: "both", t: "両方（普段はテレメトリ、必要時に映像）", s: "異常時だけ映像をつなぐ、など" }
+      ] },
+    { id: "ul", title: "カメラ映像の条件は？（必要な上り帯域）", help: "目安：SD画質1本で0.5〜1Mbps、HD（720p）1本で2〜3Mbps、フルHDや複数カメラで5〜10Mbps。",
+      when: function (a) { return a.use !== "tele"; },
+      opts: [
+        { v: "low", t: "低画質1本（〜1Mbps）", s: "様子がわかれば十分" },
+        { v: "hd1", t: "HD 1本（2〜3Mbps）", s: "遠隔操作に使える標準的な画質" },
+        { v: "multi", t: "フルHD、または複数カメラ（5〜10Mbps）", s: "前後左右の映像を同時に" },
+        { v: "high", t: "4K・多数カメラ（10Mbps超）", s: "高精細な検査映像など" }
+      ] },
+    { id: "move", title: "ロボットの移動速度と、通信中の移動は？", help: "移動中は基地局の切替（ハンドオーバー）が必要です。NB-IoTは通信中のハンドオーバーが苦手です。",
+      opts: [
+        { v: "static", t: "ほぼ固定・移動しない", s: "据置型、設置後は動かない" },
+        { v: "slow", t: "屋内をゆっくり走行（歩く速さ程度）", s: "倉庫・工場・施設内の搬送や清掃" },
+        { v: "outdoor", t: "屋外を走行（〜30km/h程度）", s: "配送・巡回・農業など" },
+        { v: "fast", t: "高速（車載など30km/h超）", s: "車両に搭載・長距離移動" }
+      ] },
+    { id: "power", title: "電源の条件は？", help: "省電力機能（PSM/eDRX）はLTE-M・NB-IoTが最も得意です。",
+      opts: [
+        { v: "mains", t: "大容量バッテリーで毎日充電（通信の電力はあまり気にしない）", s: "一般的な移動ロボット" },
+        { v: "save", t: "バッテリー駆動で、待機中の省電力が重要", s: "充電の間隔をできるだけ延ばしたい" },
+        { v: "ultra", t: "数か月〜年単位で無充電", s: "センサー端末に近い使い方" }
+      ] },
+    { id: "cty", multi: true, title: "輸出先はどこですか？（複数選択）", help: "LTE-M・NB-IoT・5G RedCapは、国やキャリアによって網がない・限定的な場合があります。",
+      opts: [
+        { v: "jp", t: "日本" }, { v: "cn", t: "中国" }, { v: "kr", t: "韓国" }, { v: "tw", t: "台湾" }, { v: "sea", t: "東南アジア", s: "国ごとに状況が大きく異なります" }, { v: "in", t: "インド" }
+      ] },
+    { id: "vol", title: "量産数量とコストの重視度は？", help: "数量が多いほど、モジュール単価の差が効いてきます。",
+      opts: [
+        { v: "small", t: "少量（〜数百台/年）。性能・開発のしやすさ重視", s: "実証・初期ロット" },
+        { v: "mid", t: "中量（数千台/年）。性能とコストのバランス", s: "" },
+        { v: "large", t: "大量（数万台/年〜）。コスト最重視", s: "1台数百円の差も大きい" }
+      ] },
+    { id: "voice", title: "音声通話は必要ですか？", help: "LTEの音声はVoLTE（Voice over LTE）です。NB-IoTは音声に対応しません。",
+      opts: [
+        { v: "no", t: "不要（データ通信だけ）", s: "" },
+        { v: "nice", t: "あれば便利（緊急時の通話など）", s: "" },
+        { v: "must", t: "必須（ロボット越しに人と通話する）", s: "" }
+      ] },
+    { id: "fut", title: "5Gへの将来性はどのくらい重要ですか？", help: "LTE網は多くの国で長く残る見込みですが、製品寿命が長いほど将来の網の変化を考える必要があります。",
+      opts: [
+        { v: "no", t: "当面LTEで十分", s: "製品寿命5年程度" },
+        { v: "some", t: "数年内に5Gも検討したい", s: "" },
+        { v: "high", t: "重要（10年近く使う・5G前提の顧客がいる）", s: "" }
+      ] }
+  ];
+
+  var ULNEED = { none: 0.01, low: 1, hd1: 3, multi: 8, high: 20 };
+  var ULTXT = { none: "テレメトリのみ（〜数十kbps）", low: "〜1Mbps", hd1: "2〜3Mbps", multi: "5〜10Mbps", high: "10Mbps超" };
+
+  var saved = store.get(KEY, {}) || {};
+  var st = { a: saved.a || {}, i: saved.i || 0, done: !!saved.done };
+  function save() { store.set(KEY, st); }
+  var active = function () { return QS.filter(function (q) { return !q.when || q.when(st.a); }); };
+  var box = document.getElementById("wz");
+
+  // ---- 採点 ----
+  function score() {
+    var a = st.a;
+    var need = a.use === "tele" ? ULNEED.none : ULNEED[a.ul || "hd1"];
+    var ctys = a.cty && a.cty.length ? a.cty : ["jp"];
+    return OPTS.map(function (o) {
+      var s = 60, pro = [], con = [], note = [];
+      var add = function (d, txt, kind) { s += d; if (txt) (kind === "note" ? note : d >= 0 ? pro : con).push(txt); };
+      // 上り帯域
+      var ratio = o.ul / need;
+      if (ratio < 1) add(-45, "必要な上り帯域（" + ULTXT[a.use === "tele" ? "none" : a.ul] + "）に届かない");
+      else if (ratio < 1.5) add(-15, "上り帯域の余裕が少なく、電波の弱い場所で映像が途切れやすい");
+      else if (need >= 1) add(10, "必要な上り帯域を余裕をもって満たせる");
+      else add(5, "テレメトリには十分な帯域");
+      if (o.ul >= 20 && need < 0.5) add(-10, "テレメトリだけには性能過剰（コスト・消費電力が無駄になりやすい）");
+      // 映像の遅延
+      if (a.use !== "tele") {
+        if (o.id === "nbiot") add(-30, "遅延が数秒になることもあり、遠隔操作映像には使えない");
+        if (o.id === "ltem") add(-10, "遅延・帯域とも映像向きではない");
+        if (o.id === "embb" && need >= 8) add(8, "高解像度・多カメラ映像と低遅延に強い");
+      }
+      // 移動
+      if (a.move === "outdoor" || a.move === "fast") {
+        if (o.id === "nbiot") add(-30, "通信中の基地局切替（ハンドオーバー）に基本的に対応せず、走行中の通信が途切れやすい");
+        else if (o.id === "ltem") add(a.move === "fast" ? -5 : 3, a.move === "fast" ? "ハンドオーバーには対応するが、高速移動時の性能は要確認" : "ハンドオーバーに対応し、移動しながら通信できる");
+        else add(5, "走行中のハンドオーバーに対応");
+      } else if (a.move === "slow") {
+        if (o.id === "nbiot") add(-15, "移動しながらの連続通信は苦手（再接続が必要になる）");
+        else add(2, "");
+      } else if (a.move === "static") {
+        if (o.id === "nbiot") add(5, "固定設置なら移動の弱点が問題にならない");
+      }
+      // 電源
+      var PW = { ultra: { nbiot: 25, ltem: 20, cat1bis: 6, cat1: 2, redcap: 4, cat4: -12, cat6: -18, embb: -25 },
+                 save: { nbiot: 10, ltem: 10, cat1bis: 8, cat1: 4, redcap: 4, cat4: -3, cat6: -8, embb: -12 },
+                 mains: { embb: -3, cat6: -2 } };
+      var pw = (PW[a.power] || {})[o.id] || 0;
+      if (pw) add(pw, pw > 0 ? (a.power === "ultra" ? "PSM/eDRXなどの省電力機能で長期間の電池駆動に向く" : "待機時の消費電力を抑えやすい") : (a.power === "mains" ? "消費電力・発熱が大きめ（大容量バッテリーなら許容範囲）" : "消費電力が大きく、電池駆動には不利"));
+      // 輸出先
+      var bad = [], weak = [], trial = [];
+      ctys.forEach(function (c) {
+        var v = o.avail[c];
+        if (v === 0) bad.push(CN[c]); else if (v === 0.5) trial.push(CN[c]); else if (v === 1) weak.push(CN[c]);
+      });
+      if (bad.length) add(-30 * bad.length, bad.join("・") + "では商用網がほぼ無い（または非常に限定的）");
+      if (trial.length) add(-12 * trial.length, trial.join("・") + "は試験段階・限定的（LTEへのフォールバック対応機種か要確認）");
+      if (weak.length) add(-6 * weak.length, weak.join("・") + "は一部のキャリアのみ対応。採用キャリアで使えるか要確認");
+      if (!bad.length && !trial.length && !weak.length && ctys.length > 1) add(5, "選んだ輸出先すべてで使いやすい");
+      if (ctys.indexOf("cn") >= 0 && o.id === "cat1bis") add(8, "中国ではCat-1bisモジュールの流通が多く、低コストの選択肢が豊富");
+      if (ctys.indexOf("cn") >= 0 && o.id === "nbiot") add(3, "中国はNB-IoTの網が広く整備されている");
+      // 数量・コスト
+      var cw = { small: 0, mid: 3, large: 7 }[a.vol] || 0;
+      if (cw) { var cd = Math.round((3 - o.cost) * cw); if (cd) add(cd, cd > 0 ? "モジュール単価が安く、量産コストに有利" : "モジュール単価が高く、量産コストに不利"); }
+      if (a.vol === "small" && (o.id === "cat4" || o.id === "cat1")) add(4, "実績の多い方式で、少量でも開発・調達しやすい");
+      // 音声
+      if (a.voice === "must") {
+        var V = { nbiot: [-40, "音声（VoLTE）に対応しない"], ltem: [3, "VoLTEに対応可能（キャリアの対応要確認）"], cat1bis: [-5, "VoLTE対応はモジュールによる"], cat1: [3, "VoLTE対応モジュールがある"], cat4: [5, "VoLTE対応モジュールが多い"], cat6: [5, "VoLTE対応モジュールが多い"], redcap: [-12, "音声（VoNR等）への対応は機種・キャリアで限定的"], embb: [2, "VoNR/VoLTE対応機種がある"] }[o.id];
+        add(V[0], V[1]);
+      } else if (a.voice === "nice") {
+        if (o.id === "nbiot") add(-10, "音声には対応しない");
+        if (o.id === "redcap") add(-3, "音声への対応は限定的");
+      }
+      // 5G将来性
+      if (a.fut === "high") {
+        var F = { redcap: [20, "5G SA網向けのIoT規格で、LTEからの移行先の本命"], embb: [15, "5Gネイティブで長期的に使える"], ltem: [5, "LTE-M/NB-IoTは5G時代も使い続けられる技術として位置付けられている"], nbiot: [5, "LTE-M/NB-IoTは5G時代も使い続けられる技術として位置付けられている"], cat1: [-6, "LTE網の長期維持は国・キャリア次第"], cat1bis: [-6, "LTE網の長期維持は国・キャリア次第"], cat4: [-6, "LTE網の長期維持は国・キャリア次第"], cat6: [-6, "LTE網の長期維持は国・キャリア次第"] }[o.id];
+        add(F[0], F[1]);
+      } else if (a.fut === "some") {
+        if (o.id === "redcap") add(8, "将来の5G移行に備えられる");
+        if (o.id === "embb") add(5, "将来の5G移行に備えられる");
+      }
+      // 注意書き
+      if (o.id === "redcap") note.push("RedCap（5G SA網が前提）の商用化は、中国が先行、日本はソフトバンクが2025年から開始、韓国・インドなどは試験段階とされます（2026年9月時点の公開情報）。採用前に対象キャリアの最新状況を確認してください。");
+      if (o.id === "ltem" || o.id === "nbiot") note.push("LTE-M/NB-IoTの商用網は国・キャリアごとに異なります（例：中国・インドはLTE-Mがほぼ無い）。GSMAのMobile IoT Deployment Mapで確認できます。");
+      if (o.id === "cat1bis" && need >= 3) note.push("Cat-1bisは受信アンテナが1本のため、電波の弱い場所ではCat-1より受信性能が落ちることがあります。");
+      if (o.id === "cat6") note.push("CA（キャリアアグリゲーション）の組合せは国・キャリアごとに異なり、対応バンドの組合せ確認が必要です。");
+      return { o: o, s: Math.max(0, Math.min(100, Math.round(s))), pro: pro, con: con, note: note };
+    }).sort(function (x, y) { return y.s - x.s; });
+  }
+
+  // ---- 描画 ----
+  function renderQ() {
+    var qs = active();
+    if (st.i >= qs.length) { st.done = true; save(); return renderResult(); }
+    var q = qs[st.i];
+    var val = st.a[q.id];
+    var pct = Math.round(100 * st.i / qs.length);
+    var html = '<div class="wz-top"><span class="txt">質問 ' + (st.i + 1) + " / " + qs.length + '</span><div class="progress"><span style="width:' + pct + '%"></span></div></div>' +
+      '<div class="wz-q"><h2>' + esc(q.title) + '</h2><p class="help">' + esc(q.help) + '</p><div class="wz-opts" role="group" aria-label="' + esc(q.title) + '">' +
+      q.opts.map(function (op) {
+        var on = q.multi ? (val || []).indexOf(op.v) >= 0 : val === op.v;
+        return '<button class="wz-opt' + (q.multi ? " multi" : "") + '" data-v="' + op.v + '" aria-pressed="' + on + '"><span class="mk"></span><span><b>' + esc(op.t) + "</b>" + (op.s ? "<small>" + esc(op.s) + "</small>" : "") + "</span></button>";
+      }).join("") + "</div></div>" +
+      '<div class="wz-nav"><button class="btn" id="wz-back"' + (st.i === 0 ? " disabled" : "") + '>◀ 戻る</button><span class="spacer"></span>' +
+      (Object.keys(st.a).length ? '<button class="btn" id="wz-reset">最初からやり直す</button>' : "") +
+      '<button class="btn primary" id="wz-next"' + ((q.multi ? (val && val.length) : val) ? "" : " disabled") + ">" + (st.i === qs.length - 1 ? "結果を見る ▶" : "次へ ▶") + "</button></div>";
+    box.innerHTML = html;
+    box.querySelectorAll(".wz-opt").forEach(function (b) {
+      b.addEventListener("click", function () {
+        if (q.multi) {
+          var arr = (st.a[q.id] || []).slice(), k = arr.indexOf(b.dataset.v);
+          if (k >= 0) arr.splice(k, 1); else arr.push(b.dataset.v);
+          st.a[q.id] = arr; save(); renderQ();
+        } else {
+          st.a[q.id] = b.dataset.v; st.i++; save(); renderQ(); box.scrollIntoView({ block: "nearest" });
+        }
+      });
+    });
+    var back = document.getElementById("wz-back");
+    back.addEventListener("click", function () { st.i = Math.max(0, st.i - 1); save(); renderQ(); });
+    document.getElementById("wz-next").addEventListener("click", function () { st.i++; save(); renderQ(); });
+    var rs = document.getElementById("wz-reset"); if (rs) rs.addEventListener("click", reset);
+  }
+
+  function answerChips() {
+    return active().map(function (q) {
+      var v = st.a[q.id];
+      var txt = q.multi ? (v || []).map(function (x) { return CN[x]; }).join("・") : (q.opts.filter(function (o) { return o.v === v; })[0] || {}).t;
+      return '<span class="badge">' + esc(txt || "未回答") + "</span>";
+    }).join("");
+  }
+
+  function renderResult() {
+    var r = score();
+    var top = r[0];
+    var li = function (arr, cls) { return arr.map(function (t) { return '<li class="' + cls + '">' + esc(t) + "</li>"; }).join(""); };
+    var html = '<div class="wz-top"><span class="txt">結果</span><div class="progress"><span style="width:100%"></span></div></div>' +
+      '<h2 style="border:0;margin:.6em 0 .3em">おすすめは「' + esc(top.o.name) + "」" + (r[1] && r[1].s >= top.s - 5 ? "（" + esc(r[1].o.name) + "も僅差）" : "") + "</h2>" +
+      '<p class="small muted">あなたの回答：</p><div class="ans-summary">' + answerChips() + "</div>" +
+      '<p class="small muted" style="margin-top:10px">点数は60点を基準に、回答ごとの加点・減点で計算しています（0〜100点）。各項目の「なぜこの結果か」を開くと理由が見られます。</p>';
+    r.forEach(function (x, i) {
+      html += '<div class="res-item' + (i === 0 ? " top" : "") + '"><div class="res-head"><span class="rank">#' + (i + 1) + '</span><span class="nm">' + esc(x.o.name) + "</span>" +
+        (i === 0 ? '<span class="badge ok">おすすめ</span>' : x.s < 40 ? '<span class="badge bad">不向き</span>' : "") +
+        '<span class="sc">' + x.s + ' 点</span></div><div class="res-bar"><span style="width:' + x.s + "%;background:var(" + (x.s < 40 ? "--bad" : x.o.color) + ')"></span></div>' +
+        "<details" + (i === 0 ? " open" : "") + "><summary>なぜこの結果か</summary><ul>" + li(x.pro, "pro") + li(x.con, "con") + li(x.note, "note") + "</ul></details></div>";
+    });
+    html += '<div class="callout robot"><span class="title">次にやること</span><p>上位2〜3方式の候補モジュールで、対象国のバンドに対応しているかを <a href="band-checker.html">バンド共通化チェッカー</a> で確認し、評価ボードで実網の上り速度・ピーク電流を測りましょう（<a href="../chapters/12-roadmap.html">第12章</a>）。SKUの分け方は <a href="../chapters/11-commonization.html">第11章</a>、部品構成は <a href="../chapters/06-hardware.html">第6章</a> へ。</p></div>' +
+      '<div class="wz-nav"><button class="btn" id="wz-back">◀ 最後の質問に戻る</button><span class="spacer"></span><button class="btn primary" id="wz-reset">最初からやり直す</button></div>';
+    box.innerHTML = html;
+    document.getElementById("wz-back").addEventListener("click", function () { st.done = false; st.i = active().length - 1; save(); renderQ(); });
+    document.getElementById("wz-reset").addEventListener("click", reset);
+  }
+
+  function reset() { st = { a: {}, i: 0, done: false }; save(); renderQ(); }
+
+  if (st.done) renderResult(); else renderQ();
+})();
+</script>
+</body>
+</html>

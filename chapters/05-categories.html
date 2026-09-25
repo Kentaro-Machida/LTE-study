@@ -1,0 +1,504 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LTEカテゴリとIoT向け規格｜LTE Study</title>
+  <link rel="stylesheet" href="../assets/style.css">
+  <style>
+    /* ---- 第5章ページ内スタイル（CSS変数のみ使用） ---- */
+    .calc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px 16px; }
+    .calc-grid label { display: block; font-size: .85rem; color: var(--text-muted); margin-bottom: 2px; }
+    .calc-grid select, .calc-grid input[type="number"] {
+      width: 100%; font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius-sm); padding: 6px 8px;
+    }
+    .calc-grid input[type="range"] { width: 100%; accent-color: var(--accent); }
+    .calc-check { display: flex; gap: 8px; align-items: center; font-size: .9rem; margin-top: 10px; }
+    .calc-check input { width: 18px; height: 18px; accent-color: var(--accent); }
+    .calc-total { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px; margin: 12px 0; }
+    .calc-total div { background: var(--surface-2); border-radius: var(--radius-sm); padding: 8px 12px; }
+    .calc-total b { display: block; font-size: 1.3rem; font-family: var(--mono); }
+    .calc-total span { font-size: .8rem; color: var(--text-muted); }
+    .cand { display: grid; grid-template-columns: 8.5em 1fr; gap: 4px 10px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: .9rem; }
+    .cand:last-child { border-bottom: 0; }
+    .cand .nm { font-weight: 700; }
+    .cand .bar { position: relative; height: 14px; background: var(--surface-2); border-radius: 999px; overflow: hidden; }
+    .cand .bar span { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 999px; }
+    .cand .bar i { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--text); }
+    .cand .why { grid-column: 2; font-size: .82rem; color: var(--text-muted); }
+    @media (max-width: 520px) { .cand { grid-template-columns: 1fr; } .cand .why { grid-column: 1; } }
+    .mono { font-family: var(--mono); }
+    table.spec td:first-child, table.spec th:first-child { position: sticky; left: 0; background: var(--surface); z-index: 1; }
+    table.spec th:first-child { background: var(--surface-2); }
+  </style>
+</head>
+<body data-root="../" data-chapter="05">
+<div class="page">
+<main>
+  <header class="chapter-hero">
+    <div class="eyebrow">CHAPTER 05</div>
+    <h1>LTEカテゴリとIoT向け規格</h1>
+    <p class="lead">「Cat-1」「Cat-4」「LTE-M」「NB-IoT」「5G RedCap」――LTEモジュールには“性能の等級”があります。速さ・消費電力・価格・カバレッジ・各国での使いやすさを比べ、ロボットの用途から候補を絞り込む考え方を身につけましょう。</p>
+    <div class="goals"><h2>この章のゴール</h2><ul>
+      <li>UEカテゴリ（Cat）が何を表すのかを説明できる</li>
+      <li>Cat-1 / Cat-1bis / Cat-4 / Cat-6以上 / LTE-M / NB-IoT / 5G NR / RedCap / eRedCap の違いを表で比較できる</li>
+      <li>遠隔操作の映像伝送に必要な「上り帯域」を自分で見積もれる</li>
+      <li>LTE-M・NB-IoTの提供状況がアジアの国ごとにまちまちであることを理解する</li>
+      <li>2G/3G停波の影響と、中国でCat-1bisが普及した理由を知る</li>
+    </ul></div>
+  </header>
+
+  <h2>1. UEカテゴリとは ―「端末の性能等級」</h2>
+  <p>第4章の「バンド」は<b>どの周波数でつながるか</b>を表す番号でした。これに対して<b>UEカテゴリ（UE Category、略して「Cat」）</b>は、<b>端末がどれだけの性能を持っているか</b>を表す等級です。UEはUser Equipment（ユーザー端末）の略で、スマホもロボットに載せるLTEモジュールもUEです。</p>
+  <p>カテゴリは3GPPの仕様書 TS 36.306（UEの無線アクセス能力）で定義されており、主に次のような能力の組み合わせで決まります。</p>
+  <ul>
+    <li><b>最大通信速度</b>（下り・上り）：1回の送信で扱えるデータ量（トランスポートブロックサイズ）の上限</li>
+    <li><b>帯域幅</b>：一度に扱える周波数の幅（1.4MHz、20MHz など）</li>
+    <li><b>MIMOの層数・受信アンテナ数</b>：何本のアンテナで並行受信できるか</li>
+    <li><b>変調方式</b>：64QAM・256QAMなど、1回の変調で何ビット運べるか（第1章）</li>
+    <li><b>キャリアアグリゲーション</b>への対応（第4章）</li>
+  </ul>
+  <p>たとえるなら、バンドは「走れる道路（国道何号線）」、カテゴリは「車の排気量やトラックの積載量」です。どんなに大きなトラック（Cat-6）でも、その道路（バンド）を走れなければ意味がありませんし、軽トラック（LTE-M）で足りる荷物ならその方が燃費（消費電力）も値段も安く済みます。</p>
+  <div class="callout tip"><span class="title">カテゴリの数字は“最大値”の目安</span>
+    「Cat-4＝下り最大150Mbps」はあくまで理論上の上限で、基地局の設定・電波状況・混雑で実効速度は大きく下がります。特に上りは、セル端（基地局から遠い場所や屋内の奥）では数Mbps以下になることも珍しくありません。</div>
+
+  <h3>カテゴリが生まれた順番（3GPPリリースの流れ）</h3>
+  <p>3GPPは規格を「リリース（Release、Rel-）」という版で少しずつ拡張してきました。スマホ向けの高速化と並行して、2010年代半ばからIoT（Internet of Things／モノのインターネット）向けの“遅いけれど安く・省電力で・遠くまで届く”規格が追加されています。</p>
+
+  <figure class="figure" data-stepper data-interval="3800">
+    <svg viewBox="0 0 760 210" role="img" aria-label="3GPPリリースとカテゴリの年表">
+      <line class="line" x1="30" y1="100" x2="740" y2="100"/>
+      <g data-dim-at="2,3,4,5,6,7,8"><circle cx="60" cy="100" r="10" fill="var(--c1)"/><text x="60" y="80" text-anchor="middle" font-size="13" font-weight="700">Rel-8</text><text x="60" y="130" text-anchor="middle" font-size="12">2008</text></g>
+      <g data-dim-at="1,3,4,5,6,7,8"><circle cx="150" cy="100" r="10" fill="var(--c1)"/><text x="150" y="80" text-anchor="middle" font-size="13" font-weight="700">Rel-10</text><text x="150" y="130" text-anchor="middle" font-size="12">2011</text></g>
+      <g data-dim-at="1,2,4,5,6,7,8"><circle cx="240" cy="100" r="10" fill="var(--c3)"/><text x="240" y="80" text-anchor="middle" font-size="13" font-weight="700">Rel-12</text><text x="240" y="130" text-anchor="middle" font-size="12">2014</text></g>
+      <g data-dim-at="1,2,3,5,6,7,8"><circle cx="330" cy="100" r="12" fill="var(--c3)"/><text x="330" y="80" text-anchor="middle" font-size="13" font-weight="700">Rel-13</text><text x="330" y="130" text-anchor="middle" font-size="12">2016</text></g>
+      <g data-dim-at="1,2,3,4,6,7,8"><circle cx="420" cy="100" r="10" fill="var(--c3)"/><text x="420" y="80" text-anchor="middle" font-size="13" font-weight="700">Rel-14</text><text x="420" y="130" text-anchor="middle" font-size="12">2017</text></g>
+      <g data-dim-at="1,2,3,4,5,7,8"><circle cx="510" cy="100" r="10" fill="var(--c2)"/><text x="510" y="80" text-anchor="middle" font-size="13" font-weight="700">Rel-15</text><text x="510" y="130" text-anchor="middle" font-size="12">2018</text></g>
+      <g data-dim-at="1,2,3,4,5,6,8"><circle cx="600" cy="100" r="10" fill="var(--c2)"/><text x="600" y="80" text-anchor="middle" font-size="13" font-weight="700">Rel-17</text><text x="600" y="130" text-anchor="middle" font-size="12">2022</text></g>
+      <g data-dim-at="1,2,3,4,5,6,7"><circle cx="690" cy="100" r="10" fill="var(--c2)"/><text x="690" y="80" text-anchor="middle" font-size="13" font-weight="700">Rel-18</text><text x="690" y="130" text-anchor="middle" font-size="12">2024</text></g>
+      <text x="30" y="30" font-size="12" class="t-muted">● 青＝LTE高速化　● 緑＝LTEのIoT向け　● 紫＝5G</text>
+      <text x="380" y="180" text-anchor="middle" font-size="13" class="t-muted">年は仕様凍結のおおよその時期</text>
+    </svg>
+    <div class="stepper-controls-slot"></div>
+    <div class="step" data-title="Rel-8"><h4>Rel-8：LTEの誕生（Cat-1〜5）</h4><p>最初のLTE。Cat-1（下り約10Mbps）からCat-5（下り約300Mbps）まで定義されました。当初はCat-3/Cat-4がスマホの主流。Cat-1は「LTEで一番低い等級」として、後にIoTで再評価されます。</p></div>
+    <div class="step" data-title="Rel-10"><h4>Rel-10：LTE-Advanced（Cat-6〜8）</h4><p>キャリアアグリゲーション（CA）が導入され、Cat-6（下り300Mbps）などが登場。以降、スマホ向けにCat-12, 16, 18, 20…と高速化が続きます。</p></div>
+    <div class="step" data-title="Rel-12"><h4>Rel-12：IoT向けの第一歩（Cat-0、PSM）</h4><p>低コスト端末向けのCat-0と、端末が長時間“眠れる”省電力モード<b>PSM（Power Saving Mode）</b>が導入されました。Cat-0自体は普及せず、次のLTE-Mへつながります。</p></div>
+    <div class="step" data-title="Rel-13"><h4>Rel-13：IoT規格の大集合（LTE-M / NB-IoT / Cat-1bis）</h4><p><b>LTE-M（Cat-M1）</b>、<b>NB-IoT（Cat-NB1）</b>、受信アンテナ1本でよい<b>Cat-1bis</b>がそろって登場。間欠受信を長くする<b>eDRX（extended Discontinuous Reception）</b>やカバレッジ拡張も入り、「IoTはLTEで」の時代が始まりました。</p></div>
+    <div class="step" data-title="Rel-14"><h4>Rel-14：LTE-M・NB-IoTの強化（Cat-M2 / Cat-NB2）</h4><p>速度を上げたCat-M2（最大約4Mbps級、帯域5MHz）とCat-NB2（最大約100kbps超）、NB-IoTの位置測位などが追加されました。ただしCat-M2は製品がほとんどなく、実用上はCat-M1が中心です。</p></div>
+    <div class="step" data-title="Rel-15"><h4>Rel-15：5G NR 初版</h4><p>5G NR（New Radio）が登場。LTE-MとNB-IoTは、5Gの時代にも「5GのmMTC（大量IoT）を担う技術」として継続することが決まりました。LTEの網を使いながら5Gが広がっていきます。</p></div>
+    <div class="step" data-title="Rel-17"><h4>Rel-17：5G RedCap</h4><p><b>RedCap（Reduced Capability）</b>は、5Gの機能を削って安く・省電力にした“5Gの中量級”。帯域幅20MHz・受信アンテナ1〜2本に抑え、下り最大150Mbps程度・上り50Mbps程度が目安です。LTE Cat-4クラスの置き換え候補とされています。</p></div>
+    <div class="step" data-title="Rel-18"><h4>Rel-18：eRedCap</h4><p>RedCapをさらに簡素化した<b>eRedCap（enhanced RedCap）</b>。ピーク速度を10Mbps程度に制限し、データ処理の帯域を5MHzに絞れるようにして、LTE Cat-1/Cat-1bisクラスの置き換えを狙っています。</p></div>
+  </figure>
+
+  <h2>2. カテゴリ比較表</h2>
+  <p>ロボット開発でよく検討される規格を一覧にしました。速度はいずれも<b>理論上の最大値</b>、価格は2025〜2026年時点の<b>大まかな目安</b>（数量・地域・機能で大きく変わります）です。表は横にスクロールできます。</p>
+  <div class="table-wrap"><table class="spec">
+    <thead><tr><th>規格</th><th>下り最大</th><th>上り最大</th><th>帯域幅</th><th>受信アンテナ</th><th>遅延の目安</th><th>消費電力</th><th>移動・ハンドオーバー</th><th>音声</th><th>カバレッジ拡張</th><th>モジュール価格帯の目安</th></tr></thead>
+    <tbody>
+      <tr><td><b>Cat-1</b><br><span class="small muted">Rel-8</span></td><td>約10Mbps</td><td>約5Mbps</td><td>最大20MHz</td><td>2本</td><td>数十ms</td><td>中</td><td>◎ 通常LTEと同じ</td><td>VoLTE可</td><td>なし</td><td>US$8〜15</td></tr>
+      <tr><td><b>Cat-1bis</b><br><span class="small muted">Rel-13</span></td><td>約10Mbps</td><td>約5Mbps</td><td>最大20MHz</td><td><b>1本</b></td><td>数十ms</td><td>中（PSM/eDRX対応品あり）</td><td>◎</td><td>VoLTE可（製品による）</td><td>なし（1本のぶん受信感度はCat-1よりやや不利）</td><td>US$3〜10（中国製が安価）</td></tr>
+      <tr><td><b>Cat-4</b><br><span class="small muted">Rel-8</span></td><td>150Mbps</td><td>50Mbps</td><td>20MHz</td><td>2本（2×2 MIMO）</td><td>数十ms</td><td>中〜大</td><td>◎</td><td>VoLTE可</td><td>なし</td><td>US$15〜30</td></tr>
+      <tr><td><b>Cat-6以上</b><br><span class="small muted">Rel-10〜</span></td><td>300Mbps〜1Gbps超</td><td>50〜150Mbps</td><td>CAで40MHz〜</td><td>2〜4本</td><td>数十ms</td><td>大</td><td>◎</td><td>VoLTE可</td><td>なし</td><td>US$30〜80</td></tr>
+      <tr><td><b>LTE-M</b><br><span class="small muted">Cat-M1, Rel-13</span></td><td>約1Mbps（半二重では約0.3Mbps）</td><td>約1Mbps（半二重では約0.4Mbps）</td><td>1.4MHz</td><td>1本</td><td>50〜数百ms</td><td>小（PSM/eDRX）</td><td>○ 接続中のハンドオーバー可</td><td>VoLTE可（網次第）</td><td>最大+15dB程度</td><td>US$5〜12</td></tr>
+      <tr><td><b>NB-IoT</b><br><span class="small muted">Cat-NB1/NB2, Rel-13/14</span></td><td>NB1 約26kbps／NB2 約127kbps</td><td>NB1 約60kbps／NB2 約160kbps</td><td>180kHz</td><td>1本</td><td>1〜10秒</td><td>極小</td><td>△ 接続中のハンドオーバーなし（待受中の再選択のみ）</td><td>不可</td><td>最大+20dB程度</td><td>US$3〜8</td></tr>
+      <tr><td><b>5G NR</b><br><span class="small muted">eMBB, Rel-15〜</span></td><td>1〜数Gbps</td><td>数百Mbps〜</td><td>最大100MHz（FR1）</td><td>2〜4本</td><td>10ms前後〜</td><td>大</td><td>◎</td><td>VoNR/VoLTE</td><td>なし</td><td>US$60〜150超</td></tr>
+      <tr><td><b>5G RedCap</b><br><span class="small muted">Rel-17</span></td><td>約150Mbps（1本なら約85Mbps）</td><td>約50Mbps</td><td>20MHz（FR1）</td><td>1〜2本</td><td>数十ms以下</td><td>中（eDRX等）</td><td>◎</td><td>製品・網次第</td><td>なし（アンテナ削減の損失あり）</td><td>US$20〜40（低下傾向）</td></tr>
+      <tr><td><b>5G eRedCap</b><br><span class="small muted">Rel-18</span></td><td>約10Mbps</td><td>約10Mbps</td><td>データ処理5MHz（RF20MHz）</td><td>1本</td><td>数十ms</td><td>小〜中</td><td>◎</td><td>製品・網次第</td><td>なし</td><td>製品はこれから（Cat-1bis並みを目標）</td></tr>
+    </tbody>
+  </table></div>
+  <p class="small muted">主な出典：3GPP TS 36.306 / TS 38.306、GSMA Mobile IoT資料、Ericsson・各モジュールメーカー資料。遅延・価格は代表的な製品・網での目安で、規格値ではありません。</p>
+
+  <p>表の読み方のポイントを押さえておきましょう。</p>
+  <ul>
+    <li><b>LTE-MとNB-IoTは「LPWA（Low Power Wide Area／省電力広域通信）」</b>：速度を犠牲にして、電池で何年も動く省電力性と、地下や建物の奥まで届くカバレッジ拡張（同じ信号を何度も繰り返し送って受信しやすくする技術）を手に入れた規格です。メーターやセンサー向けで、映像伝送には向きません。</li>
+    <li><b>NB-IoTは「動かない機器」向け</b>：接続中に基地局を切り替える<b>ハンドオーバー</b>に対応していないため、移動しながら通信し続ける用途には不向きです。LTE-Mはハンドオーバーに対応し、移動する機器や音声にも使えます。</li>
+    <li><b>Cat-1とCat-1bisは速度は同じ</b>：違いは受信アンテナの本数。Cat-1bisは1本で済むので、基板面積・部品コストを減らせます。その代わり受信の余裕（ダイバーシティ効果）が減り、電波の弱い場所では2本のCat-1より不利です。</li>
+    <li><b>RedCapは「5G版のCat-4」、eRedCapは「5G版のCat-1」</b>というイメージで捉えると分かりやすいでしょう。ただし、5G SA（Stand Alone：5Gコア網を使う方式）の網でしか使えない点に注意が必要です。</li>
+  </ul>
+
+  <h3>速さ・コスト・電力の“地図”</h3>
+  <figure class="figure" data-hotspots data-hs-default="cat4">
+    <div class="hint">それぞれの丸をクリック（タップ）すると、ロボット用途での向き・不向きが表示されます</div>
+    <svg viewBox="0 0 760 360" role="img" aria-label="カテゴリの速度とコスト・消費電力の位置関係">
+      <!-- axes -->
+      <line class="line" x1="70" y1="310" x2="740" y2="310"/>
+      <line class="line" x1="70" y1="310" x2="70" y2="20"/>
+      <text x="740" y="345" text-anchor="end" font-size="12" class="t-muted">下り最大速度 →（対数目盛）</text>
+      <text x="22" y="165" text-anchor="middle" font-size="12" class="t-muted" transform="rotate(-90 22 165)">コスト・消費電力 →</text>
+      <!-- ticks: x = 70 + (log10(Mbps)+2)/5.5*670 -->
+      <text x="70" y="328" text-anchor="middle" font-size="12" class="t-muted">10k</text>
+      <text x="192" y="328" text-anchor="middle" font-size="12" class="t-muted">100k</text>
+      <text x="314" y="328" text-anchor="middle" font-size="12" class="t-muted">1M</text>
+      <text x="435" y="328" text-anchor="middle" font-size="12" class="t-muted">10M</text>
+      <text x="557" y="328" text-anchor="middle" font-size="12" class="t-muted">100M</text>
+      <text x="679" y="328" text-anchor="middle" font-size="12" class="t-muted">1G</text>
+      <!-- LPWA zone -->
+      <rect x="130" y="210" width="230" height="95" rx="12" fill="var(--c3)" opacity=".08" stroke="var(--c3)" stroke-dasharray="5 4"/>
+      <text x="245" y="298" text-anchor="middle" font-size="12" class="t-muted">LPWA（省電力・広域）</text>
+      <g data-hs="nb"><circle cx="179" cy="265" r="24" fill="var(--c3)" opacity=".85"/><text x="179" y="270" text-anchor="middle" font-size="13" font-weight="700" fill="var(--surface)">NB-IoT</text></g>
+      <g data-hs="ltem"><circle cx="314" cy="238" r="26" fill="var(--c3)" opacity=".85"/><text x="314" y="243" text-anchor="middle" font-size="13" font-weight="700" fill="var(--surface)">LTE-M</text></g>
+      <g data-hs="cat1"><circle cx="435" cy="200" r="30" fill="var(--c1)" opacity=".85"/><text x="435" y="197" text-anchor="middle" font-size="13" font-weight="700" fill="var(--surface)">Cat-1</text><text x="435" y="213" text-anchor="middle" font-size="12" fill="var(--surface)">/ 1bis</text></g>
+      <g data-hs="ered"><circle cx="435" cy="130" r="26" fill="var(--c2)" opacity=".7"/><text x="435" y="127" text-anchor="middle" font-size="12" font-weight="700" fill="var(--surface)">5G</text><text x="435" y="142" text-anchor="middle" font-size="12" font-weight="700" fill="var(--surface)">eRedCap</text></g>
+      <g data-hs="cat4"><circle cx="578" cy="150" r="30" fill="var(--c1)" opacity=".85"/><text x="578" y="155" text-anchor="middle" font-size="13" font-weight="700" fill="var(--surface)">Cat-4</text></g>
+      <g data-hs="redcap"><circle cx="578" cy="80" r="28" fill="var(--c2)" opacity=".8"/><text x="578" y="77" text-anchor="middle" font-size="12" font-weight="700" fill="var(--surface)">5G</text><text x="578" y="92" text-anchor="middle" font-size="12" font-weight="700" fill="var(--surface)">RedCap</text></g>
+      <g data-hs="cat6"><circle cx="650" cy="110" r="26" fill="var(--c1)" opacity=".85"/><text x="650" y="115" text-anchor="middle" font-size="12" font-weight="700" fill="var(--surface)">Cat-6+</text></g>
+      <g data-hs="nr"><circle cx="700" cy="45" r="24" fill="var(--c2)" opacity=".85"/><text x="700" y="50" text-anchor="middle" font-size="12" font-weight="700" fill="var(--surface)">5G NR</text></g>
+    </svg>
+    <div class="hs-panel"></div>
+    <template data-hs-content="nb"><h4>NB-IoT <span class="badge warn">ロボット本体の主回線には不向き</span></h4><p>数十〜百数十kbps、遅延は秒単位、接続中のハンドオーバーなし。ガス・水道メーター、駐車場センサーなど「動かず、1日数回だけ少量を送る」機器向けです。ロボットでは、<b>充電ステーションや固定設置のセンサー</b>など周辺機器での利用が考えられます。中国では最も普及したLPWAです。</p></template>
+    <template data-hs-content="ltem"><h4>LTE-M（Cat-M1） <span class="badge accent">テレメトリ向き</span></h4><p>最大約1Mbps、ハンドオーバー対応で移動体にも使え、PSM/eDRXで省電力。<b>位置情報・稼働状態・アラームの送信</b>には十分です。映像はほぼ無理（低解像度・低fpsの静止画程度）。日本・韓国・北米・欧州の一部・東南アジアの一部で提供されますが、中国・インドでは実質使えないと考えて計画してください。</p></template>
+    <template data-hs-content="cat1"><h4>Cat-1 / Cat-1bis <span class="badge ok">世界で使いやすい中速</span></h4><p>上り最大約5Mbps。通常のLTE網（LTE-M/NB-IoT専用設定が不要）でつながるため、<b>国を問わず使いやすい</b>のが最大の利点です。テレメトリ・ファームウェア更新・低解像度の映像（480p〜720pの低fps）なら候補になります。中国で爆発的に普及し、モジュール価格も安くなりました。</p></template>
+    <template data-hs-content="ered"><h4>5G eRedCap <span class="badge">将来の候補</span></h4><p>Cat-1/1bisの5G版を狙う規格（Rel-18）。2026年時点では商用製品・対応網はこれからで、量産時期と各国の5G SA網の整備状況次第です。LTE網が縮退していく2030年代を見据えた選択肢として注目しておきましょう。</p></template>
+    <template data-hs-content="cat4"><h4>Cat-4 <span class="badge ok">遠隔操作映像の定番</span></h4><p>上り最大50Mbps・2×2 MIMO。<b>720p〜1080pの映像を1〜2本</b>送る遠隔操作・遠隔監視ロボットで最も一般的な選択です。モジュールの種類が豊富で、各国の認証・キャリア認定を取得済みの製品も多く、アジア展開で選びやすいカテゴリです。受信アンテナが2本必要なことに注意。</p></template>
+    <template data-hs-content="redcap"><h4>5G RedCap <span class="badge accent">Cat-4の後継候補</span></h4><p>Cat-4並みの速度を5Gで実現し、5Gの低遅延化・ネットワークスライシング（用途別に品質を確保する仕組み）などを活用できる可能性があります。ただし<b>5G SA網が前提</b>で、国・キャリアによって提供状況に大きな差があります。多くのRedCapモジュールはLTE（Cat-4相当など）へのフォールバックも備えるため、「LTEで確実につながり、5G SAがあればRedCap」という使い方が現実的です。</p></template>
+    <template data-hs-content="cat6"><h4>Cat-6以上（Cat-12, Cat-16, Cat-20…） <span class="badge">多カメラ・高画質向け</span></h4><p>CAで下りは数百Mbps以上ですが、ロボットで効いてくる<b>上りは50〜150Mbps程度</b>で、Cat-4からの伸びは下りほど大きくありません。高画質の多カメラ映像や大容量データのアップロードが必要な場合に検討します。価格・消費電力・発熱は大きめです。</p></template>
+    <template data-hs-content="nr"><h4>5G NR（eMBB） <span class="badge">最高性能・高コスト</span></h4><p>Gbps級の速度と低遅延。4Kの複数映像や高度な遠隔操作に向きますが、モジュール価格・消費電力・発熱・アンテナ本数（4本以上が多い）の負担が大きく、ミリ波など国ごとのバンド差も大きくなります。</p></template>
+  </figure>
+
+  <h3>カバレッジ拡張と省電力のしくみ</h3>
+  <p>LPWAの2規格には、<b>カバレッジ拡張（CE：Coverage Enhancement）</b>という仕組みがあります。同じデータを何度も繰り返し送り、受信側で足し合わせることで、弱い電波でも復元できるようにします（その分、速度は大きく落ちます）。性能は「最大結合損失（MCL：Maximum Coupling Loss、どれだけの損失まで通信できるか）」で比べます。</p>
+  <figure class="figure" data-hotspots data-hs-default="mcl-ltem">
+    <div class="hint">バーをクリック（タップ）すると解説が表示されます</div>
+    <svg viewBox="0 0 760 220" role="img" aria-label="最大結合損失の比較">
+      <!-- scale: 130dB -> x=190, 170dB -> x=730 ; 13.5px/dB -->
+      <g data-hs="mcl-lte"><text x="180" y="52" text-anchor="end" font-size="13">通常のLTE</text><rect x="190" y="36" width="189" height="24" rx="4" fill="var(--c1)" opacity=".85"/><text x="387" y="53" font-size="13" font-weight="700">約144dB</text></g>
+      <g data-hs="mcl-ltem"><text x="180" y="102" text-anchor="end" font-size="13">LTE-M</text><rect x="190" y="86" width="351" height="24" rx="4" fill="var(--c3)" opacity=".85"/><text x="549" y="103" font-size="13" font-weight="700">約156dB（+12〜15dB）</text></g>
+      <g data-hs="mcl-nb"><text x="180" y="152" text-anchor="end" font-size="13">NB-IoT</text><rect x="190" y="136" width="459" height="24" rx="4" fill="var(--c3)"/><text x="657" y="153" font-size="13" font-weight="700">約164dB（+20dB）</text></g>
+      <line class="line" x1="190" y1="26" x2="190" y2="175"/>
+      <text x="190" y="195" text-anchor="middle" font-size="12" class="t-muted">130dB</text>
+      <text x="460" y="195" text-anchor="middle" font-size="12" class="t-muted">150dB</text>
+      <text x="730" y="195" text-anchor="middle" font-size="12" class="t-muted">170dB</text>
+      <text x="730" y="214" text-anchor="end" font-size="12" class="t-muted">右ほど弱い電波でも通信できる →</text>
+    </svg>
+    <div class="hs-panel"></div>
+    <template data-hs-content="mcl-lte"><h4>通常のLTE：約144dB</h4><p>Cat-1〜Cat-4などの一般的なLTE端末が通信できる損失の目安です。屋外ではまず問題ありませんが、地下や厚いコンクリートの奥では限界に近づきます。</p></template>
+    <template data-hs-content="mcl-ltem"><h4>LTE-M：約156dB</h4><p>通常のLTEより約12〜15dB多くの損失に耐えます。10dBは電力で10倍、20dBは100倍の差です。建物の奥や地下にある機器にも届きやすくなりますが、繰り返し送信のぶん速度は数十kbps程度まで落ちることがあります。</p></template>
+    <template data-hs-content="mcl-nb"><h4>NB-IoT：約164dB</h4><p>通常のLTEより約20dB（電力で100倍）弱い電波でも通信できます。地下のマンホール内のメーターなどでも使われる理由です。その代わり、1回の通信に秒単位の時間がかかります。</p></template>
+  </figure>
+  <p>省電力の仕組みも2つ覚えておきましょう。<b>PSM（Power Saving Mode）</b>は、端末が網への登録を保ったまま深く眠り、その間は呼び出しにも応答しない代わりに消費電力を数μA級まで下げるモードです。<b>eDRX（extended Discontinuous Reception）</b>は、呼び出しを確認する間隔（通常は1.28秒など）を数十秒〜数十分に延ばす仕組みです。どちらも網側（キャリア）が対応・許可している必要があり、<b>ローミング先では使えないことも多い</b>ため、海外展開では要確認項目です。</p>
+  <div class="callout robot"><span class="title">ロボット視点：PSM/eDRXは“本体”より“周辺”で効く</span>
+    ロボット本体は、モーターやコンピュータが大量の電力を使うため、LTEモジュールの省電力モードの効果は相対的に小さくなります。一方、<b>電源OFF・保管中の盗難追跡</b>や<b>バッテリー残量の定期報告</b>、充電ステーション・ビーコンなどの周辺機器では、PSM/eDRXによる省電力が電池寿命を大きく左右します。</div>
+
+  <h2>3. 用途から選ぶ ― 必要な上り帯域を見積もる</h2>
+  <p>カテゴリ選びで最初に決めるべきは「<b>何のデータを、どれだけ、どちら向きに送るか</b>」です。ロボットの典型的な通信を整理すると次のようになります。</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>用途</th><th>主な方向</th><th>必要帯域の目安</th><th>遅延の要求</th><th>候補カテゴリ</th></tr></thead>
+    <tbody>
+      <tr><td>テレメトリ（稼働状態・センサー値・ログ）</td><td>上り</td><td>数kbps〜数百kbps</td><td>緩い（秒〜分）</td><td>LTE-M, NB-IoT, Cat-1bis</td></tr>
+      <tr><td>位置情報（GNSS）・アラーム</td><td>上り</td><td>数kbps</td><td>数秒以内</td><td>LTE-M, Cat-1bis（移動体ならNB-IoTは避ける）</td></tr>
+      <tr><td>遠隔からの指令（停止・目的地指示）</td><td>下り</td><td>数kbps</td><td>低いほど良い</td><td>LTE-M以上（NB-IoTは遅延が大きすぎる）</td></tr>
+      <tr><td>遠隔監視・遠隔操作の映像</td><td><b>上り</b></td><td>1本あたり1〜8Mbps程度</td><td>厳しい（〜数百ms）</td><td>Cat-4以上、5G RedCap</td></tr>
+      <tr><td>ファームウェア更新（FOTA）・地図更新</td><td>下り</td><td>数十MB〜数GB（量が問題）</td><td>緩い</td><td>容量が大きいならCat-1以上</td></tr>
+    </tbody>
+  </table></div>
+  <p>スマホの感覚だと「下りの速さ」に目が行きがちですが、<b>遠隔操作ロボットで一番厳しいのは上り</b>です。カメラ映像はロボットから“送る”データだからです。下の計算機で、カメラ構成から必要な上り帯域を見積もってみましょう。</p>
+
+  <figure class="figure" id="ulcalc">
+    <div class="hint">カメラの台数・解像度・fps・コーデックを変えると、必要な上り帯域と候補カテゴリがその場で更新されます</div>
+    <div data-tabs>
+      <div class="tab-list"><button data-tab="video">映像の上り帯域</button><button data-tab="fota">FOTAの所要時間</button></div>
+      <div data-tab-panel="video">
+        <div class="calc-grid">
+          <div><label for="uc-cams">カメラ台数：<b id="uc-cams-v">1</b> 台</label><input type="range" id="uc-cams" min="1" max="6" value="1"></div>
+          <div><label for="uc-res">解像度</label>
+            <select id="uc-res">
+              <option value="640x360">360p（640×360）</option>
+              <option value="640x480">480p（640×480）</option>
+              <option value="1280x720" selected>720p（1280×720）</option>
+              <option value="1920x1080">1080p（1920×1080）</option>
+              <option value="3840x2160">4K（3840×2160）</option>
+            </select></div>
+          <div><label for="uc-fps">フレームレート</label>
+            <select id="uc-fps">
+              <option value="5">5 fps</option><option value="10">10 fps</option><option value="15" selected>15 fps</option><option value="30">30 fps</option><option value="60">60 fps</option>
+            </select></div>
+          <div><label for="uc-codec">コーデック</label>
+            <select id="uc-codec">
+              <option value="mjpeg">MJPEG（圧縮弱い）</option>
+              <option value="h264" selected>H.264 / AVC</option>
+              <option value="h265">H.265 / HEVC</option>
+              <option value="av1">AV1</option>
+            </select></div>
+          <div><label for="uc-q">画質</label>
+            <select id="uc-q">
+              <option value="0.6">低（ノイズ許容・監視向け）</option>
+              <option value="1" selected>標準</option>
+              <option value="1.6">高（細部の判読が必要）</option>
+            </select></div>
+          <div><label for="uc-tel">テレメトリ・音声など（kbps）</label><input type="number" id="uc-tel" min="0" max="5000" step="10" value="100"></div>
+          <div><label for="uc-margin">安全係数：<b id="uc-margin-v">1.5</b> 倍</label><input type="range" id="uc-margin" min="1" max="3" step="0.1" value="1.5"></div>
+        </div>
+        <label class="calc-check"><input type="checkbox" id="uc-rt" checked> リアルタイムの遠隔操作に使う（低遅延が必要）</label>
+        <div class="calc-total">
+          <div><b id="uc-per">–</b><span>カメラ1台あたり（Mbps）</span></div>
+          <div><b id="uc-raw">–</b><span>合計（安全係数なし, Mbps）</span></div>
+          <div><b id="uc-need">–</b><span>必要な上り帯域（安全係数込み, Mbps）</span></div>
+        </div>
+        <div id="uc-cands" aria-live="polite"></div>
+        <p class="small muted" style="margin-bottom:0">バーの色部分＝そのカテゴリで<b>電波状況が良いとき</b>に期待できる実効上り速度の目安、黒い線＝必要帯域。セル端や混雑時は、目安の数分の一〜十分の一に落ちることがあります。</p>
+      </div>
+      <div data-tab-panel="fota">
+        <div class="calc-grid">
+          <div><label for="fo-size">更新ファイルのサイズ（MB）</label><input type="number" id="fo-size" min="0.1" max="20000" step="1" value="200"></div>
+          <div><label for="fo-n">台数（同時に更新する台数の目安）</label><input type="number" id="fo-n" min="1" max="100000" step="1" value="100"></div>
+        </div>
+        <div id="fo-out" aria-live="polite" style="margin-top:10px"></div>
+        <p class="small muted" style="margin-bottom:0">実効下り速度の目安で計算（プロトコルのオーバーヘッドや再送は含まず）。合計データ量はSIMの料金（第7章）にも直結します。差分更新（変更部分だけ送る方式）を使うとサイズを大きく減らせます（第8章）。</p>
+      </div>
+    </div>
+    <figcaption>映像ビットレートは「画素数 × fps × 1画素あたりのビット数（コーデック・画質で変わる）」による簡易推定です。実際の値はエンコーダの設定（CBR/VBR、GOP長など）や映像の動きの量で大きく変わるため、試作機で必ず実測してください。</figcaption>
+  </figure>
+
+  <div class="callout robot"><span class="title">ロボット視点：上りを節約する工夫</span>
+    <ul style="margin:4px 0; padding-left:1.2em">
+      <li><b>常時高画質で送らない</b>：通常は低解像度・低fps、オペレーターが操作するときだけ高画質に切り替える。</li>
+      <li><b>適応ビットレート</b>：電波が弱くなったら自動で画質を下げ、途切れや遅延の増大を防ぐ（WebRTCなどが備える機能）。</li>
+      <li><b>カメラの選択送信</b>：前方カメラだけ常時送信し、他は要求時のみ。</li>
+      <li><b>ロボット側で処理</b>：画像認識の結果（人を検知した、など）だけを送り、映像そのものは送らない。</li>
+      <li><b>回線の二重化</b>：キャリアの異なる2つのモジュール／SIMを使うと、片方が混雑してもつながりやすい（コストとのトレードオフ）。</li>
+    </ul></div>
+
+  <h2>4. アジアでのLTE-M / NB-IoT提供状況と2G/3G停波</h2>
+  <p>LTE-MとNB-IoTは、通常のLTE網に<b>キャリアが追加で機能を有効化</b>しないと使えません。つまり「その国にLTE網がある」ことと「LTE-M/NB-IoTが使える」ことは別問題です。どちらを整備するかはキャリアの戦略次第で、アジアでは国ごとの差が大きいのが実情です。</p>
+  <div data-tabs>
+    <div class="tab-list"><button data-tab="lpwa">LTE-M / NB-IoT</button><button data-tab="sunset">2G/3G停波</button></div>
+    <div data-tab-panel="lpwa">
+      <div class="table-wrap"><table>
+        <thead><tr><th>国・地域</th><th>LTE-M</th><th>NB-IoT</th><th>メモ</th></tr></thead>
+        <tbody>
+          <tr><td>日本</td><td><span class="badge ok">あり</span></td><td><span class="badge warn">一部</span></td><td>LTE-Mはドコモ・KDDI・ソフトバンクが全国提供。NB-IoTはドコモが2020年3月に終了し、ソフトバンク等が提供（各社の現況は要確認）</td></tr>
+          <tr><td>中国</td><td><span class="badge bad">実質なし</span></td><td><span class="badge ok">大規模</span></td><td>China Mobile・China Telecom・China Unicomの3社がNB-IoTを全国展開。LTE-Mは実用的には使えない前提で計画。中速はCat-1bisが主流</td></tr>
+          <tr><td>韓国</td><td><span class="badge ok">あり</span></td><td><span class="badge ok">あり</span></td><td>キャリアによりLTE-M中心・NB-IoT中心が異なる（SKT/KT/LG U+ごとに要確認）</td></tr>
+          <tr><td>台湾</td><td><span class="badge warn">要確認</span></td><td><span class="badge ok">あり</span></td><td>主要キャリアがNB-IoTを提供。LTE-Mはキャリア・時期により状況が異なる</td></tr>
+          <tr><td>香港</td><td><span class="badge warn">要確認</span></td><td><span class="badge ok">あり</span></td><td>GSMAの整理ではNB-IoT中心</td></tr>
+          <tr><td>シンガポール</td><td><span class="badge ok">あり</span></td><td><span class="badge ok">あり</span></td><td>SingtelがLTE-M/NB-IoT両方、M1がNB-IoTを提供</td></tr>
+          <tr><td>タイ</td><td><span class="badge ok">あり</span></td><td><span class="badge ok">あり</span></td><td>AISなどが両方を提供</td></tr>
+          <tr><td>マレーシア・インドネシア・フィリピン・ベトナム</td><td><span class="badge warn">一部・要確認</span></td><td><span class="badge ok">あり（主要キャリア）</span></td><td>NB-IoTは主要キャリアで提供例が多い。LTE-Mはキャリアにより有無・エリアが異なる</td></tr>
+          <tr><td>インド</td><td><span class="badge bad">限定的・要確認</span></td><td><span class="badge ok">あり</span></td><td>Jio・Airtel・Vodafone IdeaなどがNB-IoTを提供。LTE-Mは一般的でない</td></tr>
+        </tbody>
+      </table></div>
+      <p class="small muted">GSMA「Mobile IoT Deployment Map」（2026年4月更新）などをもとに整理。世界では2025年11月時点でLTE-M 129網・NB-IoT 140網が商用化されています。<b>キャリアの提供状況・対応バンド・ローミング可否は頻繁に変わる</b>ため、採用前に必ず現地キャリアまたはIoT回線事業者に確認してください。</p>
+      <div class="callout warn"><span class="title">LPWAのローミングは“つながらない”ことがある</span>
+        スマホの国際ローミングはほぼどこでも使えますが、LTE-M/NB-IoTのローミングは、キャリア間でLPWA専用の契約が結ばれていないと使えません。特に<b>NB-IoTのローミングは対応が限られます</b>。グローバルSIM（第7章）を使う場合も、国ごとに「LTE-M/NB-IoTが使えるか」を確認しましょう。</div>
+    </div>
+    <div data-tab-panel="sunset">
+      <p>古い2G（GSM等）・3G（W-CDMA/UMTS、CDMA2000）網は、周波数を4G/5Gに転用するため各国で停止（停波）が進んでいます。「LTEがつながらない場所では3Gにフォールバック（切り替え）すればよい」という考えは、もはや通用しません。</p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>国・地域</th><th>2G</th><th>3G</th></tr></thead>
+        <tbody>
+          <tr><td>日本</td><td>終了（2012年）</td><td><b>全社終了</b>：au 2022年3月、ソフトバンク 2024年4月（石川県は7月）、ドコモFOMA 2026年3月31日</td></tr>
+          <tr><td>韓国</td><td>終了（2021年）</td><td>SKT・KTが運用中。SKTは2026年8月に新規受付を停止し、2027年末ごろの終了を目指すと報道。KTの周波数免許は2026年に満了（要確認）</td></tr>
+          <tr><td>中国</td><td>段階的に縮小（キャリア・地域で差）</td><td>段階的に終了へ（2025年末までに完了との報道もあり要確認）。新規設計で2G/3Gに依存しないこと</td></tr>
+          <tr><td>台湾</td><td>終了（2017年7月）</td><td>終了（2018年12月）</td></tr>
+          <tr><td>シンガポール</td><td>終了（2017年4月）</td><td>終了（2024年7月31日から順次、各社）</td></tr>
+          <tr><td>マレーシア</td><td>縮小・終了へ</td><td>終了（2021年末〜2022年3月）</td></tr>
+          <tr><td>タイ</td><td colspan="2">規制当局NBTCが2026年第3四半期までの2G/3G終了を目指し、AIS・Trueに計画提出を指示</td></tr>
+          <tr><td>ベトナム</td><td>2G専用端末は2024年10月に利用停止、2G網の全面停止は2026年9月予定</td><td>2028年9月までに停止予定</td></tr>
+          <tr><td>フィリピン</td><td>段階的廃止の計画あり</td><td>規制当局NTCが2026年12月31日までの全国停止を指示</td></tr>
+          <tr><td>インドネシア</td><td>一部キャリアで終了</td><td>主要キャリアで2022〜2023年に終了</td></tr>
+          <tr><td>インド</td><td><b>現役（利用者多数）</b></td><td>Airtel 2020年、Vodafone Idea 2025年に終了。Jioは元々4G専用</td></tr>
+        </tbody>
+      </table></div>
+      <p class="small muted">各国規制当局・キャリア発表・業界報道（2026年9月確認）をもとに整理。停波日程は延期されることがあるため、最新情報を確認してください。</p>
+    </div>
+  </div>
+
+  <div class="callout danger"><span class="title">フォールバックの落とし穴</span>
+    <ul style="margin:4px 0; padding-left:1.2em">
+      <li><b>「LTE＋3G対応」モジュールの3G部分は、多くの国で役に立たなくなっています</b>。日本・台湾・シンガポールなどでは3Gは存在しません。</li>
+      <li><b>音声・SMSに注意</b>：LTEで音声通話をするにはVoLTE（Voice over LTE）が必要です。3G停波後、VoLTE非対応端末は緊急通報や音声通話ができなくなります（日本でもドコモがFOMA終了時にVoLTE設定の確認を呼びかけました）。ロボットで音声通話・SMSを使う予定があるなら、輸出先キャリアでのVoLTE対応と認定を確認しましょう。</li>
+      <li><b>2Gが残る国（インドなど）でも、将来の停波を前提に</b>。製品寿命（5〜10年）の間に停波する可能性を考え、LTE以上で完結する設計にします。</li>
+    </ul></div>
+
+  <h2>5. 中国でCat-1bisが普及した理由</h2>
+  <p>中国では、2020年ごろから<b>Cat-1bis</b>のモジュール出荷が急増し、世界のCat-1bis接続の大半（約85%とする調査もあります）を中国が占めるようになりました。その背景を整理すると、次の流れになります。</p>
+  <ol>
+    <li><b>2G/3Gからの移行需要</b>：シェアサイクル、決済端末、POS、見守り端末、エレベーター監視など、2Gで動いていた大量のIoT機器の移行先が必要になりました。政府（工業情報化部）も、NB-IoTとCat-1を組み合わせて2G/3Gの機器を移行する方針を打ち出しました。</li>
+    <li><b>NB-IoTでは足りない用途</b>：NB-IoTは低速・高遅延でハンドオーバーもなく、音声も使えません。移動する機器や、数百kbps〜数Mbpsが必要な機器には不向きでした。</li>
+    <li><b>LTE-Mがない</b>：中国のキャリアはLPWAとしてNB-IoTに注力し、LTE-Mはほとんど整備されませんでした。中速の選択肢として、既存のLTE網でそのまま使えるCat-1系が有力になりました。</li>
+    <li><b>アンテナ1本で安い</b>：Cat-1bisは受信アンテナが1本で済み、中国のチップメーカー（UNISOC、ASRなど）による安価なチップセットが登場。モジュール価格が大きく下がり、需要が一気に拡大しました。</li>
+  </ol>
+  <p>いまでは中国以外でも、2G/3G置き換え用途や「LTE-M/NB-IoTが使えない国でも通常のLTE網でつながる」利点から、Cat-1bisの採用が世界的に広がっています。</p>
+  <div class="callout robot"><span class="title">ロボット視点：Cat-1bisは“映像なし”モデルの有力候補</span>
+    テレメトリと遠隔指令、FOTAだけで映像を送らないロボット（例：自律走行の配送ロボットで、映像は非常時のみ低画質）なら、Cat-1bisは価格・国を選ばないつながりやすさの面で有力です。ただし、<b>中国向けの安価なモジュールが、ほかの国の認証やキャリア認定、必要なバンドに対応しているとは限りません</b>。第10章・第11章と合わせて検討しましょう。</div>
+
+  <h2>6. 5G RedCap / eRedCap の今後</h2>
+  <p>LTEは今後も長く使われますが、キャリアは徐々に周波数を5Gへ移していきます。製品寿命が長い産業用ロボットでは、<b>「量産開始から10年後にどの網が残っているか」</b>も考える必要があります。</p>
+  <div class="card-grid">
+    <div class="card"><h3>RedCap（Rel-17）</h3><p class="small">下り最大約150Mbps・上り約50Mbps、帯域20MHz、受信アンテナ1〜2本。LTE Cat-4クラスの置き換え候補。2024年以降、中国をはじめ各国でモジュールと対応網が立ち上がりつつあります。</p></div>
+    <div class="card"><h3>eRedCap（Rel-18）</h3><p class="small">ピーク約10Mbps、データ処理帯域5MHz。LTE Cat-1/1bisクラスの置き換え候補。2026年時点では製品化・網対応の初期段階です。</p></div>
+    <div class="card"><h3>前提条件：5G SA</h3><p class="small">RedCap/eRedCapは5Gコア網を使う<b>5G SA（Stand Alone）</b>でのみ動作します。5G NSA（LTEのコア網を使う方式）が主流の国・キャリアでは使えないため、提供状況は国ごとに大きく異なります（要確認）。</p></div>
+  </div>
+  <p>現実的な戦略は、<b>「今はLTE（Cat-4やCat-1bis）で各国に確実につながる構成を作り、次世代機でRedCapを評価する」</b>、あるいは<b>「LTEフォールバック付きのRedCapモジュールを採用し、5G SAがある国ではRedCapで、ない国ではLTEでつなぐ」</b>のどちらかでしょう。後者はモジュール単価や認証の手間が増えるため、量産規模や販売期間と比べて判断します。なお、LTE-MとNB-IoTは5G時代にも継続される技術として位置づけられており、LPWA用途ではすぐに置き換えを急ぐ必要はありません。</p>
+
+  <h2>7. ロボットのカテゴリ選定の考え方</h2>
+  <p>ここまでの内容を、選定の手順としてまとめます。</p>
+  <ul data-checklist="ch05-select">
+    <li>送るデータ（映像・テレメトリ・FOTA）と、方向（上り/下り）・量・遅延の要求を書き出した</li>
+    <li>上記の計算機で、必要な上り帯域（安全係数込み）を見積もった</li>
+    <li>輸出先の各国で、候補カテゴリが使えるか（LTE-M/NB-IoTの提供、5G SAの有無）を確認した</li>
+    <li>2G/3Gへのフォールバックに依存しない設計にした（音声・SMSを使うならVoLTE対応を確認）</li>
+    <li>受信アンテナの本数（Cat-1bis/LTE-M=1本、Cat-4=2本、など）を筐体設計チームと共有した</li>
+    <li>製品寿命と各国のLTE/5Gの将来（RedCapへの移行時期）を考慮した</li>
+    <li>候補モジュールの対応バンドと各国認証の取得状況を確認した（第4章・第9〜11章）</li>
+  </ul>
+  <div class="callout tip"><span class="title">ツールで試す</span>
+    用途に関する質問に答えると推奨カテゴリと理由を示す <a href="../tools/module-selector.html">LTEカテゴリ選定ウィザード</a> も用意しています。この章の計算機と合わせて使ってみてください。</div>
+
+  <div class="table-wrap"><table>
+    <thead><tr><th>ロボットのタイプ（例）</th><th>第一候補</th><th>次の候補</th><th>理由</th></tr></thead>
+    <tbody>
+      <tr><td>映像付き遠隔操作ロボット（カメラ1〜2台, 720p〜1080p）</td><td>Cat-4</td><td>5G RedCap（LTEフォールバック付き）／Cat-6以上</td><td>上り数Mbps〜十数Mbpsが必要。Cat-1系では不足</td></tr>
+      <tr><td>自律走行ロボット（映像は非常時のみ低画質）</td><td>Cat-1bis / Cat-1</td><td>Cat-4</td><td>国を問わずつながり、価格が安い</td></tr>
+      <tr><td>位置・状態の報告だけのロボット／周辺機器</td><td>LTE-M</td><td>Cat-1bis（LTE-Mがない国向け）、NB-IoT（固定設置のみ）</td><td>省電力・低コスト。国によりLTE-Mがない点に注意</td></tr>
+      <tr><td>多カメラ・高画質で遠隔監視（点検ロボット等）</td><td>Cat-6以上 / 5G NR</td><td>Cat-4＋映像の工夫</td><td>上り数十Mbpsが必要な場合がある</td></tr>
+    </tbody>
+  </table></div>
+
+  <h2>まとめ</h2>
+  <ul>
+    <li><b>UEカテゴリ</b>は端末の性能等級。バンド（どの周波数か）とは別の概念で、速度・帯域幅・アンテナ数などを表す。</li>
+    <li><b>Cat-4</b>は上り50Mbps級で映像付き遠隔操作の定番。<b>Cat-1/Cat-1bis</b>は上り約5Mbpsで国を問わず使いやすい中速。Cat-1bisは受信アンテナ1本で安い。</li>
+    <li><b>LTE-M</b>（約1Mbps、ハンドオーバー可）と<b>NB-IoT</b>（数十〜百数十kbps、固定機器向け）は省電力・広域のLPWA。映像には使えない。</li>
+    <li>遠隔操作ロボットは<b>上り</b>がボトルネック。カメラ台数・解像度・fps・コーデックから見積もり、安全係数を掛けて判断する。</li>
+    <li>LTE-M/NB-IoTの提供は国で大きく異なる。<b>中国はNB-IoTとCat-1bisが中心</b>でLTE-Mは実質なし。インドもNB-IoT中心。</li>
+    <li>2G/3G停波が進み、<b>フォールバック前提の設計は不可</b>。音声を使うならVoLTEを確認。</li>
+    <li><b>RedCap/eRedCap</b>は5G SAが前提の次世代候補。当面はLTEで確実につながる構成を基本に検討する。</li>
+  </ul>
+
+  <h2>用語</h2>
+  <dl class="terms">
+    <dt>UEカテゴリ</dt><dd>UE Category。端末の通信能力（最大速度・帯域・アンテナ数など）の等級。3GPP TS 36.306で定義。</dd>
+    <dt>Cat-1bis</dt><dd>受信アンテナ1本で動作できるCat-1（Rel-13）。速度はCat-1と同じ。</dd>
+    <dt>LTE-M</dt><dd>LTE for Machines。Cat-M1。帯域1.4MHzのIoT向けLTE。eMTCとも呼ばれる。</dd>
+    <dt>NB-IoT</dt><dd>Narrowband IoT。帯域180kHzの超狭帯域IoT規格。Cat-NB1/NB2。</dd>
+    <dt>LPWA</dt><dd>Low Power Wide Area。省電力で広域をカバーする通信方式の総称。</dd>
+    <dt>PSM</dt><dd>Power Saving Mode。網登録を保ったまま端末が長時間深く眠るモード。</dd>
+    <dt>eDRX</dt><dd>extended Discontinuous Reception。呼び出し確認の間隔を延ばして省電力化する仕組み。</dd>
+    <dt>MCL</dt><dd>Maximum Coupling Loss。通信可能な最大の損失。大きいほど弱い電波でも届く。</dd>
+    <dt>ハンドオーバー</dt><dd>通信を続けたまま接続先の基地局を切り替えること。</dd>
+    <dt>RedCap</dt><dd>Reduced Capability。機能を削った中量級の5G端末規格（Rel-17）。</dd>
+    <dt>eRedCap</dt><dd>enhanced RedCap。RedCapをさらに簡素化した規格（Rel-18）。ピーク約10Mbps。</dd>
+    <dt>5G SA / NSA</dt><dd>Stand Alone（5Gコア網を使う）／Non-Stand Alone（LTEのコア網を使う）。RedCapはSAが前提。</dd>
+    <dt>VoLTE</dt><dd>Voice over LTE。LTE網上での音声通話。3G停波後の音声に必須。</dd>
+    <dt>FOTA</dt><dd>Firmware Over The Air。無線でのファームウェア更新。</dd>
+  </dl>
+
+  <h2>確認クイズ</h2>
+  <div class="quiz" data-quiz="05"></div>
+
+  <section class="sources"><h2>参考・出典</h2><ul>
+    <li><a href="https://www.3gpp.org/dynareport/36306.htm">3GPP TS 36.306 E-UTRA; User Equipment (UE) radio access capabilities</a></li>
+    <li><a href="https://www.3gpp.org/dynareport/38306.htm">3GPP TS 38.306 NR; User Equipment (UE) radio access capabilities</a></li>
+    <li><a href="https://www.gsma.com/solutions-and-impact/technologies/internet-of-things/deployment-map/">GSMA: Mobile IoT Deployment Map</a></li>
+    <li><a href="https://www.gsma.com/solutions-and-impact/technologies/internet-of-things/mobile-iot-commercial-launches/">GSMA: Mobile IoT LPWA – LTE-M & NB-IoT Commercial Launches</a></li>
+    <li><a href="https://www.ericsson.com/en/blog/2024/12/redcap-eredcap">Ericsson: RedCap/eRedCap – standardizing simplified 5G IoT devices</a></li>
+    <li><a href="https://www.3gpp.org/news-events/partner-news/redcap-gsa-article01">3GPP/GSA: 5G RedCap – Unlocking Scalable IoT and FWA Innovation</a></li>
+    <li><a href="https://www.rcrwireless.com/20230109/carriers/assessing-the-lte-cat-1-bis-market-and-qualcomms-late-entry-into-it-reader-forum">RCR Wireless: Assessing the LTE Cat-1 bis market</a></li>
+    <li><a href="https://iot-analytics.com/cellular-iot-market-h1-2026-module-shipments/">IoT Analytics: Cellular IoT module shipments H1 2026</a></li>
+    <li><a href="https://monoist.itmedia.co.jp/mn/articles/2004/01/news054.html">MONOist：NTTドコモがLPWA「NB-IoT」方式の提供を終了、「Cat.1」と「LTE-M」は提供継続（2020）</a></li>
+    <li><a href="https://www.docomo.ne.jp/info/3g_closed/">NTTドコモ：「FOMA」および「iモード」サービス終了のご案内</a></li>
+    <li><a href="https://www.softbank.jp/biz/info/3g_closed/">ソフトバンク：3Gサービスの提供を終了しました（2024-07-31）</a></li>
+    <li><a href="https://xtech.nikkei.com/atcl/nxt/column/18/01977/032400007/">日経クロステック：KDDIの3Gサービス終了（2022-03）</a></li>
+    <li><a href="https://www.koreajoongangdaily.com/business/sk-telecom-begins-3g-network-winddown/12834852">Korea JoongAng Daily: SK Telecom stops new 3G sign-ups ahead of 2027 network shutdown</a></li>
+    <li><a href="https://corporate.starhub.com/about-us/newsroom/2023/jul/singapore-3G-services-to-retire-on-31-july-2024.html">StarHub: Singapore 3G services to retire on 31 July 2024</a></li>
+    <li><a href="https://www.bangkokpost.com/business/general/3077384/nbtc-seeks-ais-true-plans-to-end-2g-3g">Bangkok Post: NBTC seeks AIS, True plans to end 2G, 3G</a></li>
+    <li><a href="https://www.mobileworldlive.com/asia-pacific/vietnam-to-shut-down-3g-in-2028/">Mobile World Live: Vietnam to shut down 3G in 2028</a></li>
+    <li><a href="https://www.mobileworldlive.com/regulation/feature-what-is-slowing-3g-shutdowns-in-asia/">Mobile World Live: What is slowing 3G shutdowns in Asia?</a></li>
+    <li><a href="https://www.1ot.com/blog/a-complete-overview-of-2g-3g-sunsets">1oT: A Complete Overview of 2G & 3G Sunsets</a></li>
+  </ul><p>確認日: 2026-09</p></section>
+</main>
+</div>
+<script src="../assets/data/quiz/ch05.js"></script>
+<script src="../assets/app.js"></script>
+<script>
+(function () {
+  "use strict";
+  /* ---------- 上り帯域計算機 ---------- */
+  var $ = function (id) { return document.getElementById(id); };
+  if (!$("ulcalc")) return;
+  // 1画素あたりのビット数（30fps・標準画質での目安）
+  var BPP = { mjpeg: 1.0, h264: 0.07, h265: 0.045, av1: 0.035 };
+  // [名前, 良好時の実効上り(Mbps), セル端の目安(Mbps), 低遅延可否, 色, メモ]
+  var CATS = [
+    ["NB-IoT", 0.05, 0.002, false, "var(--c3)", "遅延が秒単位・ハンドオーバーなし。映像・遠隔操作には不適"],
+    ["LTE-M", 0.5, 0.05, "warn", "var(--c3)", "遅延50〜数百ms。テレメトリ・静止画向け"],
+    ["Cat-1 / 1bis", 3, 0.5, true, "var(--c1)", "上り最大約5Mbps。低画質映像まで"],
+    ["Cat-4", 20, 2, true, "var(--c1)", "上り最大50Mbps。映像付き遠隔操作の定番"],
+    ["Cat-6以上", 30, 2.5, true, "var(--c1)", "上り最大50〜150Mbps。上りはCat-4からの伸びが小さめ"],
+    ["5G RedCap", 30, 2.5, true, "var(--c2)", "上り最大約50Mbps。5G SA網が必要"],
+    ["5G NR", 80, 4, true, "var(--c2)", "上り数百Mbps級（帯域・網次第）。高コスト"]
+  ];
+  function fmt(v) { return v >= 100 ? v.toFixed(0) : v >= 10 ? v.toFixed(1) : v >= 1 ? v.toFixed(2) : v.toFixed(3); }
+  function calc() {
+    var cams = +$("uc-cams").value;
+    var res = $("uc-res").value.split("x");
+    var px = (+res[0]) * (+res[1]);
+    var fps = +$("uc-fps").value;
+    var codec = $("uc-codec").value;
+    var q = +$("uc-q").value;
+    var tel = Math.max(0, +$("uc-tel").value || 0) / 1000;
+    var margin = +$("uc-margin").value;
+    var rt = $("uc-rt").checked;
+    $("uc-cams-v").textContent = cams;
+    $("uc-margin-v").textContent = margin.toFixed(1);
+    // フレーム間圧縮のコーデックはfpsに比例しない（fps^0.8 で近似）。MJPEGはfpsに比例。
+    var fpsFactor = codec === "mjpeg" ? fps / 30 : Math.pow(fps / 30, 0.8);
+    var per = px * 30 * BPP[codec] * q * fpsFactor / 1e6;
+    var raw = per * cams + tel;
+    var need = raw * margin;
+    $("uc-per").textContent = fmt(per);
+    $("uc-raw").textContent = fmt(raw);
+    $("uc-need").textContent = fmt(need);
+    var logMax = Math.log10(Math.max(100, need * 2));
+    var logMin = -3;
+    var pos = function (v) { return Math.max(0, Math.min(100, (Math.log10(Math.max(v, 0.001)) - logMin) / (logMax - logMin) * 100)); };
+    var html = "";
+    CATS.forEach(function (c) {
+      var badge, why;
+      if (rt && c[3] === false) { badge = "<span class=\"badge bad\">不適</span>"; why = c[5]; }
+      else if (need > c[1]) { badge = "<span class=\"badge bad\">不足</span>"; why = "良好時でも目安 " + fmt(c[1]) + "Mbps。" + c[5]; }
+      else if (need <= c[2]) { badge = "<span class=\"badge ok\">余裕あり</span>"; why = "セル端の目安（" + fmt(c[2]) + "Mbps）でも足りる見込み。" + c[5]; }
+      else { badge = "<span class=\"badge accent\">候補</span>"; why = "電波が良い場所では足りるが、セル端（目安 " + fmt(c[2]) + "Mbps）では不足の可能性。" + c[5]; }
+      if (rt && c[3] === "warn" && need <= c[1]) { badge = "<span class=\"badge warn\">遅延に注意</span>"; }
+      html += "<div class=\"cand\"><div class=\"nm\">" + c[0] + " " + badge + "</div>" +
+        "<div class=\"bar\" aria-hidden=\"true\"><span style=\"width:" + pos(c[1]).toFixed(1) + "%;background:" + c[4] + ";opacity:.75\"></span><i style=\"left:" + pos(need).toFixed(1) + "%\"></i></div>" +
+        "<div class=\"why\">" + why + "</div></div>";
+    });
+    html += "<p class=\"small muted\" style=\"margin:6px 0 0\">バーは対数目盛（0.001〜" + fmt(Math.pow(10, logMax)) + "Mbps）。</p>";
+    $("uc-cands").innerHTML = html;
+  }
+  ["uc-cams", "uc-res", "uc-fps", "uc-codec", "uc-q", "uc-tel", "uc-margin", "uc-rt"].forEach(function (id) {
+    $(id).addEventListener("input", calc);
+    $(id).addEventListener("change", calc);
+  });
+  calc();
+
+  /* ---------- FOTA 所要時間 ---------- */
+  // [名前, 実効下り(Mbps)]
+  var DL = [["NB-IoT", 0.02], ["LTE-M", 0.3], ["Cat-1 / 1bis", 5], ["Cat-4", 30], ["5G RedCap", 50]];
+  function dur(sec) {
+    if (sec < 60) return sec.toFixed(0) + " 秒";
+    if (sec < 3600) return (sec / 60).toFixed(1) + " 分";
+    if (sec < 86400) return (sec / 3600).toFixed(1) + " 時間";
+    return (sec / 86400).toFixed(1) + " 日";
+  }
+  function fota() {
+    var mb = Math.max(0.1, +$("fo-size").value || 0);
+    var n = Math.max(1, Math.round(+$("fo-n").value || 1));
+    var rows = DL.map(function (d) {
+      var sec = mb * 8 / d[1];
+      return "<tr><td>" + d[0] + "</td><td class=\"mono\">" + d[1] + " Mbps</td><td><b>" + dur(sec) + "</b></td></tr>";
+    }).join("");
+    var total = mb * n;
+    $("fo-out").innerHTML = "<div class=\"table-wrap\" style=\"margin:0\"><table><thead><tr><th>規格</th><th>実効下りの目安</th><th>1台あたりの所要時間</th></tr></thead><tbody>" + rows + "</tbody></table></div>" +
+      "<p class=\"small\" style=\"margin:8px 0 0\">" + n + "台分の合計データ量：<b>" + (total >= 1024 ? (total / 1024).toFixed(1) + " GB" : total.toFixed(0) + " MB") + "</b>" +
+      (mb > 50 ? "　<span class=\"badge warn\">LTE-M/NB-IoTでの更新は現実的でない大きさです</span>" : "") + "</p>";
+  }
+  ["fo-size", "fo-n"].forEach(function (id) { $(id).addEventListener("input", fota); });
+  fota();
+})();
+</script>
+</body>
+</html>

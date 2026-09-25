@@ -1,0 +1,433 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>規格と認証の全体像｜LTE Study</title>
+  <link rel="stylesheet" href="../assets/style.css">
+  <style>
+    /* ---- 第9章ローカル ---- */
+    .reuse-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
+    @media (max-width: 640px) { .reuse-cols { grid-template-columns: 1fr; } }
+    .reuse-col { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 12px; background: var(--surface-2); }
+    .reuse-col h4 { margin: 0 0 8px; font-size: 1rem; display: flex; align-items: center; gap: 6px; }
+    .reuse-col.ok-col { border-top: 4px solid var(--ok); }
+    .reuse-col.final-col { border-top: 4px solid var(--warn); }
+    .reuse-col ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+    .reuse-col li { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; font-size: .9rem; line-height: 1.55; }
+    .reuse-col li b { display: block; }
+    .reuse-col li .why { color: var(--text-muted); font-size: .84rem; }
+    .reuse-col li.moved { animation: movedflash 1.2s ease; }
+    @keyframes movedflash { from { background: var(--accent-soft); border-color: var(--accent); } to { background: var(--surface); border-color: var(--border); } }
+    .label-mock { font-family: var(--mono); font-size: .85rem; border: 1px dashed var(--border); border-radius: 8px; padding: 10px 14px; background: var(--surface); line-height: 1.7; }
+  </style>
+</head>
+<body data-root="../" data-chapter="09">
+<div class="page">
+<main>
+  <header class="chapter-hero">
+    <div class="eyebrow">CHAPTER 09</div>
+    <h1>規格と認証の全体像</h1>
+    <p class="lead">3GPP、GCF、PTCRB、技適、キャリア認証、EMC、SAR……LTE製品にまつわる「規格」と「認証」は数が多く、関係が見えにくいものです。この章では誰が何を決め、何を確かめているのかを1枚の地図にまとめ、「モジュールの認証でどこまで済むか」を見極められるようにします。</p>
+    <div class="goals"><h2>この章のゴール</h2><ul>
+      <li>「仕様を作る団体」「業界の認証」「国の法規制」「キャリアの受入試験」の違いを説明できる</li>
+      <li>モジュール認証で流用できるものと、最終製品で改めて必要なものを区別できる</li>
+      <li>日本の技適（技術基準適合証明・工事設計認証）と表示のルールを理解する</li>
+      <li>認証取得の流れと、費用・期間の考え方（目安と見積の取り方）を知る</li>
+      <li>無線以外にロボットが気にすべき規制（機械安全・電池輸送・輸出管理）を把握する</li>
+    </ul></div>
+  </header>
+
+  <div class="callout warn"><span class="title">この章の情報について</span>
+    <p>認証制度は改正が多く、製品の構成によって必要な手続きが変わります。本章は全体像をつかむための解説で、実際の判断は<strong>最新の官公庁・認証機関の情報と、試験所・モジュールベンダーへの確認</strong>を前提にしてください。不確かな点は「要確認」と明記しています。アジア各国の具体的な制度は<a href="10-asia.html">第10章</a>で扱います。</p>
+  </div>
+
+  <h2>1. 「規格」と「認証」はどう違う？</h2>
+  <p>まず言葉を整理します。<strong>規格（仕様）</strong>は「こう作りなさい」というルールブック、<strong>認証</strong>は「ルールどおりに作られていることを第三者（または自分）が確かめ、証明したもの」です。自動車でたとえると、</p>
+  <ul>
+    <li><strong>3GPP</strong> ＝ 世界共通の「交通ルールと車の設計図の書き方」を決める会議。スマホもIoTモジュールも、LTEの動き方はここで決まります（第2章）。</li>
+    <li><strong>各国の電波法（日本の技適など）</strong> ＝ 国ごとの「車検」。その国の道路（電波）を走ってよいかを、法律に基づいて確認します。<strong>取らないと違法</strong>です。</li>
+    <li><strong>GCF / PTCRB</strong> ＝ 業界団体の「品質検査」。法律ではないが、多くの通信キャリアが「これを通っていない車は受け入れない」と考える目安です。</li>
+    <li><strong>キャリア認証</strong> ＝ 各キャリア独自の「乗り入れ審査」。自社のネットワークで問題なく動くかを確認します。</li>
+    <li><strong>安全・EMC・SAR・環境</strong> ＝ 無線に限らない「製品としての安全・周囲への迷惑・人体への影響・有害物質」のルールです。</li>
+  </ul>
+  <p>つまり、LTEロボットを出荷するには<strong>「国の法律（強制）」と「業界・キャリアの要求（事実上必須）」の2系統</strong>を満たす必要があり、それぞれが国ごと・キャリアごとに存在します。</p>
+
+  <h2>2. 規格団体と認証の関係図</h2>
+  <figure class="figure" data-hotspots data-hs-default="3gpp">
+    <div class="hint">箱をクリック（タップ）すると、その団体・制度の役割が表示されます。</div>
+    <svg viewBox="0 0 560 470" role="img" aria-label="規格団体と認証の関係図">
+      <defs><marker id="ar09" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="var(--text-muted)"/></marker></defs>
+      <g data-hs="3gpp"><rect x="170" y="14" width="220" height="50" rx="10" fill="var(--c2)" fill-opacity=".18" stroke="var(--c2)" stroke-width="1.5"/>
+        <text x="280" y="36" text-anchor="middle" font-size="14" font-weight="700">3GPP</text>
+        <text x="280" y="54" text-anchor="middle" font-size="12" class="t-muted">仕様・試験仕様を作る</text></g>
+      <g stroke="var(--text-muted)" stroke-width="1.5" fill="none" marker-end="url(#ar09)">
+        <path d="M230 64 L110 106"/><path d="M280 64 L280 106"/>
+        <path d="M180 131 L208 131" stroke-dasharray="4 3"/><path d="M360 131 L378 131" stroke-dasharray="4 3"/>
+      </g>
+      <text x="20" y="100" font-size="12" class="t-muted">業界・キャリア（事実上必須）</text>
+      <g data-hs="gcf"><rect x="20" y="108" width="160" height="48" rx="8" fill="var(--c3)" fill-opacity=".15" stroke="var(--c3)" stroke-width="1.5"/>
+        <text x="100" y="129" text-anchor="middle" font-size="13" font-weight="700">GCF</text>
+        <text x="100" y="147" text-anchor="middle" font-size="12" class="t-muted">欧州・アジア等</text></g>
+      <g data-hs="ptcrb"><rect x="210" y="108" width="150" height="48" rx="8" fill="var(--c3)" fill-opacity=".15" stroke="var(--c3)" stroke-width="1.5"/>
+        <text x="285" y="129" text-anchor="middle" font-size="13" font-weight="700">PTCRB</text>
+        <text x="285" y="147" text-anchor="middle" font-size="12" class="t-muted">北米</text></g>
+      <g data-hs="carrier"><rect x="380" y="108" width="160" height="48" rx="8" fill="var(--c4)" fill-opacity=".15" stroke="var(--c4)" stroke-width="1.5"/>
+        <text x="460" y="129" text-anchor="middle" font-size="13" font-weight="700">キャリア認証</text>
+        <text x="460" y="147" text-anchor="middle" font-size="12" class="t-muted">接続試験（IOT等）</text></g>
+
+      <text x="20" y="190" font-size="12" class="t-muted">国の法規制（国ごと・強制）― 無線</text>
+      <g data-hs="radio"><rect x="20" y="198" width="160" height="52" rx="8" fill="var(--c5)" fill-opacity=".15" stroke="var(--c5)" stroke-width="1.5"/>
+        <text x="100" y="220" text-anchor="middle" font-size="13" font-weight="700">電波法の型式認証</text>
+        <text x="100" y="239" text-anchor="middle" font-size="12" class="t-muted">日本は技適（MIC）</text></g>
+      <g data-hs="telecom"><rect x="200" y="198" width="160" height="52" rx="8" fill="var(--c5)" fill-opacity=".15" stroke="var(--c5)" stroke-width="1.5"/>
+        <text x="280" y="220" text-anchor="middle" font-size="13" font-weight="700">電気通信事業法</text>
+        <text x="280" y="239" text-anchor="middle" font-size="12" class="t-muted">端末機器の認定</text></g>
+      <g data-hs="sar"><rect x="380" y="198" width="160" height="52" rx="8" fill="var(--c5)" fill-opacity=".15" stroke="var(--c5)" stroke-width="1.5"/>
+        <text x="460" y="220" text-anchor="middle" font-size="13" font-weight="700">SAR・電波防護</text>
+        <text x="460" y="239" text-anchor="middle" font-size="12" class="t-muted">人体の近くで使うか</text></g>
+
+      <text x="20" y="280" font-size="12" class="t-muted">製品全般の規制（国ごと）― 無線以外</text>
+      <g data-hs="safety"><rect x="20" y="288" width="160" height="52" rx="8" fill="var(--c6)" fill-opacity=".15" stroke="var(--c6)" stroke-width="1.5"/>
+        <text x="100" y="310" text-anchor="middle" font-size="13" font-weight="700">電気安全</text>
+        <text x="100" y="329" text-anchor="middle" font-size="12" class="t-muted">IEC 62368-1 等</text></g>
+      <g data-hs="emc"><rect x="200" y="288" width="160" height="52" rx="8" fill="var(--c6)" fill-opacity=".15" stroke="var(--c6)" stroke-width="1.5"/>
+        <text x="280" y="310" text-anchor="middle" font-size="13" font-weight="700">EMC</text>
+        <text x="280" y="329" text-anchor="middle" font-size="12" class="t-muted">ノイズ放出・耐性</text></g>
+      <g data-hs="env"><rect x="380" y="288" width="160" height="52" rx="8" fill="var(--c6)" fill-opacity=".15" stroke="var(--c6)" stroke-width="1.5"/>
+        <text x="460" y="310" text-anchor="middle" font-size="13" font-weight="700">環境規制</text>
+        <text x="460" y="329" text-anchor="middle" font-size="12" class="t-muted">RoHS・REACH 等</text></g>
+
+      <g stroke="var(--text-muted)" stroke-width="1.5" fill="none">
+        <path d="M100 340 V372"/><path d="M280 340 V372"/><path d="M460 340 V372"/>
+      </g>
+      <g data-hs="product"><rect x="20" y="372" width="520" height="60" rx="12" fill="var(--c1)" fill-opacity=".15" stroke="var(--c1)" stroke-width="2"/>
+        <text x="280" y="398" text-anchor="middle" font-size="14" font-weight="700">わたしたちのロボット（最終製品）</text>
+        <text x="280" y="419" text-anchor="middle" font-size="12" class="t-muted">上のすべてを「仕向地ごと」に満たして出荷</text></g>
+      <text x="20" y="456" font-size="12" class="t-muted">点線矢印：GCF/PTCRBの認証を前提・参考にするキャリアが多い</text>
+    </svg>
+    <div class="hs-panel"></div>
+    <template data-hs-content="3gpp"><h4>3GPP（3rd Generation Partnership Project）</h4><p>日本のARIB・TTC、欧州のETSI、中国のCCSA、韓国のTTA、米国のATIS、インドのTSDSIなど、各地域の標準化団体が集まってLTE・5Gの仕様を作るプロジェクトです。仕様書はTS（Technical Specification）番号で呼ばれます。</p><p>重要なのは、<strong>3GPPは「認証」をしない</strong>こと。ただし「適合性を確かめる試験の方法」も仕様として作っています。例：TS 36.521（LTE端末の無線送受信の適合試験）、TS 36.523（プロトコルの適合試験）、TS 34.229 相当の IMS 試験など。GCFやPTCRBはこれらの試験仕様を使います。</p></template>
+    <template data-hs-content="gcf"><h4>GCF（Global Certification Forum）</h4><p>通信キャリア・端末メーカー・試験所が参加する業界団体で、1999年に発足しました。3GPPの適合試験を中心に、どの試験を通れば認証とするかの基準（<strong>GCF-CC：Certification Criteria</strong>）を定め、メーカーは認定試験所での試験結果をもとに認証を宣言します。欧州・アジアなど多くの地域のキャリアが参照します。</p><p>法律ではないので、GCFがなくても違法ではありません。しかし、キャリアの受入れやIoT向け回線サービスの条件として求められることがあります。IoTモジュールの多くはモジュール単体でGCF認証を取得済みで、それを組み込んだ製品は試験を大幅に減らせる仕組み（モジュール認証の流用）があります。詳細条件は要確認。</p></template>
+    <template data-hs-content="ptcrb"><h4>PTCRB（旧 PCS Type Certification Review Board）</h4><p>北米のキャリアが運営する認証制度で、GCFの北米版と考えるとわかりやすいです（試験内容は3GPP適合試験が中心で、GCFと多くが重なります）。北米の主要キャリアはPTCRB認証を事実上の必須条件にしています。今回の輸出先（アジア）では基本的に不要ですが、モジュール選定時に「PTCRB・GCF両方取得済み」かどうかは、そのモジュールの成熟度の目安になります。</p></template>
+    <template data-hs-content="carrier"><h4>キャリア認証（接続試験・受入試験）</h4><p>キャリア（通信事業者）が、自社ネットワークにつなぐ機器を試験・承認する仕組みです。名称や範囲はキャリアごとに違います。たとえばNTTドコモは法人向けIoT機器の「相互接続性試験（IOT：Inter-Operability Testing）」を案内しており、プロトコル・パフォーマンス・アンテナ性能・フィールド試験などで構成され、<strong>IOT完了済みの通信モジュールを搭載していること</strong>などが申込の前提とされています。KDDI・ソフトバンクにも同様の手続きがあります（詳細は各社に要確認）。</p><p>MVNO（格安SIM事業者）やIoT向け回線サービス経由で使う場合でも、裏側のキャリアの要件が適用されることがあります。使いたい回線を決めたら、早い段階で「この製品を接続するのに何が必要か」を回線事業者に確認しましょう。</p></template>
+    <template data-hs-content="radio"><h4>電波法の型式認証（日本：技適）</h4><p>電波を出す機器は、その国の電波法に基づく認証が<strong>国ごとに</strong>必要です。日本では総務省（MIC）が所管し、登録証明機関が「技術基準適合証明」または「工事設計認証」を行います。認証を受けた機器には<strong>技適マーク</strong>と番号を表示します（第4節で詳しく）。他国の例：米国FCC、EUのRED（CEマーキング）、韓国KC、台湾NCC、中国SRRC、インドWPC 等（第10章）。</p></template>
+    <template data-hs-content="telecom"><h4>電気通信事業法の端末機器認定（日本）</h4><p>日本では、キャリアの電気通信回線に接続する端末機器は、電波法とは別に<strong>電気通信事業法</strong>の技術基準への適合が求められます（「技術基準適合認定」「設計認証」）。LTEモジュールは多くの場合、電波法の番号（Rで始まる）と電気通信事業法の番号（Tで始まる）の<strong>両方</strong>を持ち、技適マークの横に並べて表示されます。認定済みのモジュールを組み込んだ製品も、同じ表示を付すことができる扱いです（JATE等のQ&Aを参照）。</p></template>
+    <template data-hs-content="sar"><h4>SAR（比吸収率）・電波防護</h4><p>SAR（Specific Absorption Rate）は、人体に吸収される電波のエネルギーの指標（W/kg）です。日本では、携帯電話端末等のうち<strong>人体（頭部・両手を除く）から20cm以内で通常使われる機器</strong>にも、2014年4月から許容値（2W/kg、四肢は4W/kg）が適用されています。判定の目安は送信アンテナと人体の距離です。</p><p>ロボットのLTEアンテナが<strong>人が触れる・抱える・すぐ隣に立つ位置</strong>にあるかが分かれ目です。アンテナを人から20cm以上離れた位置（機体上部など）に置ける設計なら、SARの論点を小さくできます。対象となる場合は、最終製品での測定が必要になり得ます（要確認）。</p></template>
+    <template data-hs-content="safety"><h4>電気安全</h4><p>感電・発火・やけどなどから人を守るための規制です。ICT・AV機器の国際規格は <strong>IEC 62368-1</strong>（旧 IEC 60950-1 と IEC 60065 の統合）。ロボットの場合は用途により、家庭用電気機器の IEC 60335 系、機械の電気装置の IEC 60204-1 なども関係し得ます。日本では、ACアダプターや充電器が<strong>電気用品安全法（PSE）</strong>の対象となるのが典型です。どの規格・制度が適用されるかは製品の分類と仕向地で決まるため、試験所と相談して決めます。</p></template>
+    <template data-hs-content="emc"><h4>EMC（Electromagnetic Compatibility：電磁両立性）</h4><p>「周りに迷惑なノイズを出さない（エミッション）」と「周りのノイズで誤動作しない（イミュニティ）」の2面があります。ICT機器では CISPR 32（エミッション）/ CISPR 35（イミュニティ）が代表的な国際規格。日本ではIT機器について VCCI の自主規制があり、各国では強制認証の一部になっていることもあります（韓国KC、台湾BSMI等、第10章）。</p><p>モーターやDC-DCコンバーターを積んだロボットはノイズ源が多く、<strong>EMCは最終製品全体で評価するしかありません</strong>。無線モジュールの受信感度をロボット自身のノイズが下げる問題（デセンス）とも根が同じです。</p></template>
+    <template data-hs-content="env"><h4>環境規制（RoHS・REACH など）</h4><p><strong>RoHS</strong>は電気電子機器に含まれる特定有害物質（鉛・水銀・カドミウム・六価クロム・特定臭素系難燃剤・一部フタル酸エステル）を制限する規制で、EUが発祥。中国・韓国・台湾・インドなどにも独自のRoHS型規制があり、表示方法が国ごとに違います。<strong>REACH</strong>はEUの化学物質規制で、高懸念物質（SVHC）の含有情報の伝達などを求めます。モジュールや部品メーカーの適合証明（含有化学物質データ）を集めて、製品として宣言する作業になります。</p></template>
+    <template data-hs-content="product"><h4>最終製品（わたしたちのロボット）</h4><p>最終的に責任を負うのは<strong>製品を市場に出す者</strong>（製造者・輸入者）です。モジュールの認証は大きな助けになりますが、「モジュールが認証を持っている＝製品も全部OK」ではありません。次の節で、流用できる範囲を具体的に見ていきます。</p></template>
+  </figure>
+
+  <h3>強制か、事実上必須か、任意か</h3>
+  <div class="table-wrap"><table>
+    <thead><tr><th>種類</th><th>例</th><th>性格</th><th>誰が確認</th><th>単位</th></tr></thead>
+    <tbody>
+      <tr><td>無線の型式認証</td><td>技適、FCC、RED、KC、NCC、SRRC、WPC</td><td><span class="badge bad">法律で強制</span></td><td>各国の当局・登録認証機関</td><td>国ごと</td></tr>
+      <tr><td>通信端末の認定</td><td>日本の電気通信事業法の端末認定 等</td><td><span class="badge bad">法律で強制</span></td><td>登録認定機関（JATE等）</td><td>国ごと（制度がない国も）</td></tr>
+      <tr><td>電気安全・EMC</td><td>PSE、KC、BSMI、CCC、BIS 等</td><td><span class="badge bad">強制</span>〜<span class="badge">任意</span>（国・製品分類で違う）</td><td>当局・認証機関・自己宣言</td><td>国ごと</td></tr>
+      <tr><td>SAR・電波防護</td><td>日本のSAR規制 等</td><td><span class="badge bad">対象機器は強制</span></td><td>試験所・当局</td><td>国ごと</td></tr>
+      <tr><td>業界認証</td><td>GCF、PTCRB</td><td><span class="badge warn">事実上必須のことが多い</span></td><td>業界団体の認定試験所</td><td>地域</td></tr>
+      <tr><td>キャリア認証</td><td>ドコモIOT、各国キャリアの受入試験</td><td><span class="badge warn">そのキャリアで使うなら必須</span></td><td>各キャリア</td><td>キャリアごと</td></tr>
+      <tr><td>環境規制</td><td>RoHS、REACH 等</td><td><span class="badge bad">仕向地で強制</span></td><td>自己宣言が中心</td><td>国・地域ごと</td></tr>
+    </tbody>
+  </table></div>
+
+  <h2>3. モジュール認証で流用できるもの・最終製品で必要なもの</h2>
+  <p>認証取得済みのLTEモジュール（「モジュラー認証」「モジュール認証」と呼ばれます）を使う最大のメリットは、<strong>無線部分の試験の大部分を、モジュールメーカーが済ませてくれている</strong>ことです。自社で一から無線機を設計すると、各国の電波法・GCF・キャリア試験を全部自分で受けることになり、費用も期間も大きく膨らみます。</p>
+  <p>ただし、流用できるのは「モジュールが認証を受けた条件どおりに使う」場合に限られます。下の図で、設計の条件を切り替えて、項目が左右どちらの列に移るかを確かめてみましょう。</p>
+
+  <figure class="figure" id="reuse">
+    <div class="hint">条件ボタンをオン/オフすると、項目が「流用できる」⇔「最終製品で必要」の列を移動します。</div>
+    <div class="chips" role="group" aria-label="設計条件">
+      <button class="chip" data-cond="ant" aria-pressed="false">アンテナを認証時と別品・高利得に変更</button>
+      <button class="chip" data-cond="body" aria-pressed="false">人体から20cm以内で使う</button>
+      <button class="chip" data-cond="multi" aria-pressed="false">Wi-Fi等と同時に送信</button>
+      <button class="chip" data-cond="modify" aria-pressed="false">モジュール本体を改造・再設計</button>
+    </div>
+    <div class="reuse-cols">
+      <div class="reuse-col ok-col"><h4><span class="badge ok">流用できる</span> モジュールの認証でカバー</h4><ul id="col-reuse"></ul></div>
+      <div class="reuse-col final-col"><h4><span class="badge warn">最終製品で必要</span> 改めて試験・手続き</h4><ul id="col-final"></ul></div>
+    </div>
+    <figcaption>一般的な考え方を単純化した図です。実際の要否は仕向地・モジュールの認証条件（取扱説明書やインテグレーションガイドに記載）・試験所の判断で決まります（要確認）。</figcaption>
+  </figure>
+
+  <div class="callout tip"><span class="title">モジュールの「使い方の条件」を読もう</span>
+    <p>モジュールメーカーは、認証を受けたときの条件を<strong>ハードウェア設計ガイド／インテグレーションガイド／認証ノート</strong>に書いています。例：使用できるアンテナの種類と最大利得、アンテナケーブルの損失、人体からの距離、他の無線との同時送信の扱い、最終製品に表示すべき文言。モジュール選定（<a href="../tools/module-selector.html">選定ウィザード</a>）の段階で、この資料を取り寄せて確認するのがおすすめです。</p>
+  </div>
+
+  <h2>4. 日本の技適を詳しく</h2>
+  <p>日本で電波を出す機器を使うには、原則として無線局の免許が必要です。ただし携帯電話の端末は、キャリアが一括して免許を受ける「包括免許」の仕組みで運用され、利用者が個別に免許を取る必要はありません。その前提として、端末（＝LTEモジュール、またはそれを組み込んだ機器）が<strong>電波法の技術基準に適合していることの証明</strong>、いわゆる<strong>技適</strong>を受けている必要があります。技適のない機器で電波を出すと、電波法違反になり得ます。</p>
+
+  <div data-tabs>
+    <div class="tab-list"><button data-tab="kinds">認証の種類</button><button data-tab="module">モジュール組込み</button><button data-tab="antenna">外付けアンテナ</button><button data-tab="mark">表示の方法</button></div>
+    <div data-tab-panel="kinds">
+      <div class="table-wrap"><table>
+        <thead><tr><th>制度</th><th>中身</th><th>向いている場面</th></tr></thead>
+        <tbody>
+          <tr><td><b>技術基準適合証明</b></td><td>登録証明機関が<strong>1台ごと（またはロットの個体）</strong>を試験して証明</td><td>試作機・少量品・研究用</td></tr>
+          <tr><td><b>工事設計認証</b></td><td>登録証明機関が<strong>設計（工事設計）と、その設計どおりに作る品質管理の方法</strong>を審査して認証。製造者は設計に合致させる義務を負う</td><td>量産品（LTEモジュールはほぼこちら）</td></tr>
+          <tr><td><b>技術基準適合自己確認</b></td><td>「特別特定無線設備」に限り、製造者等が自ら試験・確認して総務大臣に届け出る制度（SDoCに相当）。携帯無線通信の端末も対象区分に含まれる</td><td>社内に試験体制がある場合。実務でどちらを選ぶかは試験所と要相談（要確認）</td></tr>
+        </tbody>
+      </table></div>
+      <p>証明・認証を行う<strong>登録証明機関</strong>は総務大臣の登録を受けた民間機関で、一般財団法人テレコムエンジニアリングセンター（TELEC）、一般財団法人電気通信端末機器審査協会（JATE）のほか、国内外の複数の試験所が登録されています（一覧は総務省の電波利用ポータルに掲載）。</p>
+      <p>あわせて、キャリア網につながる端末には<strong>電気通信事業法</strong>の技術基準適合認定・設計認証も必要です（第2節）。LTEモジュールはこちらも取得済みのものが一般的です。</p>
+    </div>
+    <div data-tab-panel="module">
+      <p>技適を取得済みのモジュールを組み込む場合の考え方：</p>
+      <ul>
+        <li><strong>モジュール（アンテナ等を含む）に一切変更を加えなければ、製品として再度認証を取る必要はない</strong>とされています（TELEC FAQ）。ただしSARの規制対象となる機器は別途手続きが必要になり得ます。</li>
+        <li><strong>表示</strong>：モジュール自体に技適マークが付いていますが、組み込むと外から見えなくなります。電波法の改正により、認証済みモジュールを組み込んだ製品の製造業者・輸入業者・販売業者は、<strong>モジュールに付されている表示と同じ表示を製品にも付すことができる</strong>ようになっています（任意）。実務上は、ユーザーや監督当局が確認しやすいよう、製品の銘板・取扱説明書・画面などに表示するのが一般的です。</li>
+        <li>電気通信事業法側の表示（T番号）も同様に、組み込んだ製品に同じ表示を付すことができる扱いです（JATE Q&A）。</li>
+        <li>モジュールメーカーの「インテグレーションガイド」に、製品に記載すべき文言や番号が書かれていることが多いので、それに従います。</li>
+      </ul>
+    </div>
+    <div data-tab-panel="antenna">
+      <p><strong>アンテナ（空中線）は無線設備の一部</strong>で、認証はモジュール＋特定のアンテナ（種類・利得）の組み合わせで受けています。</p>
+      <ul>
+        <li>認証時と異なるアンテナへの<strong>変更・追加は「工事設計の変更」</strong>に当たり、認証（変更）の申込みが必要になるとされています（TELEC FAQ）。簡易な手続きで済む場合もあります。</li>
+        <li>LTEモジュールは外付けアンテナ（同軸コネクタでつなぐ）前提の製品が多く、メーカーは「この種類・この利得以下のアンテナなら可」という条件で複数のアンテナを登録していることがあります。<strong>使いたいアンテナがモジュールの認証の範囲に入っているか</strong>を、モジュールメーカーに確認しましょう。</li>
+        <li>ロボットの外装に合わせてアンテナを自社設計・特注する場合は、試作の早い段階で試験所とモジュールメーカーに相談を。アンテナの効率（OTA性能）はキャリア試験でも見られることがあります。</li>
+        <li>ケーブルを延長して損失が増える方向は、送信電力を上げる方向ではないため問題になりにくい一方、受信性能が落ちます（第6章）。</li>
+      </ul>
+    </div>
+    <div data-tab-panel="mark">
+      <p>技適マーク（〒に似た記号を丸で囲んだマーク）と、証明・認証の番号を表示します。</p>
+      <ul>
+        <li><strong>番号</strong>：電波法の番号は「R」、電気通信事業法の番号は「T」の記号とともに記載されます。</li>
+        <li><strong>大きさ</strong>：かつては「直径3mm以上」とされていましたが、2019年2月施行の改正で「表示を容易に識別できること」に改められています。</li>
+        <li><strong>電磁的表示</strong>：ディスプレイを持つ機器は、画面に技適マークと番号を表示する方法も認められています。<strong>一定の操作で直ちに明瞭に表示できること</strong>、その表示方法を取扱説明書等に記載することなどが条件です。ロボットの操作画面・保守画面・スマホアプリから表示できるようにする設計が考えられます（ディスプレイを持たない機器の扱いを含め、最新の要件は総務省の案内で要確認）。</li>
+      </ul>
+      <p class="small">表示例（イメージ。番号は架空）：</p>
+      <div class="label-mock">本製品は電波法および電気通信事業法に基づく<br>技術基準適合証明等を受けた無線モジュールを内蔵しています。<br>[技適マーク] R 000-000000 &nbsp; T D000000000</div>
+    </div>
+  </div>
+
+  <div class="callout robot"><span class="title">わたしたちのロボットでは</span>
+    <ul>
+      <li>国内向けの試作機を屋外で走らせる段階から、<strong>技適を取得済みのモジュール</strong>と<strong>認証範囲内のアンテナ</strong>を使いましょう。海外製の開発ボードをそのまま使うと、日本の技適がないことがあります（技適未取得機器を実験目的で短期間使うための届出制度もありますが、条件つきなので要確認）。</li>
+      <li>アンテナは外装デザインの影響を強く受けるので、<strong>「どのアンテナを使うか」を認証の観点からも</strong>メカ設計と一緒に早めに決めます。</li>
+      <li>操作画面を持つなら、技適マークの電磁的表示を「設定＞機器情報」に入れておくと、ラベルスペースを節約できます。</li>
+    </ul>
+  </div>
+
+  <h2>5. キャリア認証とGCFの位置づけ</h2>
+  <p>電波法の認証は「電波の出し方が法律に合っているか」を見るもので、「そのキャリアのネットワークでちゃんと動くか」は見ていません。それを確かめるのがGCF/PTCRBとキャリア認証です。</p>
+  <div class="card-grid">
+    <div class="card"><h3>GCF</h3><p class="small">3GPPの適合試験（無線・プロトコル・SIM連携など）の合格を基準に認証。対象のバンドやRAT（LTE-M、NB-IoTなど）ごとに試験項目が決まります。認証済みモジュールを使った製品は、モジュールの結果を流用して追加試験を減らせるのが一般的。</p></div>
+    <div class="card"><h3>キャリア認証</h3><p class="small">キャリア固有の機能・設定（APN、省電力タイマー、再接続の挙動、SMSなど）、そのキャリアの網での実地試験、アンテナ性能などを確認。日本ではIoT機器向けの相互接続性試験の案内がキャリアから出ています。</p></div>
+    <div class="card"><h3>回線サービス事業者</h3><p class="small">IoT向けSIMの事業者（MVNO・グローバルSIM事業者）が独自の「動作確認済み機器」リストを持っていることも。海外ローミングで使う場合は、訪問先キャリアの要件がどう扱われるかを確認します（第7章）。</p></div>
+  </div>
+  <div class="callout warn"><span class="title">モジュールのFW版数に注意</span>
+    <p>キャリア認証は<strong>特定のモジュール型番とFW版数</strong>で取得されていることが多く、FWを更新（第8章のFOTA）したときに再確認が必要になる場合があります。モジュールメーカーが「どの版数でどのキャリアの認証を取っているか」を一覧で持っているので、量産で使う版数を固定し、更新方針をあらかじめ相談しておきましょう。</p>
+  </div>
+
+  <h2>6. 認証取得の典型的な流れ</h2>
+  <figure class="figure" data-stepper data-interval="4000">
+    <svg viewBox="0 0 560 215" role="img" aria-label="認証取得の7ステップ">
+      <g stroke="var(--border)" stroke-width="3" fill="none">
+        <path d="M70 60 H490 V160 H210"/>
+      </g>
+      <g font-size="13" text-anchor="middle">
+        <g><circle cx="70" cy="60" r="20" fill="var(--surface-2)" stroke="var(--border)" stroke-width="1.5"/><circle data-show-from="1" cx="70" cy="60" r="20" fill="var(--accent)" fill-opacity=".35"/><text x="70" y="65" font-weight="700">1</text><text x="70" y="100">要件確認</text></g>
+        <g><circle cx="210" cy="60" r="20" fill="var(--surface-2)" stroke="var(--border)" stroke-width="1.5"/><circle data-show-from="2" cx="210" cy="60" r="20" fill="var(--accent)" fill-opacity=".35"/><text x="210" y="65" font-weight="700">2</text><text x="210" y="100">試験所選定</text></g>
+        <g><circle cx="350" cy="60" r="20" fill="var(--surface-2)" stroke="var(--border)" stroke-width="1.5"/><circle data-show-from="3" cx="350" cy="60" r="20" fill="var(--accent)" fill-opacity=".35"/><text x="350" y="65" font-weight="700">3</text><text x="350" y="100">事前試験</text></g>
+        <g><circle cx="490" cy="60" r="20" fill="var(--surface-2)" stroke="var(--border)" stroke-width="1.5"/><circle data-show-from="4" cx="490" cy="60" r="20" fill="var(--accent)" fill-opacity=".35"/><text x="490" y="65" font-weight="700">4</text><text x="490" y="100">本試験</text></g>
+        <g><circle cx="490" cy="160" r="20" fill="var(--surface-2)" stroke="var(--border)" stroke-width="1.5"/><circle data-show-from="5" cx="490" cy="160" r="20" fill="var(--accent)" fill-opacity=".35"/><text x="490" y="165" font-weight="700">5</text><text x="490" y="200">申請・審査</text></g>
+        <g><circle cx="350" cy="160" r="20" fill="var(--surface-2)" stroke="var(--border)" stroke-width="1.5"/><circle data-show-from="6" cx="350" cy="160" r="20" fill="var(--accent)" fill-opacity=".35"/><text x="350" y="165" font-weight="700">6</text><text x="350" y="200">証明書</text></g>
+        <g><circle cx="210" cy="160" r="20" fill="var(--surface-2)" stroke="var(--border)" stroke-width="1.5"/><circle data-show-from="7" cx="210" cy="160" r="20" fill="var(--accent)" fill-opacity=".35"/><text x="210" y="165" font-weight="700">7</text><text x="210" y="200">ラベル・出荷</text></g>
+      </g>
+      <g fill="none" stroke="var(--accent)" stroke-width="3">
+        <circle data-show-at="1" cx="70" cy="60" r="26"/><circle data-show-at="2" cx="210" cy="60" r="26"/><circle data-show-at="3" cx="350" cy="60" r="26"/><circle data-show-at="4" cx="490" cy="60" r="26"/>
+        <circle data-show-at="5" cx="490" cy="160" r="26"/><circle data-show-at="6" cx="350" cy="160" r="26"/><circle data-show-at="7" cx="210" cy="160" r="26"/>
+      </g>
+      <text x="20" y="150" font-size="12" class="t-muted">不合格なら</text>
+      <text x="20" y="168" font-size="12" class="t-muted">設計修正→再試験</text>
+    </svg>
+    <div class="stepper-controls-slot"></div>
+    <div class="step" data-title="要件確認"><h4>① 要件確認</h4><p><strong>仕向地（国）× 製品の分類 × 無線の種類</strong>の表を作り、必要な認証・規制を洗い出します。LTEだけでなく、Wi-Fi・Bluetooth・GNSS受信・充電器・電池・製品安全・EMC・環境規制まで含めます。使う回線（キャリア・IoT SIM事業者）も決め、キャリア認証の要否を確認。各モジュールの認証取得状況（どの国・どのキャリア・どのFW版数）もここで集めます。</p></div>
+    <div class="step" data-title="試験所選定"><h4>② 試験所・認証機関の選定と見積</h4><p>複数国の認証を1か所でまとめて扱える試験所・認証代行会社も多くあります。見積依頼には、製品の概要、無線モジュールの型番と認証番号、アンテナの仕様、電源、使用形態（人体との距離）、仕向地の一覧を用意します。人気の試験所は予約が数週間〜数か月先まで埋まっていることもあるので、<strong>量産日程から逆算して早めに枠を押さえる</strong>のがコツです。</p></div>
+    <div class="step" data-title="事前試験"><h4>③ 事前試験（プリスキャン・デバッグ）</h4><p>本試験の前に、EMCの放射ノイズや無線の性能を簡易に測って問題を洗い出します。ロボットではモーター・電源まわりのノイズでEMCを外すことがよくあり、本番で不合格になると再試験費用と日程の遅れが大きいので、<strong>DVT（設計検証）段階の試作機で事前試験</strong>をしておくと安心です（第12章）。</p></div>
+    <div class="step" data-title="本試験"><h4>④ 本試験</h4><p>量産と同等の試作機（試験サンプル）を提出して試験します。無線の試験用に、特定のチャネル・出力で連続送信させる<strong>試験モード</strong>が必要になることが多いので、モジュールの試験用コマンドやファームウェアを準備します。試験中は試験所からの質問に即答できる担当者を決めておきましょう。</p></div>
+    <div class="step" data-title="申請・審査"><h4>⑤ 申請・審査</h4><p>試験報告書、回路図、ブロック図、外観写真、ラベル案、取扱説明書、部品表などを揃えて申請します。国によっては現地の代理人（ローカルエージェント）や現地法人が申請者になる必要があります（第10章）。書類の不備による差し戻しで時間を失いがちなので、試験所のチェックリストに沿って準備します。</p></div>
+    <div class="step" data-title="証明書"><h4>⑥ 証明書の発行</h4><p>審査に通ると証明書（認証番号）が発行されます。有効期限がある制度、年次の費用がかかる制度、工場監査がある制度もあります。証明書は製品の構成（部品・FW・アンテナ）と結びついているので、<strong>量産後の設計変更は「認証に影響するか」を毎回判断する</strong>仕組み（変更管理）を作っておきます。</p></div>
+    <div class="step" data-title="ラベル・出荷"><h4>⑦ ラベル表示・出荷</h4><p>認証マークと番号、必要な注意書きを製品・包装・取扱説明書に表示します。国ごとに表示の形式が違うため、仕向地別のラベルやSKUが必要になることもあります（<a href="11-commonization.html">第11章</a>）。電子表示が認められる国では、画面表示でラベルを共通化する工夫もできます。</p></div>
+  </figure>
+
+  <h2>7. 費用と期間の目安</h2>
+  <p>費用と期間は、製品の構成・試験所・国・時期で大きく変わります。以下は<strong>考え方をつかむための幅を持った目安</strong>で、確かな出典に基づく価格ではありません。必ず複数の試験所から見積を取ってください。</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>項目</th><th>認証済みモジュールをそのまま使う場合</th><th>アンテナ変更・自社無線設計の場合</th><th>期間の目安</th></tr></thead>
+    <tbody>
+      <tr><td>日本の技適（LTE部分）</td><td>原則不要（モジュールの認証を利用）</td><td>変更申請〜新規認証：<span class="badge warn">目安・要見積</span></td><td>数週間〜数か月</td></tr>
+      <tr><td>EMC（製品全体）</td><td colspan="2">必要。試験日数（数日程度）と試験所の料金で決まる <span class="badge warn">目安・要見積</span></td><td>予約待ち＋数日〜数週間</td></tr>
+      <tr><td>電気安全</td><td colspan="2">製品分類と規格により大きく変動 <span class="badge warn">目安・要見積</span></td><td>数週間〜数か月</td></tr>
+      <tr><td>SAR</td><td>人体から離して使う設計なら不要となることが多い（要確認）</td><td>対象なら測定が必要 <span class="badge warn">目安・要見積</span></td><td>数週間</td></tr>
+      <tr><td>GCF（製品）</td><td>モジュールの認証を流用し、追加試験は限定的なことが多い <span class="badge warn">要確認</span></td><td>試験項目が大幅に増える</td><td>数週間〜数か月</td></tr>
+      <tr><td>キャリア認証</td><td colspan="2">キャリア・試験範囲による。フィールド試験を含むと長くなる <span class="badge warn">要見積</span></td><td>1〜数か月</td></tr>
+      <tr><td>アジア各国の型式認証</td><td colspan="2">国ごとに費用・期間・現地試験の要否が異なる（<a href="10-asia.html">第10章</a>）</td><td>国により数週間〜数か月</td></tr>
+    </tbody>
+  </table></div>
+  <div class="callout tip"><span class="title">費用を下げるコツ</span>
+    <ul>
+      <li><strong>認証済みモジュール＋認証範囲内のアンテナ</strong>を選ぶ（最大の節約）。</li>
+      <li>仕向地の多くで取得済みのモジュールを選ぶ（<a href="../tools/band-checker.html">バンド共通化チェッカー</a>で候補を比較）。</li>
+      <li>試験は複数国分をまとめて同じ試験所に依頼し、共通の試験データ（CBスキームのIEC報告書など）を再利用する。</li>
+      <li>事前試験で本試験の不合格を防ぐ。</li>
+    </ul>
+  </div>
+
+  <div class="callout robot"><span class="title">コラム：ロボットは「無線以外」の規制も多い</span>
+    <p><b>① 機械安全</b>：動く機械であるロボットには、無線とは別に機械安全の考え方が必要です。リスクアセスメントの基本は ISO 12100、サービスロボットでは ISO 13482（生活支援ロボットの安全要求）、産業用ロボットでは ISO 10218 などが参照されます。EUでは機械指令に代わる<strong>機械規則（EU）2023/1230</strong>が2027年1月から適用予定です。アジアの仕向地で何が強制かは国と製品分類によるので要確認。第8章で扱った「通信断時のフェイルセーフ」の設計根拠も、このリスクアセスメントに位置づけます。</p>
+    <p><b>② リチウム電池の輸送（UN38.3）</b>：リチウムイオン電池は輸送上の危険物で、国連の「試験及び判定基準マニュアル」第III部38.3節（<strong>UN38.3</strong>）の試験に合格した電池であることが、空輸・海上輸送の前提になります。電池メーカーから試験概要書（Test Summary）を入手しましょう。機器に組み込んだ状態（UN3481）でも規制があり、航空輸送では充電率の制限など毎年改訂されるルールがあるため、IATA危険物規則の最新版と輸送業者に要確認です。日本国内では、モバイルバッテリー等が電気用品安全法の対象になる点にも注意。</p>
+    <p><b>③ 輸出管理（該非判定）</b>：日本から輸出する貨物は、外国為替及び外国貿易法（外為法）に基づき、規制リストに該当するか（<strong>該非判定</strong>）を確認する必要があります。<strong>暗号機能を持つ通信機器</strong>は情報セキュリティ関連の項目に関係し得ます。市販品向けの例外（いわゆるマスマーケット品）などで「非該当」になることも多いですが、判定と根拠の記録は輸出者の責任です。LTEモジュールや主要部品のメーカーから該非判定書（パラメータシート）を取り寄せ、製品として判定します。米国製の技術・部品を含む場合は米国の再輸出規制（EAR）も確認が必要です（要確認）。</p>
+  </div>
+
+  <h3>認証準備のチェックリスト</h3>
+  <ul data-checklist="ch09-cert-prep">
+    <li>仕向地の一覧と、国ごとの必要認証の表（無線・通信端末・安全・EMC・SAR・環境・電池）</li>
+    <li>採用モジュールの認証取得状況（国・GCF/PTCRB・キャリア・FW版数）の資料</li>
+    <li>モジュールのインテグレーションガイド（アンテナ条件・人体距離・表示文言）</li>
+    <li>アンテナの型番・利得・ケーブル損失と、それがモジュール認証の範囲内かの確認</li>
+    <li>使う回線（キャリア／IoT SIM事業者）と、キャリア認証の要否</li>
+    <li>試験所の見積・予約（量産日程から逆算）</li>
+    <li>試験モード（連続送信など）の準備</li>
+    <li>ラベル・取扱説明書・電子表示の案</li>
+    <li>電池のUN38.3試験概要書、部品の含有化学物質データ</li>
+    <li>該非判定書（モジュール・主要部品・製品）</li>
+    <li>量産後の変更管理ルール（部品・FW・アンテナ変更時の認証影響判断）</li>
+  </ul>
+
+  <h2>まとめ</h2>
+  <ul>
+    <li>3GPPは仕様を作るだけで認証はしない。GCF/PTCRBは業界の認証、各国電波法（技適等）は法律による強制、キャリア認証はそのキャリアで使うための条件。</li>
+    <li>認証済みモジュールを<strong>条件どおり（アンテナ含め無改造）</strong>に使えば、無線部分の多くを流用できる。EMC・電気安全・ラベル・環境規制は最終製品で必要。</li>
+    <li>アンテナ変更は工事設計の変更になり得る。人体から20cm以内で使うならSARを確認。</li>
+    <li>日本の技適：量産品は工事設計認証が中心。組み込み製品にもモジュールと同じ表示を付すことができ、画面での電磁的表示も可能。電気通信事業法の端末認定も忘れずに。</li>
+    <li>流れは 要件確認→試験所選定→事前試験→本試験→申請→証明書→ラベル。費用・期間は幅が大きく、必ず見積を取る。</li>
+    <li>ロボットは機械安全・電池輸送（UN38.3）・輸出管理（該非判定）も計画に入れる。</li>
+  </ul>
+
+  <h2>用語</h2>
+  <dl class="terms">
+    <dt>3GPP</dt><dd>3rd Generation Partnership Project。LTE・5Gの仕様を作る国際的な標準化プロジェクト。</dd>
+    <dt>GCF</dt><dd>Global Certification Forum。キャリア・メーカー・試験所による業界認証制度。GCF-CCは認証基準。</dd>
+    <dt>PTCRB</dt><dd>北米のキャリアが運営する端末認証制度。</dd>
+    <dt>技適</dt><dd>電波法に基づく技術基準適合証明・工事設計認証（およびそのマーク）の通称。</dd>
+    <dt>工事設計認証</dt><dd>設計と品質管理の方法を審査して認証する方式。量産品向け。</dd>
+    <dt>登録証明機関</dt><dd>総務大臣の登録を受け、技適の証明・認証を行う機関。</dd>
+    <dt>電気通信事業法の端末認定</dt><dd>キャリアの回線に接続する端末機器が技術基準に適合していることの認定。表示番号は「T」。</dd>
+    <dt>IOT（相互接続性試験）</dt><dd>Inter-Operability Testing。キャリアのネットワークとの接続性を確かめる試験（IoTとは別の言葉）。</dd>
+    <dt>SAR</dt><dd>Specific Absorption Rate、比吸収率。人体に吸収される電波エネルギーの指標（W/kg）。</dd>
+    <dt>EMC</dt><dd>Electromagnetic Compatibility。ノイズを出さない・ノイズに強いこと。</dd>
+    <dt>IEC 62368-1</dt><dd>AV・ICT機器の安全規格。</dd>
+    <dt>RoHS / REACH</dt><dd>有害物質の使用制限／化学物質の登録・情報伝達を求める規制（EU発祥、各国に類似制度）。</dd>
+    <dt>UN38.3</dt><dd>リチウム電池の輸送安全試験（国連 試験及び判定基準マニュアル）。</dd>
+    <dt>該非判定</dt><dd>輸出する貨物・技術が外為法の規制リストに該当するかを判定すること。</dd>
+  </dl>
+
+  <h2>確認クイズ</h2>
+  <div class="quiz" data-quiz="09"></div>
+
+  <section class="sources"><h2>参考・出典</h2><ul>
+    <li><a href="https://www.tele.soumu.go.jp/j/sys/equ/tech/index.htm">総務省 電波利用ポータル｜基準認証制度（制度の概要・登録証明機関一覧）</a></li>
+    <li><a href="https://www.tele.soumu.go.jp/j/sys/equ/tech/gitekimark/index.htm">総務省 電波利用ポータル｜技適マークの表示の方法</a></li>
+    <li><a href="https://www.tele.soumu.go.jp/j/sys/equ/tech/type/index.htm">総務省 電波利用ポータル｜特定無線設備、特別特定無線設備一覧</a></li>
+    <li><a href="https://www.tele.soumu.go.jp/j/sys/equ/tech/faq/index.htm">総務省 電波利用ポータル｜基準認証制度についてよくある質問（FAQ）</a></li>
+    <li><a href="https://www.soumu.go.jp/main_content/000585232.pdf">総務省｜技術基準適合認定等の表示方法の見直しについて（表示の大きさ等の改正）</a></li>
+    <li><a href="https://www.telec.or.jp/faq/">TELEC よくあるお問合せ</a>（認証済みモジュールの組込み、表示、アンテナ変更）</li>
+    <li><a href="https://www.jate.or.jp/jp/nintei/QandA.html">JATE 電気通信端末機器技術基準適合認定等制度に関するQ and A</a></li>
+    <li><a href="https://www.tele.soumu.go.jp/resource/j/equ/mra/pdf/25/j_5.pdf">総務省 Body-SAR規制の概要</a> / <a href="https://www.tele.soumu.go.jp/resource/j/equ/tech/faq/300125.pdf">ICCJ Body-SARに関する制度の運用のガイドライン</a></li>
+    <li><a href="https://www.nttdocomo.co.jp/biz/support/iot/">NTTドコモ 相互接続性試験（IOT）</a></li>
+    <li><a href="https://www.globalcertificationforum.org/">Global Certification Forum (GCF)</a> / <a href="https://www.ptcrb.com/">PTCRB</a></li>
+    <li><a href="https://www.3gpp.org/about-us">3GPP About</a> / <a href="https://www.3gpp.org/DynaReport/36521-1.htm">TS 36.521-1</a> / <a href="https://www.3gpp.org/DynaReport/36523-1.htm">TS 36.523-1</a></li>
+    <li><a href="https://webstore.iec.ch/">IEC Webstore（IEC 62368-1）</a> / <a href="https://eur-lex.europa.eu/eli/reg/2023/1230/oj">Regulation (EU) 2023/1230 on machinery</a></li>
+    <li><a href="https://unece.org/transport/dangerous-goods/un-manual-tests-and-criteria">UNECE Manual of Tests and Criteria（UN38.3）</a> / <a href="https://www.iata.org/en/programs/cargo/dgr/lithium-batteries/">IATA Lithium Batteries</a></li>
+    <li><a href="https://www.meti.go.jp/policy/anpo/qanda08.html">経済産業省 安全保障貿易管理 Q&amp;A（コンピュータ、エレクトロニクス、通信関連）</a> / <a href="https://www.cistec.or.jp/">CISTEC</a></li>
+  </ul><p>確認日: 2026-09</p></section>
+</main>
+</div>
+<script src="../assets/data/quiz/ch09.js"></script>
+<script src="../assets/app.js"></script>
+<script>
+/* ===== 第9章：流用できる/最終製品で必要 ウィジェット ===== */
+(function () {
+  "use strict";
+  var box = document.getElementById("reuse");
+  if (!box) return;
+  var colR = document.getElementById("col-reuse");
+  var colF = document.getElementById("col-final");
+  var C = { ant: false, body: false, multi: false, modify: false };
+  // 各項目: name と、条件から [列("r"|"f"), 理由] を返す関数
+  var ITEMS = [
+    { id: "radio", name: "電波法の無線特性（技適：送信電力・周波数・不要発射）", f: function (c) {
+      if (c.modify) return ["f", "モジュールに手を加えると認証の前提が崩れます。改めて証明・認証が必要です。"];
+      if (c.ant) return ["f", "アンテナの変更・追加は工事設計の変更に当たり得ます。変更申請や再試験を試験所と相談。"];
+      return ["r", "モジュール（アンテナ含む）を変更せずに使えば、製品として取り直す必要は原則なし。"];
+    } },
+    { id: "telecom", name: "電気通信事業法の端末認定（日本）", f: function (c) {
+      if (c.modify) return ["f", "モジュールを改造すると、認定の前提が変わるため要確認。"];
+      return ["r", "認定済みモジュールを組み込めば、同じ表示を製品に付すことができる扱い。"];
+    } },
+    { id: "gcf", name: "GCF等のプロトコル適合（3GPP試験）", f: function (c) {
+      if (c.modify) return ["f", "無線部を自社設計・改造すると、適合試験の大半を自分で受けることになります。"];
+      if (c.ant) return ["f", "アンテナが変わると無線性能関連の追加試験を求められる場合があります（要確認）。"];
+      return ["r", "モジュールの認証結果を流用でき、製品としての追加は限定的なことが多い（要確認）。"];
+    } },
+    { id: "sar", name: "SAR・RF被ばく評価", f: function (c) {
+      if (c.body) return ["f", "人体（頭部・両手を除く）から20cm以内で通常使うなら、最終製品での評価・測定が必要になり得ます。"];
+      if (c.multi) return ["f", "複数の無線の同時送信では、合算した評価が求められる場合があります（要確認）。"];
+      return ["r", "アンテナを人から20cm以上離して使う設計なら、モジュールの前提条件内で扱えることが多い。"];
+    } },
+    { id: "coexist", name: "無線の共存・受信感度（デセンス）", f: function (c) {
+      if (c.multi) return ["f", "LTEとWi-Fi/BTの同時動作で互いの性能が落ちないか、製品で確認が必要。"];
+      return ["f", "機体内のノイズで受信感度が落ちないかは、製品でしか確かめられません（認証というより品質・キャリア試験の論点）。"];
+    } },
+    { id: "carrier", name: "キャリア認証（接続試験）", f: function () {
+      return ["f", "IOT済みモジュールの搭載が前提でも、製品としての試験が求められることが多い（キャリアごとに要確認）。"];
+    } },
+    { id: "emc", name: "EMC（ホスト機器としてのノイズ放出・耐性）", f: function () {
+      return ["f", "モーター・電源・配線を含む製品全体で評価。モジュールの認証では代替できません。"];
+    } },
+    { id: "safety", name: "電気安全（IEC 62368-1 等、充電器・電池含む）", f: function () {
+      return ["f", "製品としての安全評価が必要。モジュールの安全適合は部品としての材料になるだけ。"];
+    } },
+    { id: "label", name: "ラベル・取扱説明書の表示", f: function () {
+      return ["f", "モジュールの番号の表示（日本では任意だが推奨）や、各国の表示義務・注意書きは製品側で対応。"];
+    } },
+    { id: "env", name: "環境規制（RoHS・REACH 等）", f: function () {
+      return ["f", "部品の適合データを集めて、製品として適合を宣言します。"];
+    } }
+  ];
+  var prev = {};
+  function render() {
+    colR.innerHTML = ""; colF.innerHTML = "";
+    ITEMS.forEach(function (it) {
+      var res = it.f(C);
+      var li = document.createElement("li");
+      var b = document.createElement("b"); b.textContent = it.name;
+      var s = document.createElement("span"); s.className = "why"; s.textContent = res[1];
+      li.appendChild(b); li.appendChild(s);
+      if (prev[it.id] && prev[it.id] !== res[0]) li.classList.add("moved");
+      prev[it.id] = res[0];
+      (res[0] === "r" ? colR : colF).appendChild(li);
+    });
+    if (!colR.children.length) {
+      var e = document.createElement("li"); e.className = "why"; e.textContent = "（この条件では、流用できる項目はほとんどありません）";
+      colR.appendChild(e);
+    }
+  }
+  Array.prototype.forEach.call(box.querySelectorAll("[data-cond]"), function (btn) {
+    btn.addEventListener("click", function () {
+      var k = btn.dataset.cond;
+      C[k] = !C[k];
+      btn.setAttribute("aria-pressed", String(C[k]));
+      render();
+    });
+  });
+  render();
+})();
+</script>
+</body>
+</html>

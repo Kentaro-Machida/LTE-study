@@ -1,0 +1,529 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SIMの種類と回線｜LTE Study</title>
+  <link rel="stylesheet" href="../assets/style.css">
+  <style>
+    /* ---- 第7章 ページローカル ---- */
+    .fig-mid > svg { max-width: 680px; margin: 0 auto; }
+    svg .lbl { font-size: 14px; font-weight: 700; }
+    svg .sub { font-size: 12px; fill: var(--text-muted); }
+    svg .arrow { stroke-width: 2.5; fill: none; }
+    .flow { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; margin: 20px 0; box-shadow: var(--shadow); }
+    .flow .trail { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+    .flow .trail .badge { cursor: pointer; }
+    .flow .q { font-weight: 700; margin: 4px 0 8px; }
+    .flow .qnum { font-family: var(--mono); color: var(--accent); margin-right: 6px; }
+    .flow .opts { display: grid; gap: 6px; }
+    .flow .opt { text-align: left; border: 1px solid var(--border); background: var(--surface); border-radius: 8px; padding: 8px 12px; cursor: pointer; line-height: 1.55; }
+    .flow .opt:hover { border-color: var(--accent); background: var(--accent-soft); }
+    .flow .opt small { display: block; color: var(--text-muted); }
+    .flow .result { background: var(--ok-soft); border-left: 4px solid var(--ok); border-radius: 0 var(--radius-sm) var(--radius-sm) 0; padding: 10px 14px; }
+    .flow .result h4 { margin: 0 0 6px; }
+    .flow .result ul { margin: 6px 0; padding-left: 1.2em; }
+    .opt-grid { display: grid; grid-template-columns: 7em 1fr; gap: 6px 12px; font-size: .92rem; }
+    .opt-grid dt { color: var(--text-muted); font-weight: 600; }
+    .opt-grid dd { margin: 0; }
+    @media (max-width: 600px) { .opt-grid { grid-template-columns: 1fr; } .opt-grid dd { margin-bottom: 6px; } }
+  </style>
+</head>
+<body data-root="../" data-chapter="07">
+<div class="page">
+<main>
+  <header class="chapter-hero">
+    <div class="eyebrow">CHAPTER 07</div>
+    <h1>SIMの種類と回線</h1>
+    <p class="lead">SIMは「このロボットは正規の契約者です」と網に証明するための鍵です。この章では、SIMの中身と形、遠隔で契約を書き換えられるeSIM、そして海外に出荷するロボットの回線をどう用意し、どう運用するかを整理します。</p>
+    <div class="goals"><h2>この章のゴール</h2><ul>
+      <li>SIMが持つ IMSI と Ki の役割、認証の仕組みを説明できる</li>
+      <li>SIMの形状（1FF〜4FF・MFF2）と産業用SIMの違いがわかる</li>
+      <li>eSIMの仕組みと、SGP.22 / SGP.02 / SGP.32 の違いを説明できる</li>
+      <li>現地SIM・グローバルIoT SIM・国際ローミング・eSIM切替のメリットと法規上の注意点を比べられる</li>
+      <li>ロボットの出荷から廃棄までの回線運用（開通・休止・盗難対応）を設計できる</li>
+    </ul></div>
+  </header>
+
+  <h2>1. SIMの役割：網に「本人」を証明する鍵</h2>
+  <p><strong>SIM</strong>（Subscriber Identity Module：加入者識別モジュール）は、小さなICカード（中身は小さなコンピュータ）です。LTEでは正確には、カードの中で動く <strong>USIM</strong> というアプリケーションが役目を果たします。SIMの中には主に次の情報が入っています。</p>
+  <ul>
+    <li><strong>IMSI</strong>（International Mobile Subscriber Identity）：加入者の番号。最大15桁で、先頭3桁が国（<strong>MCC</strong>：日本は440/441）、続く2〜3桁が事業者（<strong>MNC</strong>）を表します。網はこの番号で「誰の契約か」「どの事業者の加入者か」を判断します。</li>
+    <li><strong>Ki</strong>：加入者ごとの128ビットの秘密鍵。<strong>SIMの外に絶対に出ない</strong>ように作られていて、同じ鍵は事業者のコア網（HSS：加入者データベース）だけが持っています。</li>
+    <li><strong>ICCID</strong>：SIMカードそのものの製造番号（19〜20桁）。カードの表面にも印字され、回線管理や在庫管理でよく使われます。</li>
+    <li>そのほか、優先して接続すべき網のリスト（PLMNリスト）、認証アルゴリズムの設定値（OPc）、電話番号（MSISDN）に関する情報などが入っています。</li>
+  </ul>
+  <p><a href="03-attach.html">第3章</a>の「アタッチ」で見たように、ロボットが網につながるとき、網とSIMは<strong>チャレンジ・レスポンス</strong>という方法で互いを確認します（LTEでは EPS-AKA と呼ばれる手順）。鍵そのものを電波に乗せないのがポイントです。</p>
+
+  <figure class="figure fig-mid" data-stepper data-interval="4000">
+    <svg viewBox="0 0 560 230" role="img" aria-label="SIM認証（チャレンジ・レスポンス）の流れ">
+      <rect x="20" y="40" width="170" height="150" rx="10" fill="var(--c5)" fill-opacity=".12" stroke="var(--c5)" stroke-width="1.5"/>
+      <text class="lbl" x="105" y="66" text-anchor="middle">ロボット（SIM）</text>
+      <text class="sub" x="105" y="90" text-anchor="middle">IMSI・Ki を保持</text>
+      <rect x="370" y="40" width="170" height="150" rx="10" fill="var(--c3)" fill-opacity=".12" stroke="var(--c3)" stroke-width="1.5"/>
+      <text class="lbl" x="455" y="66" text-anchor="middle">コア網（MME/HSS）</text>
+      <text class="sub" x="455" y="90" text-anchor="middle">同じ Ki を保持</text>
+
+      <g data-show-at="1"><path class="arrow" stroke="var(--c1)" d="M190 120 H362"/><path fill="var(--c1)" d="M362 114 L372 120 L362 126 Z"/><text class="lbl" x="280" y="110" text-anchor="middle">① IMSI で名乗る</text></g>
+      <g data-show-at="2"><text class="sub" x="455" y="120" text-anchor="middle">Ki＋乱数RAND→</text><text class="sub" x="455" y="138" text-anchor="middle">XRES・AUTN を計算</text><path class="arrow" stroke="var(--c3)" d="M370 160 H198"/><path fill="var(--c3)" d="M198 154 L188 160 L198 166 Z"/><text class="lbl" x="280" y="150" text-anchor="middle">② RAND＋AUTN</text></g>
+      <g data-show-at="3"><text class="sub" x="105" y="120" text-anchor="middle">AUTNで網が本物か確認</text><text class="sub" x="105" y="138" text-anchor="middle">Ki＋RAND→RES を計算</text><circle cx="105" cy="165" r="12" fill="var(--c5)" fill-opacity=".35" stroke="var(--c5)"/><text class="sub" x="105" y="170" text-anchor="middle" style="fill:var(--text)">鍵</text></g>
+      <g data-show-at="4"><path class="arrow" stroke="var(--c1)" d="M190 120 H362"/><path fill="var(--c1)" d="M362 114 L372 120 L362 126 Z"/><text class="lbl" x="280" y="110" text-anchor="middle">③ RES を返す</text><text class="sub" x="455" y="138" text-anchor="middle">RES＝XRES なら合格</text></g>
+      <g data-show-at="5"><text class="lbl" x="280" y="120" text-anchor="middle" style="fill:var(--ok)">④ 同じ暗号鍵を導出</text><text class="sub" x="280" y="142" text-anchor="middle">以後の通信を暗号化・改ざん検知</text><text class="sub" x="105" y="138" text-anchor="middle">CK/IK→KASME</text><text class="sub" x="455" y="138" text-anchor="middle">CK/IK→KASME</text></g>
+      <text class="sub" x="280" y="220" text-anchor="middle">Ki は一度も電波に乗らない</text>
+    </svg>
+    <div class="stepper-controls-slot"></div>
+    <div class="step" data-title="IMSIで名乗る"><h4>① 名乗る</h4><p>ロボットのモジュールは、SIMから読み出したIMSI（またはその仮の番号）を網に送って「この加入者です」と名乗ります。まだこの時点では本人かどうかわかりません。</p></div>
+    <div class="step" data-title="チャレンジ"><h4>② 網からの問題（チャレンジ）</h4><p>網のHSS（加入者データベース）は、そのIMSIに対応する Ki と乱数 RAND から、「正しい答え」XRES と、網が本物であることを示す AUTN を計算し、RAND と AUTN を端末に送ります。</p></div>
+    <div class="step" data-title="SIMで計算"><h4>③ SIMの中で計算</h4><p>SIMはAUTNを検証して「偽の基地局ではない」ことを確認し、自分の Ki と RAND から答え RES を計算します。計算はSIMの中で行われ、Ki は外に出ません。これが「SIMを差し替えると別の契約者になる」理由です。</p></div>
+    <div class="step" data-title="答え合わせ"><h4>④ 答え合わせ（レスポンス）</h4><p>端末が RES を返し、網は XRES と一致するか確かめます。一致すれば、同じ Ki を持っている＝正規の加入者と判断できます。</p></div>
+    <div class="step" data-title="鍵の導出"><h4>⑤ 暗号化の開始</h4><p>両者は同じ計算で暗号鍵（CK/IK から KASME など）を導き出し、以降の制御信号とデータを暗号化・完全性保護します。このようにSIMは「ロボットの身分証」であり「暗号の鍵束」でもあります。</p></div>
+    <figcaption>図1 SIMによる相互認証（EPS-AKAの概略）。</figcaption>
+  </figure>
+
+  <div class="callout robot"><span class="title">ロボットにとっての意味</span>
+    <p>SIMを抜き取られると、そのSIMは別の機器（スマートフォン等）でも使えてしまい、不正利用で高額請求になる危険があります。逆に、正しいSIMさえあればどのモジュールでも「その回線」として通信できます。量産ロボットでは、抜き取りを防ぐ<strong>チップSIM（MFF2）</strong>と、回線管理側での<strong>IMEIロック</strong>（7節）を組み合わせるのが定番です。</p>
+  </div>
+
+  <h2>2. SIMの形状</h2>
+  <p>SIMはこれまで小型化を繰り返してきました。中のICチップと8個の接点の配置はほぼ同じで、外側のプラスチックの大きさが違うだけです。IoT機器では、基板にはんだ付けする <strong>MFF2</strong>（Machine Form Factor 2）もよく使われます。下の図は各形状を<strong>互いに実寸の比率</strong>で描いたものです。</p>
+
+  <figure class="figure fig-mid" data-hotspots data-hs-default="f4">
+    <div class="hint">形状をクリックすると寸法と特徴が表示されます（各図形の大きさの比率が実寸比）</div>
+    <svg viewBox="0 0 560 300" role="img" aria-label="SIM形状の実寸比較">
+      <!-- 1FF: 85.6 x 53.98 mm, scale 3.2 px/mm -->
+      <g data-hs="f1">
+        <path d="M20 40 H294 V213 H20 Z" fill="var(--c5)" fill-opacity=".10" stroke="var(--c5)" stroke-width="1.5"/>
+        <rect x="46" y="100" width="80" height="48" rx="6" fill="none" stroke="var(--c5)" stroke-dasharray="4 3"/>
+        <rect x="68" y="110" width="34" height="28" rx="3" fill="var(--c4)" fill-opacity=".45" stroke="var(--c4)"/>
+        <text class="lbl" x="157" y="66" text-anchor="middle">1FF（フルサイズ）</text>
+        <text class="sub" x="157" y="86" text-anchor="middle">85.6 × 54.0 mm</text>
+        <text class="sub" x="200" y="130" text-anchor="middle">点線＝2FFの</text>
+        <text class="sub" x="200" y="148" text-anchor="middle">切り取り線</text>
+      </g>
+      <!-- 2FF: 25 x 15 mm -> 80 x 48 -->
+      <g data-hs="f2">
+        <path d="M320 40 H392 L400 48 V88 H320 Z" fill="var(--c5)" fill-opacity=".14" stroke="var(--c5)" stroke-width="1.5"/>
+        <rect x="343" y="50" width="34" height="28" rx="3" fill="var(--c4)" fill-opacity=".45" stroke="var(--c4)"/>
+        <text class="lbl" x="360" y="108" text-anchor="middle">2FF</text>
+        <text class="sub" x="360" y="124" text-anchor="middle">25×15mm</text>
+      </g>
+      <!-- 3FF: 15 x 12 mm -> 48 x 38.4 -->
+      <g data-hs="f3">
+        <path d="M425 40 H465 L473 48 V78.4 H425 Z" fill="var(--c5)" fill-opacity=".14" stroke="var(--c5)" stroke-width="1.5"/>
+        <rect x="432" y="45" width="34" height="28" rx="3" fill="var(--c4)" fill-opacity=".45" stroke="var(--c4)"/>
+        <text class="lbl" x="449" y="108" text-anchor="middle">3FF</text>
+        <text class="sub" x="449" y="124" text-anchor="middle">15×12mm</text>
+      </g>
+      <!-- 4FF: 12.3 x 8.8 mm -> 39.4 x 28.2 -->
+      <g data-hs="f4">
+        <path d="M495 40 H528 L534.4 46.4 V68.2 H495 Z" fill="var(--c5)" fill-opacity=".14" stroke="var(--c5)" stroke-width="1.5"/>
+        <rect x="498" y="42" width="33" height="24" rx="3" fill="var(--c4)" fill-opacity=".45" stroke="var(--c4)"/>
+        <text class="lbl" x="515" y="108" text-anchor="middle">4FF</text>
+        <text class="sub" x="515" y="124" text-anchor="middle">12.3×8.8</text>
+      </g>
+      <!-- MFF2: 6 x 5 mm -> 19.2 x 16 -->
+      <g data-hs="mff2">
+        <rect x="350" y="160" width="19.2" height="16" rx="1.5" fill="var(--c6)" fill-opacity=".5" stroke="var(--c6)" stroke-width="1.5"/>
+        <text class="lbl" x="385" y="168">MFF2（チップ型）</text>
+        <text class="sub" x="385" y="186">6×5mm・はんだ付け</text>
+        <rect x="330" y="146" width="210" height="50" rx="8" fill="none" stroke="var(--border)"/>
+      </g>
+      <g data-hs="esim">
+        <rect x="330" y="206" width="210" height="50" rx="8" fill="var(--c5)" fill-opacity=".08" stroke="var(--c5)" stroke-dasharray="5 4"/>
+        <text class="lbl" x="345" y="228">eSIM / iSIM</text>
+        <text class="sub" x="345" y="246">形でなく「書換え方式」の名前</text>
+      </g>
+      <text class="sub" x="20" y="240">オレンジ色＝接点（8個の端子が並ぶ金属面）</text>
+      <text class="sub" x="20" y="260">1〜4FFはカード型（ソケットに挿す）</text>
+    </svg>
+    <div class="hs-panel"></div>
+    <template data-hs-content="f1"><h4>1FF（フルサイズ、ID-1）</h4><p>クレジットカードと同じ大きさ（85.6×54.0mm）。今は端末に直接挿すことはなく、この台紙から2FF〜4FFを切り取って使う「キャリア（台紙）」の役割です。</p></template>
+    <template data-hs-content="f2"><h4>2FF（ミニSIM、25×15mm）</h4><p>かつての携帯電話の標準サイズ。産業用ルーターや古い機器では今もよく使われ、ソケットもしっかりしたものが多いです。</p></template>
+    <template data-hs-content="f3"><h4>3FF（マイクロSIM、15×12mm）</h4><p>2010年ごろのスマートフォンで普及。IoT機器でも一部使われています。</p></template>
+    <template data-hs-content="f4"><h4>4FF（ナノSIM、12.3×8.8mm）</h4><p>現在のスマートフォンの標準で、厚さも0.67mmと薄くなっています。多くのSIMは「1FF台紙に2FF/3FF/4FFの切り取り線」が入った<strong>マルチカット</strong>で届きます。小さいソケットほど振動に弱い傾向があるので、ロボットではロック機構を重視します。</p></template>
+    <template data-hs-content="mff2"><h4>MFF2（エムエフエフツー）</h4><p>6×5mmの8端子パッケージ（DFN/SON系）で、基板に<strong>直接はんだ付け</strong>します。接触不良が起きず、抜き取りによる不正利用も防げるため、車載・メーター・産業機器の標準です。ただし物理的に差し替えられないので、国やキャリアを変えるには <strong>eSIM（eUICC）対応のMFF2</strong> を選ぶか、グローバルIoT SIMの MFF2 版を使います。</p></template>
+    <template data-hs-content="esim"><h4>eSIM と iSIM</h4><p><strong>eSIM</strong>は形状の名前ではなく、「中の契約情報（プロファイル）を遠隔で書き込める」<strong>eUICC</strong>という仕組みのことです。多くはMFF2形状ですが、カード型のeUICCもあります（4節）。<strong>iSIM</strong>はさらに進んで、SIMの機能をモデムチップ（SoC）内の安全な領域に統合したもので、SIM部品そのものが不要になります。</p></template>
+    <figcaption>図2 SIM形状の比較（互いの大きさは実寸比、画面上の大きさは実寸ではありません）。</figcaption>
+  </figure>
+
+  <h2>3. 産業用SIM：見た目は同じでも中身が違う</h2>
+  <p>スマートフォン用のSIM（コンシューマ向け）と、IoT機器向けの<strong>産業用（インダストリアルグレード）SIM</strong>は、形が同じでも耐久性が違います。ロボットのように、温度変化・振動・長期間の連続稼働がある機器では産業用を選びます。</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>項目</th><th>コンシューマ向け（目安）</th><th>産業用（目安）</th><th>ロボットでの意味</th></tr></thead>
+    <tbody>
+      <tr><td>動作温度</td><td>−25〜+85℃程度</td><td>−40〜+105℃程度（製品による）</td><td>屋外・冷凍倉庫・炎天下・モーター近傍</td></tr>
+      <tr><td>書換え可能回数</td><td>10万回程度</td><td>50万回以上の品もある</td><td>頻繁な位置登録・ローミング切替でSIM内のデータを何度も書き換える</td></tr>
+      <tr><td>データ保持期間</td><td>10年程度</td><td>10〜15年以上</td><td>ロボットの製品寿命と合わせる</td></tr>
+      <tr><td>耐振動・耐湿</td><td>一般的</td><td>強化（MFF2・耐腐食接点など）</td><td>走行振動・結露</td></tr>
+      <tr><td>管理機能</td><td>なし</td><td>回線管理プラットフォーム、IMEIロック、休止等</td><td>数百〜数千台の回線を一括管理</td></tr>
+    </tbody>
+  </table></div>
+  <p class="small muted">数値はSIMベンダー各社の一般的な仕様の目安です。採用時は必ずデータシートで確認してください。</p>
+
+  <h2>4. eSIM（eUICC）の仕組み</h2>
+  <p>従来のSIMは、工場で1つの事業者の契約情報を書き込んだら一生そのままでした。<strong>eUICC</strong>（embedded Universal Integrated Circuit Card）は、事業者ごとの契約情報のひとまとまり＝<strong>プロファイル</strong>を、あとから電波経由でダウンロード・切替・削除できるSIMです。例えるなら、「中身を入れ替えられる鍵束」です。</p>
+  <p>プロファイルは事業者が発行し、<strong>SM-DP+</strong>（Subscription Manager – Data Preparation：プロファイルを作って暗号化し、配送するサーバ）から、特定のeUICCにしか開けられない形で届けられます。この仕組みは業界団体 <strong>GSMA</strong> が仕様化しており、用途によって3つの世代があります。</p>
+
+  <div class="table-wrap"><table>
+    <thead><tr><th>仕様</th><th>SGP.22（コンシューマ）</th><th>SGP.02（M2M）</th><th>SGP.32（IoT）</th></tr></thead>
+    <tbody>
+      <tr><td>主な対象</td><td>スマートフォン・タブレット・ウェアラブル</td><td>車載・メーターなど従来のM2M</td><td>画面のないIoT機器（ロボット含む）</td></tr>
+      <tr><td>主導するのは</td><td>利用者（QRコードを読み取る＝<strong>Pull型</strong>）</td><td>事業者側のサーバ（<strong>Push型</strong>）</td><td>機器の管理者が<strong>eIM</strong>から遠隔で指示</td></tr>
+      <tr><td>主な構成要素</td><td>LPA（端末内の管理アプリ）、SM-DP+、SM-DS</td><td>SM-DP、<strong>SM-SR</strong>（eUICCを遠隔管理するサーバ）</td><td><strong>eIM</strong>（遠隔管理）、<strong>IPA</strong>（機器内の代理）、SM-DP+（SGP.22と共通）</td></tr>
+      <tr><td>画面・操作</td><td>必要（利用者が操作）</td><td>不要</td><td>不要</td></tr>
+      <tr><td>事業者の切替</td><td>容易（利用者が選ぶ）</td><td>難しい：SM-SRの事業者間連携が必要で、特定事業者に縛られやすい</td><td>容易：SGP.22と同じSM-DP+を使えるので、多くの事業者のプロファイルを選べる</td></tr>
+      <tr><td>状況（2026年）</td><td>普及済み</td><td>既存M2Mで広く運用中</td><td>2023年にv1.0公開、v1.2が認証可能版。対応製品が増加中</td></tr>
+    </tbody>
+  </table></div>
+  <p>SGP.02 は「事業者主導」で作られたため、最初に選んだ事業者のSM-SRに縛られ、別の事業者に切り替えるには事業者同士の接続（統合）が必要で、実際にはなかなか切り替えられないという課題がありました。SGP.32 はこれを解決するため、スマートフォン向けに普及したSGP.22の仕組み（SM-DP+）を再利用しつつ、利用者の操作の代わりに <strong>eIM</strong>（eSIM IoT Remote Manager）というサーバが機器群をまとめて管理する形にしたものです。機器側の <strong>IPA</strong>（IoT Profile Assistant）は、モジュールやホストのソフト（IPAd）か、eUICCの中（IPAe）に置かれます。</p>
+
+  <figure class="figure fig-mid" data-stepper data-interval="4000">
+    <svg viewBox="0 0 560 300" role="img" aria-label="SGP.32によるプロファイル書込みの流れ">
+      <rect x="20" y="50" width="190" height="210" rx="10" fill="var(--c1)" fill-opacity=".10" stroke="var(--c1)" stroke-width="1.5"/>
+      <text class="lbl" x="115" y="74" text-anchor="middle">ロボット</text>
+      <rect x="40" y="90" width="150" height="46" rx="8" fill="var(--c1)" fill-opacity=".14" stroke="var(--c1)"/>
+      <text class="lbl" x="115" y="118" text-anchor="middle">IPA</text>
+      <rect x="40" y="150" width="150" height="96" rx="8" fill="var(--c5)" fill-opacity=".14" stroke="var(--c5)"/>
+      <text class="lbl" x="115" y="172" text-anchor="middle">eUICC</text>
+      <g data-show-at="1,2,3,4">
+        <rect x="52" y="182" width="126" height="24" rx="4" fill="var(--c6)" fill-opacity=".25" stroke="var(--c6)"/>
+        <text class="sub" x="115" y="199" text-anchor="middle" style="fill:var(--text)">初期プロファイル</text>
+      </g>
+      <g data-show-from="5">
+        <rect x="52" y="182" width="126" height="24" rx="4" fill="var(--c6)" fill-opacity=".12" stroke="var(--c6)" stroke-dasharray="3 3"/>
+        <text class="sub" x="115" y="199" text-anchor="middle">初期（無効）</text>
+      </g>
+      <g data-show-from="5">
+        <rect x="52" y="212" width="126" height="24" rx="4" fill="var(--c3)" fill-opacity=".3" stroke="var(--c3)"/>
+        <text class="sub" x="115" y="229" text-anchor="middle" style="fill:var(--text)">現地キャリア（有効）</text>
+      </g>
+
+      <rect x="360" y="30" width="180" height="56" rx="10" fill="var(--c4)" fill-opacity=".12" stroke="var(--c4)" stroke-width="1.5"/>
+      <text class="lbl" x="450" y="54" text-anchor="middle">eIM</text>
+      <text class="sub" x="450" y="74" text-anchor="middle">機器群の遠隔管理</text>
+      <rect x="360" y="122" width="180" height="56" rx="10" fill="var(--c5)" fill-opacity=".12" stroke="var(--c5)" stroke-width="1.5"/>
+      <text class="lbl" x="450" y="146" text-anchor="middle">SM-DP+</text>
+      <text class="sub" x="450" y="166" text-anchor="middle">プロファイル配送</text>
+      <rect x="360" y="214" width="180" height="56" rx="10" fill="var(--c2)" fill-opacity=".12" stroke="var(--c2)" stroke-width="1.5"/>
+      <text class="lbl" x="450" y="238" text-anchor="middle">携帯網</text>
+      <text class="sub" x="450" y="258" text-anchor="middle">初期回線 / 現地キャリア</text>
+
+      <g data-show-at="1"><text class="lbl" x="115" y="36" text-anchor="middle" style="fill:var(--c4)">工場で書込み</text></g>
+      <g data-show-at="2"><path class="arrow" stroke="var(--c2)" d="M210 220 H352"/><path fill="var(--c2)" d="M352 214 L362 220 L352 226 Z"/><text class="sub" x="285" y="210" text-anchor="middle">初期回線で接続</text></g>
+      <g data-show-at="3"><path class="arrow" stroke="var(--c4)" d="M360 58 L210 110"/><path fill="var(--c4)" d="M216 104 L206 112 L219 114 Z"/><text class="sub" x="300" y="70" text-anchor="middle">取得を指示</text></g>
+      <g data-show-at="4"><path class="arrow" stroke="var(--c5)" d="M360 150 L212 118"/><path fill="var(--c5)" d="M220 112 L208 117 L218 124 Z"/><text class="sub" x="290" y="120" text-anchor="middle">暗号化BPP</text></g>
+      <g data-show-at="5"><path class="arrow" stroke="var(--c3)" d="M210 235 H352"/><path fill="var(--c3)" d="M352 229 L362 235 L352 241 Z"/><text class="sub" x="285" y="255" text-anchor="middle">現地網にアタッチ</text></g>
+      <g data-show-at="6"><path class="arrow" stroke="var(--c4)" d="M210 100 L360 64"/><path fill="var(--c4)" d="M352 60 L363 63 L354 71 Z"/><text class="sub" x="290" y="100" text-anchor="middle">結果を通知</text></g>
+    </svg>
+    <div class="stepper-controls-slot"></div>
+    <div class="step" data-title="工場"><h4>① 工場：eUICCと初期プロファイル</h4><p>ロボットの基板にeUICC（多くはMFF2）を実装します。eUICCベンダーの工場で、出荷直後に最低限つながるための<strong>初期（ブートストラップ）プロファイル</strong>と、管理先のeIMの情報が書き込まれています。初期プロファイルはグローバルIoT SIMのように多くの国でローミングできる回線が一般的です。</p></div>
+    <div class="step" data-title="初期接続"><h4>② 出荷・電源ON：初期回線でつながる</h4><p>仕向け国に届いたロボットは、初期プロファイルでローミング接続します。この時点で、ロボットは最低限の管理通信ができる状態になります。</p></div>
+    <div class="step" data-title="eIMの指示"><h4>③ eIMからの指示</h4><p>管理者（自社や回線サービス事業者）は、現地キャリアとの契約に基づき、eIMで「このロボット群に、このSM-DP+からこのプロファイルを入れる」と指示します。指示はIPAに届きます。利用者がQRコードを読む必要はありません。</p></div>
+    <div class="step" data-title="ダウンロード"><h4>④ SM-DP+からダウンロード</h4><p>IPAはSM-DP+に接続し、<strong>BPP</strong>（Bound Profile Package：そのeUICC専用に暗号化・署名されたプロファイル）をダウンロードしてeUICCに渡します。他のeUICCでは開けないので、途中で盗まれても使えません。</p></div>
+    <div class="step" data-title="有効化"><h4>⑤ インストールと切替</h4><p>eUICCはプロファイルをインストールし、有効化します。有効にできるプロファイルは原則1つなので、初期プロファイルは無効になります。モジュールは再アタッチし、以後は<strong>現地キャリアの加入者</strong>として通信します（恒久ローミング規制への対応にもなります）。</p></div>
+    <div class="step" data-title="結果通知"><h4>⑥ 結果の通知と後始末</h4><p>処理結果はeIMに通知されます。新しいプロファイルで接続できなかった場合に元へ戻す（フォールバック）設計が重要です。後日、別の国へ移設するときも、同じ手順で別のプロファイルに切り替えられます。</p></div>
+    <figcaption>図3 SGP.32（eSIM IoT）でのプロファイル書込みの流れ（概略）。</figcaption>
+  </figure>
+
+  <div class="callout warn"><span class="title">eSIMでも「事業者がプロファイルを出してくれるか」は別問題</span>
+    <p>eSIMは技術的には切替を可能にしますが、実際には<strong>その国のキャリアがIoT向けにプロファイルを提供し、自社（または回線サービス事業者）と契約を結んでくれるか</strong>が前提です。国やキャリアによってはIoT用eSIMプロファイルの提供が限定的な場合もあります。採用前に、仕向け国ごとに利用できるプロファイルを回線サービス事業者に確認しましょう。また、モジュールとeUICCがSGP.32に対応しているか（IPAの実装場所）も確認が必要です。</p>
+  </div>
+
+  <details class="more"><summary>もっと詳しく：iSIM（統合型SIM）</summary>
+    <p>iSIM は、SIMの機能（eUICC）を、モデムを含むチップ（SoC）の中の独立した安全領域（セキュアエンクレーブ）に組み込んだものです。SIMの部品・配線・実装コストが不要になり、消費電力も下がります。一部のLTE-M/NB-IoT向けチップで対応が進んでいますが、2026年時点では対応チップ・キャリアの受け入れ状況が限られるため、ロボットでの採用はまだ「検討対象」の段階です（要確認）。</p>
+  </details>
+
+  <h2>5. 回線の選び方：4つの選択肢</h2>
+  <p>海外に出荷するロボットの回線には、大きく4つの方法があります。「料金」だけでなく、「手配の手間」「通信品質」「その国の法規」を合わせて考えます。</p>
+
+  <div data-tabs>
+    <div class="tab-list">
+      <button data-tab="local">① 現地キャリアSIM</button>
+      <button data-tab="global">② グローバルIoT SIM</button>
+      <button data-tab="jproam">③ 日本のSIMでローミング</button>
+      <button data-tab="esim">④ eSIMで現地切替</button>
+    </div>
+    <div data-tab-panel="local">
+      <p>出荷先の国の携帯事業者（例：韓国のSK Telecom・KT・LG U+、台湾の中華電信 等）と、その国で法人契約してSIMを調達します。</p>
+      <dl class="opt-grid">
+        <dt>コスト</dt><dd><span class="badge ok">安い</span> 国内料金なので通信量が多いほど有利。</dd>
+        <dt>手配の手間</dt><dd><span class="badge bad">大きい</span> 国ごとに契約・請求・サポート窓口が別。現地法人や代理店が必要な場合も。SIMを出荷先ごとに挿し分けるため、<strong>製造・在庫が国別</strong>になる。</dd>
+        <dt>品質</dt><dd><span class="badge ok">良い</span> 自国網なので遅延が小さく、LTE-M/NB-IoTなど網側機能もフルに使える。ただしその1社の網しか使えない（圏外なら終わり）。</dd>
+        <dt>法規</dt><dd><span class="badge ok">最も確実</span> 恒久ローミング規制・SIM登録制度にそのまま適合させやすい。</dd>
+        <dt>向くケース</dt><dd>出荷先が1〜2か国で台数が多い、中国・インドのように現地回線が必須の国。</dd>
+      </dl>
+    </div>
+    <div data-tab-panel="global">
+      <p>多くの国の事業者とローミング契約を持つ回線サービス事業者（MVNO・IoT回線事業者）のSIMを、1種類ですべての国に使います。<strong>マルチIMSI</strong>型は、SIMの中に複数事業者のIMSIを持ち、国に応じて切り替えて「その国に近い事業者の加入者」として振る舞います。</p>
+      <dl class="opt-grid">
+        <dt>コスト</dt><dd><span class="badge warn">中〜高</span> MB単価はローミング料金ベース。月数MB〜数百MBなら許容範囲だが、動画を送るような大容量用途では高くつく。</dd>
+        <dt>手配の手間</dt><dd><span class="badge ok">小さい</span> 契約・請求・管理画面が1つ。<strong>全世界で同じSIMを工場で実装</strong>できる（在庫が1種類）。</dd>
+        <dt>品質</dt><dd><span class="badge warn">中</span> 通信は多くの場合、ホーム網を経由するため遅延が増える（ローカルブレイクアウト対応の事業者もある）。一方で<strong>現地の複数キャリアに接続できる</strong>ので、圏外に強い。</dd>
+        <dt>法規</dt><dd><span class="badge bad">注意</span> 恒久ローミングを禁止・制限する国では長期利用できない（6節）。</dd>
+        <dt>向くケース</dt><dd>出荷先が多国・少量、PoCや初期出荷、通信量が小さい遠隔監視用途。</dd>
+      </dl>
+    </div>
+    <div data-tab-panel="jproam">
+      <p>日本の事業者（またはその法人向けIoTサービス）のSIMを、海外で国際ローミングさせる方法です。</p>
+      <dl class="opt-grid">
+        <dt>コスト</dt><dd><span class="badge bad">高いことが多い</span> 個人向けの海外ローミング料金は非常に高い。法人IoT向けの海外対応プランなら現実的な場合もある。</dd>
+        <dt>手配の手間</dt><dd><span class="badge ok">最小</span> 日本語で契約・サポートできる。すでに国内で使っているなら追加手配がほぼ不要。</dd>
+        <dt>品質</dt><dd><span class="badge warn">中</span> ローミング先の事業者・カテゴリ（特にLTE-M/NB-IoTのローミング対応）が限られることがある。</dd>
+        <dt>法規</dt><dd><span class="badge bad">注意</span> 恒久ローミング規制の対象。ローミング契約自体も「一時滞在の旅行者」を想定していることが多い。</dd>
+        <dt>向くケース</dt><dd>展示会デモ、短期の現地実証（PoC）、少数台の評価機。</dd>
+      </dl>
+    </div>
+    <div data-tab-panel="esim">
+      <p>eUICCを実装し、出荷時は初期（グローバル）プロファイルでつなぎ、現地に着いたら現地キャリアのプロファイルを遠隔で書き込みます（4節の流れ）。</p>
+      <dl class="opt-grid">
+        <dt>コスト</dt><dd><span class="badge ok">長期的に有利</span> 現地料金を使える。ただしeUICCは通常のSIMより高く、eIM・プロファイル管理の費用もかかる。</dd>
+        <dt>手配の手間</dt><dd><span class="badge warn">中</span> 工場では1種類のSIMで済む（在庫1種類）。一方で国ごとのキャリア契約とプロファイル手配は必要。回線サービス事業者にまとめて任せることもできる。</dd>
+        <dt>品質</dt><dd><span class="badge ok">良い</span> 現地網の品質を使え、切替に失敗しても初期プロファイルに戻れる設計にできる。</dd>
+        <dt>法規</dt><dd><span class="badge ok">適合させやすい</span> 「一定期間内に現地事業者のプロファイルへ切り替える」ことを求める国の規制にも対応しやすい。</dd>
+        <dt>向くケース</dt><dd>多国展開・量産・長期運用、ロボットが転売・移設される可能性がある場合。</dd>
+      </dl>
+    </div>
+  </div>
+
+  <div class="table-wrap"><table>
+    <thead><tr><th>方式</th><th>コスト</th><th>手配の手間</th><th>品質</th><th>法規リスク</th><th>在庫の種類</th></tr></thead>
+    <tbody>
+      <tr><td>① 現地キャリアSIM</td><td class="center"><span class="badge ok">低</span></td><td class="center"><span class="badge bad">大</span></td><td class="center"><span class="badge ok">良</span></td><td class="center"><span class="badge ok">低</span></td><td>国の数だけ</td></tr>
+      <tr><td>② グローバルIoT SIM</td><td class="center"><span class="badge warn">中〜高</span></td><td class="center"><span class="badge ok">小</span></td><td class="center"><span class="badge warn">中</span></td><td class="center"><span class="badge bad">高</span></td><td>1種類</td></tr>
+      <tr><td>③ 日本SIMでローミング</td><td class="center"><span class="badge bad">高</span></td><td class="center"><span class="badge ok">最小</span></td><td class="center"><span class="badge warn">中</span></td><td class="center"><span class="badge bad">高</span></td><td>1種類</td></tr>
+      <tr><td>④ eSIMで現地切替</td><td class="center"><span class="badge ok">低〜中</span></td><td class="center"><span class="badge warn">中</span></td><td class="center"><span class="badge ok">良</span></td><td class="center"><span class="badge ok">低</span></td><td>1種類</td></tr>
+    </tbody>
+  </table></div>
+
+  <h2>6. 法規：恒久ローミングとSIM登録</h2>
+  <h3>6-1. 恒久ローミング（パーマネントローミング）の規制</h3>
+  <p>ローミングは本来「旅行者が一時的に他国の網を使う」ための仕組みです。IoT機器のように、外国のSIMを入れたまま何年もその国で使い続けることを<strong>恒久ローミング</strong>と呼びます。受け入れ国の事業者から見ると「自国の網を使っているのに自国の契約者ではない」ため、規制当局や事業者が制限することがあります。ブラジル・トルコ・ナイジェリアなどは明示的な禁止で知られ、アジアでは<strong>中国とインドが実質的に禁止</strong>、その他の国は条件付きで容認〜要確認、とまちまちです。さらに、法令で禁止されていなくても、<strong>現地事業者とのローミング契約で恒久利用が禁止・制限</strong>され、一定期間後に接続を切られることもあります。</p>
+
+  <div class="table-wrap"><table>
+    <thead><tr><th>国・地域</th><th>恒久ローミング</th><th>SIM登録・その他</th></tr></thead>
+    <tbody>
+      <tr><td>中国</td><td><span class="badge bad">実質不可</span> 商用運用には現地三大キャリア（China Mobile / China Telecom / China Unicom）の回線が必要とされる。試験的利用は黙認されることがあるとの報告も</td><td>実名登録制度。IoT向け回線も法人の実名登録が前提。IoT回線は用途・接続先が制限されることがある（要確認）。データの越境移転規制にも注意</td></tr>
+      <tr><td>インド</td><td><span class="badge bad">不可</span> 恒久運用にはDoT（電気通信局）の認可を受けた事業者・M2Mサービス登録とKYC（本人確認）が必要とされる</td><td>TRAIの勧告（2024年3月）では、輸入機器のM2M eSIMは国際ローミング開始から<strong>6か月以内</strong>にインドの事業者のプロファイルへ切り替えることとされる（現行の運用・適用範囲は要確認）</td></tr>
+      <tr><td>韓国</td><td><span class="badge warn">条件付きで可</span>（要確認）</td><td>実名確認制度あり。現地キャリアの法人IoT回線が一般的</td></tr>
+      <tr><td>台湾</td><td><span class="badge">要確認</span></td><td>SIMの実名登録制度あり（要確認）</td></tr>
+      <tr><td>シンガポール</td><td><span class="badge warn">実務上困難</span> 行政上の要件により持続的運用は難しいとされる（要確認）</td><td>SIM登録制度あり</td></tr>
+      <tr><td>インドネシア</td><td><span class="badge">要確認</span></td><td>SIM登録（国民ID等）に加え、<strong>IMEI登録制度（CEIR）</strong>があり、未登録の端末は網で使えなくなる。IoT機器・モジュールへの適用範囲は要確認</td></tr>
+      <tr><td>フィリピン</td><td><span class="badge">要確認</span></td><td>SIM登録法（RA 11934、2022年施行）。<strong>M2M/IoT用途のSIMも対象</strong>で、法人は法人として登録</td></tr>
+      <tr><td>タイ・ベトナム・マレーシア</td><td><span class="badge">要確認</span></td><td>いずれもSIM登録（本人確認）が義務。ベトナムは近年、登録情報の再確認を強化</td></tr>
+      <tr><td>日本（参考）</td><td><span class="badge ok">条件付きで可</span></td><td>音声SIMは本人確認義務（携帯電話不正利用防止法）。データ専用・IoTは事業者の運用による</td></tr>
+    </tbody>
+  </table></div>
+  <div class="callout danger"><span class="title">規制は頻繁に変わります</span>
+    <p>上表は2026年9月時点で確認できた公開情報（回線事業者・調査会社の解説等）をもとにした<strong>概要</strong>で、法的助言ではありません。「要確認」の国を含め、出荷前には必ず<strong>回線サービス事業者と現地の法律・認証の専門家</strong>に最新情報を確認してください。国ごとの認証制度は<a href="10-asia.html">第10章</a>で扱います。</p>
+  </div>
+
+  <h3>6-2. SIM本人登録制度</h3>
+  <p>アジアの多くの国では、犯罪・詐欺対策として<strong>SIMの本人登録</strong>（実名登録）が義務化されています。スマートフォンなら利用者が身分証を示して登録しますが、ロボットのSIMは誰が登録するのでしょうか。一般的には、回線の契約者（自社、現地販売代理店、または顧客企業）が<strong>法人として登録</strong>し、どの機器にどのSIMが入っているかを管理します。国によっては、法人登録でも利用者（エンドユーザー）の情報や、機器の設置場所の管理を求められることがあります。</p>
+  <div class="callout robot"><span class="title">契約者を誰にするかを先に決める</span>
+    <p>ロボットを「販売」するのか「レンタル・サブスクリプション（通信込み）」で提供するのかで、回線の契約者が変わります。通信込みで売るなら自社（または現地法人）が契約者となり、登録・請求・解約の責任を負います。顧客に回線を用意してもらうなら、SIMスロットやAPN（接続先名）の設定手段を用意する必要があります。<strong>ビジネスモデルと回線の契約形態はセットで設計</strong>しましょう。</p>
+  </div>
+
+  <h2>7. 出荷時・運用時の回線管理</h2>
+  <p>数百〜数千台のロボットの回線は、1回線ずつ手作業で管理できません。IoT回線サービスには、Webの管理画面やAPIで回線の状態を切り替えられる<strong>回線管理プラットフォーム</strong>（CMP：Connectivity Management Platform）が付いています。各SIMは、製造から廃棄まで次のような状態をたどります。</p>
+
+  <figure class="figure fig-mid" data-hotspots data-hs-default="test">
+    <div class="hint">状態（箱）をクリックすると、その状態の意味と課金・運用の注意点が表示されます</div>
+    <svg viewBox="0 0 560 230" role="img" aria-label="SIMのライフサイクル">
+      <defs><marker id="ah7" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" fill="var(--text-muted)"/></marker></defs>
+      <path class="line" d="M170 55 H200" marker-end="url(#ah7)"/>
+      <path class="line" d="M360 55 H390" marker-end="url(#ah7)"/>
+      <path class="line" d="M470 80 V110 H100 V140" marker-end="url(#ah7)"/>
+      <path class="line" d="M180 158 H210" marker-end="url(#ah7)"/>
+      <path class="line" d="M210 178 H180" marker-end="url(#ah7)"/>
+      <path class="line" d="M370 168 H400" marker-end="url(#ah7)"/>
+      <g data-hs="test"><rect x="20" y="30" width="150" height="50" rx="10" fill="var(--c6)" fill-opacity=".14" stroke="var(--c6)"/><text class="lbl" x="95" y="53" text-anchor="middle">テスト</text><text class="sub" x="95" y="70" text-anchor="middle">工場検査</text></g>
+      <g data-hs="inv"><rect x="205" y="30" width="155" height="50" rx="10" fill="var(--c6)" fill-opacity=".14" stroke="var(--c6)"/><text class="lbl" x="282" y="53" text-anchor="middle">在庫</text><text class="sub" x="282" y="70" text-anchor="middle">出荷待ち・輸送中</text></g>
+      <g data-hs="ready"><rect x="395" y="30" width="145" height="50" rx="10" fill="var(--c4)" fill-opacity=".14" stroke="var(--c4)"/><text class="lbl" x="467" y="53" text-anchor="middle">開通待ち</text><text class="sub" x="467" y="70" text-anchor="middle">初回通信で開通</text></g>
+      <g data-hs="active"><rect x="20" y="140" width="160" height="56" rx="10" fill="var(--ok)" fill-opacity=".16" stroke="var(--ok)"/><text class="lbl" x="100" y="164" text-anchor="middle">開通（稼働）</text><text class="sub" x="100" y="184" text-anchor="middle">課金中</text></g>
+      <g data-hs="susp"><rect x="215" y="140" width="155" height="56" rx="10" fill="var(--warn)" fill-opacity=".16" stroke="var(--warn)"/><text class="lbl" x="292" y="164" text-anchor="middle">休止</text><text class="sub" x="292" y="184" text-anchor="middle">一時停止・盗難時</text></g>
+      <g data-hs="retire"><rect x="405" y="140" width="135" height="56" rx="10" fill="var(--bad)" fill-opacity=".12" stroke="var(--bad)"/><text class="lbl" x="472" y="164" text-anchor="middle">解約</text><text class="sub" x="472" y="184" text-anchor="middle">廃棄・返却</text></g>
+      <text class="sub" x="20" y="222">※状態の名前・課金条件は回線サービスにより異なります</text>
+    </svg>
+    <div class="hs-panel"></div>
+    <template data-hs-content="test"><h4>テスト（Test Ready）</h4><p>工場の検査工程で、少量の無料（または低額）データ通信ができる状態です。ロボットの最終検査で「実際に網につながるか」「電波強度（RSRP）が基準内か」「IMEI・ICCIDの紐付け」を確認します。一定の通信量・期間を超えると自動で次の状態に移る設定が一般的です。</p></template>
+    <template data-hs-content="inv"><h4>在庫（Inventory）</h4><p>出荷を待つ、または船で運ばれている間の状態です。課金されない（または低額）ようにしておきます。輸送中や倉庫でロボットの電源が入っても、勝手に課金が始まらないようにするためです。</p></template>
+    <template data-hs-content="ready"><h4>開通待ち（Activation Ready）</h4><p>顧客先で電源が入り、初めて通信した瞬間に自動で「開通」になる状態です。<strong>開通のタイミングを「出荷日」ではなく「顧客が使い始めた日」にできる</strong>ので、在庫期間の無駄な課金を避けられます。</p></template>
+    <template data-hs-content="active"><h4>開通（Activated）</h4><p>通常の稼働状態で、月額料金と通信量の課金がかかります。多数の回線でデータ量を分け合う<strong>プール（シェア）料金</strong>にすると、機体ごとの通信量のばらつきを吸収できます。通信量の急増（ソフトの不具合による暴走など）を検知して止めるアラート設定も重要です。</p></template>
+    <template data-hs-content="susp"><h4>休止（Suspended / Deactivated）</h4><p>回線を一時的に止めた状態です。顧客の契約停止、長期保管、<strong>盗難・紛失時</strong>に使います。休止中も少額の基本料がかかる場合があります。盗難時は、休止にする前に最後の位置情報（GNSS・基地局情報）を取得しておくと役立ちます。</p></template>
+    <template data-hs-content="retire"><h4>解約（Retired）</h4><p>ロボットの廃棄・返却時に回線を終了します。解約を忘れると課金が続くので、資産管理システムと回線管理を連携させましょう。eSIMならプロファイルの削除、MFF2なら基板ごとの廃棄になります。</p></template>
+    <figcaption>図4 IoT回線（SIM）のライフサイクルの例。</figcaption>
+  </figure>
+
+  <h3>IMEIロックと盗難対策</h3>
+  <p><strong>IMEI</strong>（International Mobile Equipment Identity）は、モジュール（通信機器）側の製造番号です。回線管理プラットフォームでSIMとIMEIの組を登録しておき、<strong>別のIMEIの機器にSIMが挿されたら通信を拒否する</strong>のがIMEIロックです。SIMを抜き取ってスマートフォンで使う不正利用を防げます。盗難・紛失時は、①最後の位置を取得、②回線を休止、③必要ならロボット側のソフトで機能ロック、④保険・警察対応、という手順をあらかじめ決めておきます。</p>
+  <div class="callout robot"><span class="title">量産ラインでの紐付け</span>
+    <p>工場の検査工程で、ロボットのシリアル番号・モジュールのIMEI・SIMのICCID（eSIMならEID：eUICCの識別番号）を<strong>自動で読み取ってデータベースに登録</strong>しておくと、出荷後のサポート・回線の開通・IMEIロック・盗難対応がすべてスムーズになります。これは<a href="12-roadmap.html">第12章</a>の量産準備の重要項目です。</p>
+  </div>
+
+  <h2>8. どの回線方式を選ぶか：簡易判定</h2>
+  <p>質問に答えると、おすすめの回線方式と理由を表示します。あくまで最初の当たりを付けるための目安です。</p>
+  <div class="flow" id="sim-flow" aria-live="polite"></div>
+
+  <h2>9. 回線まわりの確認チェックリスト</h2>
+  <ul data-checklist="ch07-sim">
+    <li>出荷先ごとに、恒久ローミングの可否とSIM登録制度を回線事業者・専門家に確認した</li>
+    <li>回線の契約者（自社・現地法人・代理店・顧客）とビジネスモデル（販売/通信込みサブスク）を決めた</li>
+    <li>SIMの形状（ソケット/MFF2）とグレード（産業用・温度範囲）を決めた</li>
+    <li>eSIMを使う場合、モジュール・eUICCのSGP.32（またはSGP.02）対応と、仕向け国で使えるプロファイルを確認した</li>
+    <li>回線管理プラットフォームで、テスト→在庫→開通待ち→開通の状態遷移と課金条件を確認した</li>
+    <li>工場でシリアル・IMEI・ICCID/EIDを自動登録する仕組みを用意した</li>
+    <li>IMEIロック、通信量アラート、盗難時の休止手順を決めた</li>
+    <li>通信量の見積もり（月あたりMB）から料金プランとプール料金を比較した</li>
+    <li>中国・インド向けは現地キャリア回線（または現地プロファイル）を前提に計画した</li>
+  </ul>
+
+  <h2>まとめ</h2>
+  <ul>
+    <li>SIMは IMSI（名前）と Ki（秘密鍵）を持つICカードで、Kiを外に出さずにチャレンジ・レスポンスで認証する。</li>
+    <li>形状は1FF〜4FFのカード型と、はんだ付けのMFF2。ロボットには振動・抜き取りに強い<strong>産業用MFF2</strong>が向く。</li>
+    <li>eSIM（eUICC）はプロファイルを遠隔で書き換えられる。IoT向けの新仕様 <strong>SGP.32</strong> は、eIMとIPAで画面のない機器群を管理し、事業者の切替を容易にする。</li>
+    <li>回線は「現地SIM」「グローバルIoT SIM」「日本SIMのローミング」「eSIMで現地切替」から選ぶ。多国・量産・長期運用ならeSIM切替が有力。</li>
+    <li><strong>中国・インドは恒久ローミングが実質不可</strong>。多くのアジア諸国にSIM登録義務がある。規制は変わるので出荷前に必ず確認する。</li>
+    <li>回線はライフサイクル（テスト→在庫→開通→休止→解約）で管理し、IMEIロックと盗難対応を用意する。</li>
+  </ul>
+
+  <h2>用語</h2>
+  <dl class="terms">
+    <dt>SIM / USIM</dt><dd>加入者識別モジュール。LTEではカード内のUSIMアプリが認証を担う。</dd>
+    <dt>IMSI</dt><dd>International Mobile Subscriber Identity。加入者番号（MCC＋MNC＋個別番号）。</dd>
+    <dt>Ki</dt><dd>SIMと事業者のHSSだけが持つ加入者ごとの秘密鍵。</dd>
+    <dt>ICCID</dt><dd>SIMカード自体の識別番号。</dd>
+    <dt>IMEI</dt><dd>International Mobile Equipment Identity。通信機器（モジュール）の識別番号。</dd>
+    <dt>EPS-AKA</dt><dd>LTEの認証と鍵合意の手順（チャレンジ・レスポンス）。</dd>
+    <dt>MFF2</dt><dd>基板にはんだ付けするチップ型SIM（6×5mm）。</dd>
+    <dt>eUICC / eSIM</dt><dd>プロファイルを遠隔で書き込み・切替できるSIM。</dd>
+    <dt>iSIM</dt><dd>SIM機能をモデムを含むSoCに統合したもの。</dd>
+    <dt>プロファイル</dt><dd>事業者ごとの契約情報（IMSI・鍵・設定）のひとまとまり。</dd>
+    <dt>SM-DP+</dt><dd>プロファイルを作成・暗号化して配送するサーバ。</dd>
+    <dt>SM-SR</dt><dd>SGP.02（M2M）でeUICCを遠隔管理するサーバ。</dd>
+    <dt>eIM / IPA</dt><dd>SGP.32でIoT機器群のプロファイルを遠隔管理するサーバ / 機器側の代理機能。</dd>
+    <dt>マルチIMSI</dt><dd>1枚のSIMに複数事業者のIMSIを持たせ、国に応じて切り替える方式。</dd>
+    <dt>恒久ローミング</dt><dd>外国のSIMで長期間継続して他国の網を使うこと。規制される国がある。</dd>
+    <dt>CMP</dt><dd>Connectivity Management Platform。回線の状態・課金を一括管理する仕組み。</dd>
+    <dt>KYC</dt><dd>Know Your Customer。契約者の本人確認。</dd>
+  </dl>
+
+  <h2>確認クイズ</h2>
+  <div class="quiz" data-quiz="07"></div>
+
+  <section class="sources"><h2>参考・出典</h2><ul>
+    <li><a href="https://www.gsma.com/solutions-and-impact/technologies/esim/">GSMA: eSIM（SGP.22 / SGP.02 / SGP.32 仕様の入手先）</a></li>
+    <li><a href="https://trustedconnectivityalliance.org/wp-content/uploads/2024/09/TCA_Realising-the-Benefits-of-SGP.32_FINAL.pdf">Trusted Connectivity Alliance: Realising the Benefits of GSMA's eSIM IoT Specification (SGP.32)</a></li>
+    <li><a href="https://kigen.com/resources/blog/esims-explained-sgp-32-iot-esims-and-consumer-esims/">Kigen: SGP.32 IoT eSIMs and consumer eSIMs explained</a></li>
+    <li><a href="https://www.cullen-international.com/news/2026/04/Asia-Pacific-sharpens-regulatory-control-of-IoT-connectivity-across-roaming--licensing-and-SIM-registration-frameworks.html">Cullen International: Asia-Pacific sharpens regulatory control of IoT connectivity（2026年4月）</a></li>
+    <li><a href="https://www.transatel.com/news-and-insights/blog/decoding-2025-iot-regulations-critical-for-global-deployment/">Transatel: Decoding 2025 IoT regulations</a></li>
+    <li><a href="https://iot.cards/en/resources/blog/roaming-permanente">iot.cards: Permanent roaming in IoT: what's allowed and what isn't in 2026</a></li>
+    <li><a href="https://www.trai.gov.in/sites/default/files/2024-09/Recommendations_21032024_0.pdf">TRAI: Recommendations on Usage of Embedded SIM for Machine-to-Machine Communications（2024年3月）</a></li>
+    <li><a href="https://www.pib.gov.in/PressReleasePage.aspx?PRID=2016367">PIB: TRAI releases recommendations on Usage of Embedded SIM for M2M Communications</a></li>
+    <li><a href="https://elibrary.judiciary.gov.ph/thebookshelf/showdocs/2/96154">Philippines: IRR of Republic Act No. 11934 (SIM Registration Act)</a></li>
+    <li><a href="https://www.theregister.com/2020/10/13/ceir_indonesia_imei_mess/">The Register: Indonesia's CEIR IMEI registration（2020年）</a></li>
+    <li><a href="https://www.etsi.org/deliver/etsi_ts/102200_102299/102221/">ETSI TS 102 221（UICCの物理・電気仕様、形状）</a></li>
+    <li><a href="https://www.3gpp.org/DynaReport/33401.htm">3GPP TS 33.401（EPSのセキュリティ、EPS-AKA）</a></li>
+  </ul><p>確認日: 2026-09</p></section>
+</main>
+</div>
+<script src="../assets/data/quiz/ch07.js"></script>
+<script src="../assets/app.js"></script>
+<script>
+(function () {
+  "use strict";
+  var box = document.getElementById("sim-flow");
+  if (!box) return;
+  var esc = (window.LTE && window.LTE.esc) || function (s) { return String(s); };
+  var Q = [
+    { id: "cn", q: "出荷先に中国またはインドは含まれますか？", opts: [
+      { v: "yes", t: "含まれる", s: "どちらか一方でも" },
+      { v: "no", t: "含まれない" } ] },
+    { id: "countries", q: "出荷先の国（地域）の数は？", opts: [
+      { v: "one", t: "1〜2か国" },
+      { v: "many", t: "3か国以上" } ] },
+    { id: "volume", q: "1国あたりの想定台数は？", opts: [
+      { v: "small", t: "少量（〜数百台）", s: "PoC・初期出荷など" },
+      { v: "large", t: "多い（数千台〜）" } ] },
+    { id: "data", q: "1台あたりの月間通信量は？", opts: [
+      { v: "low", t: "少ない（〜数百MB）", s: "状態・位置・ログの送信" },
+      { v: "high", t: "多い（数GB〜）", s: "映像・遠隔操作・大容量更新" } ] },
+    { id: "move", q: "出荷後にロボットが別の国へ移設・転売される可能性は？", opts: [
+      { v: "yes", t: "ありうる" },
+      { v: "no", t: "ほぼない" } ] },
+    { id: "stage", q: "今の開発段階は？", opts: [
+      { v: "poc", t: "PoC・展示会デモ・評価機" },
+      { v: "mass", t: "量産・本格出荷" } ] }
+  ];
+  var LABEL = {};
+  Q.forEach(function (q) { LABEL[q.id] = {}; q.opts.forEach(function (o) { LABEL[q.id][o.v] = o.t; }); });
+  var ans = {};
+
+  function recommend(a) {
+    var main, why = [], also = [];
+    if (a.stage === "poc") {
+      main = a.countries === "one" && a.cn === "no" ? "グローバルIoT SIM（または日本SIMの法人向けローミング）" : "グローバルIoT SIM（中国・インドは現地SIMを別途用意）";
+      why.push("PoC・評価段階では手配の速さが最優先。1種類のSIMで複数国を試せます。");
+      if (a.cn === "yes") why.push("中国・インドは恒久ローミングが実質不可のため、実証でも現地回線を用意するのが安全です（短期の試験利用の可否は要確認）。");
+      also.push("量産に向けて、eSIM（SGP.32）対応のモジュール・eUICCを試作段階から評価しておくと移行がスムーズです。");
+      return { main: main, why: why, also: also };
+    }
+    if (a.countries === "many" || a.move === "yes") {
+      main = "eSIM（eUICC）＋現地プロファイル切替（SGP.32）";
+      why.push("工場では1種類のSIMを実装し、出荷先で現地キャリアのプロファイルに切り替えられます。");
+      if (a.move === "yes") why.push("移設・転売があっても、遠隔で別の国のプロファイルに切り替えられます。");
+      if (a.cn === "yes") why.push("中国・インドの「現地事業者の回線が必要」という要件に、現地プロファイルで対応しやすくなります（利用できるプロファイルは要確認）。");
+      if (a.data === "high") why.push("通信量が多いので、ローミング料金ではなく現地料金にできる効果が大きいです。");
+      also.push("仕向け国ごとに利用可能なIoT用eSIMプロファイルを回線サービス事業者に確認しましょう。");
+      if (a.volume === "small" && a.data === "low") also.push("台数・通信量が小さいうちは、グローバルIoT SIM（マルチIMSI）単独でも十分な場合があります（恒久ローミング規制国を除く）。");
+      return { main: main, why: why, also: also };
+    }
+    /* 1〜2か国・移設なし・量産 */
+    if (a.cn === "yes" || a.volume === "large" || a.data === "high") {
+      main = "現地キャリアSIM（法人契約・産業用MFF2）";
+      if (a.cn === "yes") why.push("中国・インドでは現地事業者の回線が前提です。");
+      if (a.volume === "large") why.push("台数が多いので、国別の契約・在庫管理の手間より料金の安さが効きます。");
+      if (a.data === "high") why.push("通信量が多いと、現地料金との差が大きくなります。");
+      also.push("将来の国追加に備えて、eSIM対応のMFF2を採用しておく選択肢もあります。");
+    } else {
+      main = "グローバルIoT SIM（マルチIMSI）";
+      why.push("少量・低通信量なら、1種類のSIMで契約・管理を一本化できる利点が大きいです。");
+      also.push("出荷先に恒久ローミングの制限がないか、回線事業者に必ず確認してください。");
+    }
+    return { main: main, why: why, also: also };
+  }
+
+  function render() {
+    var idx = Q.findIndex(function (q) { return !(q.id in ans); });
+    var trail = Q.filter(function (q) { return q.id in ans; }).map(function (q, i) {
+      return '<button class="badge accent" data-back="' + q.id + '" title="この質問からやり直す">' + (i + 1) + '. ' + esc(LABEL[q.id][ans[q.id]]) + '</button>';
+    }).join("");
+    var html = '<div class="trail">' + (trail || '<span class="small muted">質問に答えてください（回答をクリックすると戻れます）</span>') + '</div>';
+    if (idx >= 0) {
+      var q = Q[idx];
+      html += '<div class="q"><span class="qnum">Q' + (idx + 1) + '/' + Q.length + '</span>' + esc(q.q) + '</div><div class="opts">' +
+        q.opts.map(function (o) { return '<button class="opt" data-q="' + q.id + '" data-v="' + o.v + '">' + esc(o.t) + (o.s ? '<small>' + esc(o.s) + '</small>' : '') + '</button>'; }).join("") + '</div>';
+    } else {
+      var r = recommend(ans);
+      html += '<div class="result"><h4>おすすめ：' + esc(r.main) + '</h4><b>理由</b><ul>' + r.why.map(function (w) { return '<li>' + esc(w) + '</li>'; }).join("") + '</ul>' +
+        (r.also.length ? '<b>あわせて検討</b><ul>' + r.also.map(function (w) { return '<li>' + esc(w) + '</li>'; }).join("") + '</ul>' : '') +
+        '<p class="small muted" style="margin-bottom:0">この判定は目安です。法規・料金は回線事業者に確認してください。</p></div>' +
+        '<div class="btn-row"><button class="btn" data-reset>最初からやり直す</button></div>';
+    }
+    box.innerHTML = html;
+  }
+  box.addEventListener("click", function (e) {
+    var t = e.target.closest("button");
+    if (!t) return;
+    if (t.hasAttribute("data-reset")) { ans = {}; }
+    else if (t.dataset.back) {
+      var k = Q.findIndex(function (q) { return q.id === t.dataset.back; });
+      Q.slice(k).forEach(function (q) { delete ans[q.id]; });
+    } else if (t.dataset.q) { ans[t.dataset.q] = t.dataset.v; }
+    render();
+  });
+  render();
+})();
+</script>
+</body>
+</html>

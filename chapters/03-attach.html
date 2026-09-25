@@ -1,0 +1,665 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>接続の流れ（アタッチ）｜LTE Study</title>
+  <link rel="stylesheet" href="../assets/style.css">
+  <style>
+    /* ---- 第3章ページ専用スタイル（CSS変数のみ使用） ---- */
+    .seq-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; margin-top: 10px; }
+    .seq-scroll svg { display: block; width: 100%; min-width: 660px; max-width: 800px; height: auto; margin: 0 auto; }
+    .seq .msg { transition: opacity .3s; }
+    .seq .msg.is-on:not(.is-cur) { opacity: .32; }
+    .seq .msg.is-cur text { font-weight: 700; }
+    .seq .lane rect { transition: stroke-width .2s; }
+    .seq .lane.is-inv rect { stroke-width: 3.5; fill: var(--accent-soft); }
+    .seq text.lbl { font-size: 12px; paint-order: stroke; stroke: var(--surface); stroke-width: 4px; stroke-linejoin: round; }
+
+    .pw-controls { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; margin: 6px 0 8px; }
+    .pw-controls label { font-size: .9rem; }
+    .pw-controls input[type="range"] { width: min(320px, 100%); accent-color: var(--accent); vertical-align: middle; }
+    .pw-slider-wrap[hidden] { display: none; }
+    .pw-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; margin-top: 10px; }
+    .pw-stat { background: var(--surface-2); border-radius: var(--radius-sm); padding: 8px 12px; }
+    .pw-stat .k { font-size: .78rem; color: var(--text-muted); display: block; }
+    .pw-stat .v { font-weight: 700; font-size: 1.02rem; }
+    .pw-note { margin-top: 10px; background: var(--surface-2); border-radius: var(--radius-sm); padding: 10px 14px; font-size: .92rem; }
+    .meter { letter-spacing: 2px; color: var(--warn); }
+
+    .ts-flow { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px; counter-reset: ts; }
+    .ts-node { position: relative; background: var(--surface-2); border: 1px solid var(--border); border-left: 5px solid var(--c6); border-radius: var(--radius-sm); padding: 8px 12px 10px; line-height: 1.5; }
+    .ts-node .lv { font-family: var(--mono); font-size: .75rem; color: var(--text-muted); display: block; }
+    .ts-node .nm { font-weight: 700; display: block; margin: 2px 0 4px; }
+    .ts-node .sym { font-size: .82rem; color: var(--text-muted); display: block; }
+    .ts-node.l-radio { border-left-color: var(--c2); }
+    .ts-node.l-sim { border-left-color: var(--c5); }
+    .ts-node.l-core { border-left-color: var(--c3); }
+    .ts-node.l-ext { border-left-color: var(--c4); }
+    .ts-node.l-dev { border-left-color: var(--c1); }
+    .ts-node.is-active { border-color: var(--accent); background: var(--accent-soft); }
+    .ts-legend { font-size: .8rem; color: var(--text-muted); margin: 8px 0 0; }
+  </style>
+</head>
+<body data-root="../" data-chapter="03">
+<div class="page">
+<main>
+  <header class="chapter-hero">
+    <div class="eyebrow">CHAPTER 03</div>
+    <h1>接続の流れ（アタッチ）</h1>
+    <p class="lead">ロボットの電源を入れてから、最初の1パケットが送れるようになるまでの数秒〜数十秒のあいだに、端末・基地局・コア網のあいだでは何十ものやり取りが行われています。その流れを1ステップずつ再生しながら理解し、「つながらない」ときにどこを疑えばよいか判断できるようになりましょう。</p>
+    <div class="goals"><h2>この章のゴール</h2><ul>
+      <li>電源ON → セルサーチ → RRC接続 → Attach → 認証 → IP割当 の順番と、それぞれの目的を説明できる</li>
+      <li>SIMとHSSが秘密鍵Kで「答え合わせ」する認証（AKA）の考え方がわかる</li>
+      <li>RRC Idle / Connected の違いと、省電力機能（DRX・eDRX・PSM）の得失がわかる</li>
+      <li><code>AT+CEREG?</code> の結果から登録状態を読み取り、「つながらない」原因の当たりをつけられる</li>
+    </ul></div>
+  </header>
+
+  <h2>1. 全体像 — 「ホテルのチェックイン」にたとえると</h2>
+  <p>第2章で、LTEのネットワークが <b>UE（User Equipment：端末）</b>、<b>eNodeB（eNB：基地局）</b>、そしてコア網 <b>EPC（Evolved Packet Core）</b> の中の <b>MME</b>（制御の司令塔）、<b>HSS</b>（加入者データベース）、<b>S-GW / P-GW</b>（データの出入口）で構成されることを見ました。この章では、それらの登場人物が「電源ON」の瞬間からどう連携するのかを追いかけます。</p>
+  <p>流れ全体を、初めて泊まるホテルでのチェックインにたとえると覚えやすくなります。</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>LTEの手順</th><th>ホテルでたとえると</th><th>主な相手</th><th>層</th></tr></thead>
+    <tbody>
+      <tr><td>PLMN選択</td><td>予約してあるホテル（系列）を決める</td><td>UE内部（SIMの情報）</td><td>—</td></tr>
+      <tr><td>セルサーチ（PSS/SSS）</td><td>ホテルの看板と入口を見つける</td><td>eNB</td><td>物理層</td></tr>
+      <tr><td>システム情報（MIB/SIB）</td><td>入口の館内案内を読む（受付はどこか、何階か）</td><td>eNB</td><td>RRC（報知）</td></tr>
+      <tr><td>ランダムアクセス（RACH）</td><td>フロントで「すみません」と手を挙げる</td><td>eNB</td><td>MAC</td></tr>
+      <tr><td>RRC接続</td><td>担当スタッフが付いて、専用の窓口ができる</td><td>eNB</td><td>RRC</td></tr>
+      <tr><td>Attach要求・認証（AKA）</td><td>予約名を告げ、本人確認（身分証の照合）</td><td>MME・HSS</td><td>NAS</td></tr>
+      <tr><td>セキュリティ確立</td><td>以後の会話は小声（暗号）で、と取り決める</td><td>MME・eNB</td><td>NAS / AS</td></tr>
+      <tr><td>デフォルトベアラ・IP割当</td><td>部屋の鍵とWi-Fiパスワードを受け取る</td><td>S-GW・P-GW</td><td>NAS / GTP</td></tr>
+    </tbody>
+  </table></div>
+  <p>表の「層」の欄に出てくる <b>NAS（Non-Access Stratum）</b> は「端末とコア網（MME）のあいだの会話」、<b>AS（Access Stratum）</b> は「端末と基地局のあいだの会話」を指します。NASのメッセージは基地局を通りますが、基地局は中身を解釈せずにそのままMMEへ中継します。手紙を郵便局（基地局）に預けても、郵便局は封を開けずに宛先（MME）へ届けるのと同じです。</p>
+  <p>そして <b>RRC（Radio Resource Control）</b> はAS側の制御プロトコルで、「この端末にどの無線リソースを割り当てるか」を端末と基地局で取り決めます。ここを押さえておくと、次のシーケンス図がぐっと読みやすくなります。</p>
+
+  <h2>2. シーケンス図で1ステップずつ再生する</h2>
+  <p>下の図は、3GPP（LTEを標準化している国際団体）の仕様 TS 23.401 に書かれている「初期アタッチ」手順を、学習用に要点だけ残して簡略化したものです。縦の点線がそれぞれの装置、横の矢印がメッセージです。「次へ」を押すと該当する矢印が強調され、そのステップで関わる装置の枠が太くなります。</p>
+
+  <figure class="figure" data-stepper data-interval="4200" id="seq-fig">
+    <div class="hint">「次へ ▶」または番号で1ステップずつ再生。スマホでは図を横にスクロールできます</div>
+    <div class="stepper-controls-slot"></div>
+    <div class="step" data-title="電源ON・PLMN選択"><h4>① 電源ON → PLMN選択</h4><p>モジュールが起動すると、まずSIMを読み、「どの事業者の網（PLMN）につなぐか」を決めます。<b>PLMN（Public Land Mobile Network）</b>は MCC（国番号、日本は440/441）＋MNC（事業者番号）で表される“事業者の網”のIDです。SIMに書かれた「自社網（HPLMN）」を最優先に、ローミング用SIMなら「優先ローミング先リスト」の順に候補を探します。この段階ではまだ電波は送信していません。</p></div>
+    <div class="step" data-title="セルサーチ"><h4>② セルサーチ（PSS / SSS）</h4><p>対応バンドの周波数を順に聞いて、基地局が常に送っている同期信号を探します。<b>PSS（Primary Synchronization Signal）</b>で大まかなタイミングを、<b>SSS（Secondary Synchronization Signal）</b>でフレームの区切りを合わせ、両者の組み合わせから<b>PCI（物理セルID、504通り）</b>がわかります。ラジオのダイヤルを回して放送局を探す作業にあたり、<b>モジュールが対応していないバンドのセルは、ここで“見えない”</b>ことになります。</p></div>
+    <div class="step" data-title="MIB/SIB"><h4>③ システム情報（MIB / SIB）の受信</h4><p>見つけたセルが放送している報知情報を読みます。<b>MIB（Master Information Block）</b>には帯域幅やフレーム番号など“最低限の読み方”が、<b>SIB1</b>にはそのセルが属するPLMN・トラッキングエリア番号（TAC）・利用制限の有無などが、<b>SIB2</b>にはランダムアクセスの方法など共通設定が入っています。SIB1のPLMNが①で選んだものと一致し、電波が十分に強ければ、このセルに「キャンプ（待受）」します。</p></div>
+    <div class="step" data-title="RACH"><h4>④ ランダムアクセス（RACH）</h4><p>ここで初めて端末が電波を出します。SIB2で指定された方法で<b>プリアンブル</b>（合図の符号）を送り、基地局は<b>ランダムアクセス応答</b>で「送信タイミングのずれ（タイミングアドバンス）」と「次に話してよい枠」を返します。複数の端末が同時に手を挙げることもあるため、“ランダム”に符号を選び、あとの手順で衝突を解消します。</p></div>
+    <div class="step" data-title="RRC接続"><h4>⑤ RRC接続の確立</h4><p>もらった枠で <b>RRC接続要求</b>を送り、基地局は <b>RRC接続セットアップ</b>で端末専用の制御チャネルを割り当てます。端末は <b>RRC接続セットアップ完了</b>を返し、このメッセージの中に<b>NASメッセージ「Attach要求」</b>を相乗りさせます。ここで端末は <b>RRC Connected</b> 状態になりました。</p></div>
+    <div class="step" data-title="Attach要求"><h4>⑥ Attach要求がMMEへ</h4><p>基地局は受け取ったAttach要求を、S1というインタフェースでMMEへ転送します（中身は開けません）。Attach要求には端末のID（初回は <b>IMSI</b>：SIM固有の加入者番号。2回目以降は網がくれた一時ID <b>GUTI</b>）、端末の能力、要求するPDN接続の種類などが入っています。</p></div>
+    <div class="step" data-title="認証 AKA"><h4>⑦ 認証（EPS-AKA）</h4><p>MMEはHSSに「この加入者の認証情報をください」と問い合わせ、HSSは<b>秘密鍵K</b>から計算した<b>認証ベクトル</b>（乱数RAND、期待される答えXRES、網の証明書にあたるAUTN、以降の鍵のもとKASME）を返します。MMEはRANDとAUTNを端末に送り、SIMは自分のKで答えRESを計算して返します。<b>RES＝XRESなら本人確認OK</b>。同時にSIMもAUTNを検証して「本物の網か」を確かめる<b>相互認証</b>です。</p></div>
+    <div class="step" data-title="セキュリティ・位置登録"><h4>⑧ NASセキュリティ確立と位置登録</h4><p>MMEは<b>NASセキュリティモードコマンド</b>で使う暗号・完全性保護のアルゴリズムを指定し、端末が完了を返すと、以後のNASメッセージは暗号化されます。続いてMMEはHSSに<b>位置登録（Update Location）</b>を行い、「この加入者は今このMMEの配下にいる」と登録すると同時に、契約内容（使ってよいAPN、通信速度上限など）を受け取ります。<b>SIM未開通やローミング不可はこのあたりで判明</b>し、Attach拒否になります。</p></div>
+    <div class="step" data-title="ベアラ・IP割当"><h4>⑨ デフォルトベアラ作成とIP割当</h4><p>MMEはS-GWに<b>セッション作成要求</b>を送り、S-GWはそれをP-GWへ中継します。P-GWは <b>APN</b>（接続先ネットワークの名前）に応じて端末の<b>IPアドレスを割り当て</b>、インターネットや企業網への出口を用意します。こうして端末〜P-GW間に「データの専用通路」＝<b>デフォルトベアラ</b>が作られます。</p></div>
+    <div class="step" data-title="Attach完了"><h4>⑩ Attach受諾・無線側の設定・完了</h4><p>MMEは基地局に「この端末のコンテキスト（鍵やベアラ情報）」を渡しつつ、端末宛の<b>Attach受諾</b>（割り当てたIPアドレス入り）を託します。基地局は<b>ASセキュリティモード</b>で無線区間の暗号化を開始し、<b>RRC再設定</b>でデータ用の無線ベアラを張ります。端末が<b>Attach完了</b>を返し、MMEがS-GWに基地局側の受け口を通知（ベアラ更新）して、準備完了です。</p></div>
+    <div class="step" data-title="データ通信"><h4>⑪ データ通信開始</h4><p>ユーザーデータ（IPパケット）は <b>UE ⇄ eNB ⇄ S-GW ⇄ P-GW ⇄ インターネット</b> の経路を通ります。MMEとHSSは制御専門で、データは通りません（第2章の「ユーザープレーン／コントロールプレーン」の分離）。LTEでは、Attachが終わった時点でIPアドレスまで持っている“常時接続（Always-on）”状態になるのが特徴です。</p></div>
+
+    <div class="seq-scroll"><svg class="seq" id="seq-svg" viewBox="0 0 800 760" role="img" aria-label="初期アタッチ手順のシーケンス図"></svg></div>
+    <figcaption>図1：LTE初期アタッチの簡略シーケンス（TS 23.401 5.3.2節を元に学習用に簡略化）。UE⇄MMEの矢印（NAS）は実際には基地局を経由しますが、基地局は中身を解釈せず中継するだけなので直接の矢印で描いています。</figcaption>
+  </figure>
+
+  <div class="callout robot"><span class="title">ロボットでは：起動シーケンスをLTE待ちにしない</span>
+    <p>アタッチは電波が良ければ1〜数秒で終わりますが、<b>初回起動・輸出先での初回電源ON・圏外からの復帰</b>では、対応する全バンドを探すセルサーチに数十秒〜数分かかることがあります。ロボットのソフトは「LTEがつながるまで起動を止める」のではなく、LTEは並行して接続を試み、つながったら状態を通知する非同期の設計にしましょう。また、輸出先ごとに使うバンドをモジュール設定で絞り込むと、探す時間が短くなります（第4章・第8章）。</p>
+  </div>
+
+  <h2>3. 各ステップをもう少し詳しく</h2>
+
+  <h3>3-1. PLMN選択：どの事業者につなぐか</h3>
+  <p>SIMの中には、自社網のID（HPLMN）、同等に扱う網のリスト（EHPLMN）、ローミング時の優先リスト（OPLMN）、そして「以前拒否されたので当面避ける網」＝<b>禁止PLMNリスト（FPLMN）</b>が入っています。端末は基本的にこの情報に従い、自動で網を選びます（自動選択モード）。モジュールでは <code>AT+COPS</code> コマンドで手動選択に切り替えることもできます。</p>
+  <p>日本国内の自社SIMならHPLMNを探すだけですが、<b>輸出先で日本のSIMやグローバルSIMを使う場合はローミング</b>になり、「どの現地事業者に、どの順でつなぐか」がSIM側のリストと契約で決まります。一度拒否された網はFPLMNに登録されて以降しばらく試されなくなるため、現地試験で「最初に失敗したら、その後もつながらない」という現象の原因になることがあります。</p>
+
+  <h3>3-2. セルサーチとシステム情報：看板と館内案内</h3>
+  <p>基地局は、端末がいてもいなくても同期信号と報知情報を送り続けています。PSSは3種類、SSSは168種類あり、その組み合わせで <b>3 × 168 = 504</b> 通りの物理セルIDが表せます。端末は周波数を一つずつ聞いて同期信号を探し、見つかったら<b>RSRP（Reference Signal Received Power：基準信号の受信電力）</b>などで電波の強さを測ります。</p>
+  <p>MIBは約40ミリ秒ごとに繰り返し送られ、帯域幅とフレーム番号がわかります。SIB1にはPLMN ID、TAC（トラッキングエリアコード＝呼び出しの単位となるエリア番号）、セル単位の利用制限（cell barred）などが入り、端末は「このセルで待受してよいか」をここで判断します。</p>
+  <div class="callout tip"><span class="title">「対応バンド」はここで効いてくる</span>
+    <p>端末は自分が対応するバンドの周波数しか聞きにいけません。現地の事業者がBand 3とBand 8で運用していても、モジュールがBand 1とBand 19にしか対応していなければ、セルサーチは永遠に何も見つけられません。これが輸出で最も多い「つながらない」原因のひとつです（詳しくは<a href="04-bands.html">第4章</a>、<a href="../tools/band-checker.html">バンド共通化チェッカー</a>）。</p>
+  </div>
+
+  <h3>3-3. ランダムアクセス（RACH）：4ステップの挨拶</h3>
+  <p><b>RACH（Random Access Channel）</b>の手順は、通常4つのメッセージで構成されます。Msg1（プリアンブル送信）、Msg2（ランダムアクセス応答：タイミングアドバンスと送信許可）、Msg3（RRC接続要求：端末の識別子入り）、Msg4（RRC接続セットアップ：衝突解消）です。複数の端末が偶然同じプリアンブルを選んでしまっても、Msg4で自分の識別子が返ってきた端末だけが「自分が選ばれた」と判断します。</p>
+  <p><b>タイミングアドバンス</b>とは「基地局から遠い端末ほど、少し早めに送信してね」という補正値です。電波は光速で進みますが、数kmあれば数マイクロ秒の遅れになり、多数の端末の信号を基地局で揃えて受信するためにはこの補正が欠かせません。</p>
+
+  <h3>3-4. 認証（AKA）：秘密鍵Kは電波に乗らない</h3>
+  <p>LTEの認証方式 <b>EPS-AKA（Authentication and Key Agreement）</b> の要は、<b>SIMとHSSだけが同じ秘密鍵Kを持っている</b>ことです。Kは製造時にSIMへ書き込まれ、外から読み出すことはできません。認証では、Kそのものではなく「Kを使って計算した答え」だけを見せ合います。</p>
+
+  <figure class="figure">
+    <svg viewBox="0 0 640 330" role="img" aria-label="AKA認証の考え方">
+      <!-- SIM側 -->
+      <rect x="16" y="20" width="200" height="290" rx="12" class="box" style="stroke:var(--c5);stroke-width:2"/>
+      <text x="116" y="46" text-anchor="middle" font-size="14" font-weight="700">SIM（端末内）</text>
+      <rect x="46" y="62" width="140" height="34" rx="8" fill="var(--c5)" fill-opacity=".18" stroke="var(--c5)"/>
+      <text x="116" y="84" text-anchor="middle" font-size="13">🔑 秘密鍵 K</text>
+      <text x="116" y="140" text-anchor="middle" font-size="13">RAND と K から計算</text>
+      <text x="116" y="160" text-anchor="middle" font-size="13" class="t-muted">↓</text>
+      <rect x="46" y="170" width="140" height="34" rx="8" fill="var(--c1)" fill-opacity=".15" stroke="var(--c1)"/>
+      <text x="116" y="192" text-anchor="middle" font-size="13">答え RES</text>
+      <text x="116" y="238" text-anchor="middle" font-size="12" class="t-muted">AUTN を検証して</text>
+      <text x="116" y="256" text-anchor="middle" font-size="12" class="t-muted">「本物の網か」も確認</text>
+      <text x="116" y="290" text-anchor="middle" font-size="12" class="t-muted">暗号鍵 CK / IK も生成</text>
+      <!-- HSS側 -->
+      <rect x="424" y="20" width="200" height="290" rx="12" class="box" style="stroke:var(--c5);stroke-width:2"/>
+      <text x="524" y="46" text-anchor="middle" font-size="14" font-weight="700">HSS（コア網）</text>
+      <rect x="454" y="62" width="140" height="34" rx="8" fill="var(--c5)" fill-opacity=".18" stroke="var(--c5)"/>
+      <text x="524" y="84" text-anchor="middle" font-size="13">🔑 秘密鍵 K</text>
+      <text x="524" y="140" text-anchor="middle" font-size="13">乱数 RAND を作り計算</text>
+      <text x="524" y="160" text-anchor="middle" font-size="13" class="t-muted">↓</text>
+      <rect x="454" y="170" width="140" height="34" rx="8" fill="var(--c3)" fill-opacity=".15" stroke="var(--c3)"/>
+      <text x="524" y="192" text-anchor="middle" font-size="13">期待値 XRES</text>
+      <text x="524" y="238" text-anchor="middle" font-size="12" class="t-muted">RAND・AUTN・XRES・</text>
+      <text x="524" y="256" text-anchor="middle" font-size="12" class="t-muted">KASME をMMEへ渡す</text>
+      <!-- 中央 -->
+      <line x1="226" y1="112" x2="414" y2="112" class="line"/>
+      <polygon points="226,112 236,107 236,117" fill="var(--text-muted)"/>
+      <text x="320" y="104" text-anchor="middle" font-size="13">RAND・AUTN（MME経由）</text>
+      <line x1="226" y1="220" x2="304" y2="220" class="line"/>
+      <polygon points="304,220 294,215 294,225" fill="var(--text-muted)"/>
+      <text x="262" y="212" text-anchor="middle" font-size="12">RES</text>
+      <line x1="414" y1="220" x2="336" y2="220" class="line dash"/>
+      <text x="378" y="212" text-anchor="middle" font-size="12">XRES</text>
+      <circle cx="320" cy="220" r="16" fill="var(--ok)" fill-opacity=".2" stroke="var(--ok)" stroke-width="2"/>
+      <text x="320" y="225" text-anchor="middle" font-size="14" font-weight="700">＝?</text>
+      <text x="320" y="258" text-anchor="middle" font-size="13">MMEが比較</text>
+      <text x="320" y="278" text-anchor="middle" font-size="12" class="t-muted">一致すれば本人</text>
+      <text x="320" y="300" text-anchor="middle" font-size="12" fill="var(--bad)">K 自体は一度も送らない</text>
+    </svg>
+    <figcaption>図2：EPS-AKAの考え方。同じ問題（RAND）を、同じ鍵（K）を持つ2者が別々に解き、答えが一致するかで本人確認します。</figcaption>
+  </figure>
+  <p>この仕組みのおかげで、電波を盗聴されても K は漏れません。また RAND は毎回変わるので、過去の答えを録音して再生する「なりすまし」も通用しません。さらに AUTN には網側しか作れない検証値と通し番号（SQN）が入っており、SIMはそれを確かめることで<b>偽の基地局</b>にだまされるのを防ぎます。</p>
+  <p>認証が通ると、SIMとHSS（MME）の両方で、Kから派生させた同じ鍵 <b>KASME</b> ができます。以後の暗号化・改ざん防止の鍵はすべてこのKASMEから作られます。</p>
+
+  <h3>3-5. セキュリティ確立：NASとASの2段階</h3>
+  <p>鍵ができても、どのアルゴリズムで暗号化するかを決めなければ使えません。まずMMEと端末の間で <b>NASセキュリティモード</b>（NAS SMC）を実行し、続いて基地局と端末の間で <b>ASセキュリティモード</b>（AS SMC）を実行します。LTEの標準アルゴリズムには、SNOW 3Gベース（EEA1/EIA1）、AESベース（EEA2/EIA2）、ZUCベース（EEA3/EIA3）の3系統があり、ZUCは中国で開発された方式です。</p>
+  <p>暗号化（盗聴防止）と完全性保護（改ざん防止）は別物で、制御メッセージには必ず完全性保護がかかります。セキュリティ確立の前に送られるAttach要求などは暗号化されていないため、初回はIMSIが平文で流れる弱点があり、LTEでは2回目以降に一時ID（GUTI）を使うことでその機会を減らしています。</p>
+
+  <h3>3-6. デフォルトベアラとIP割当：Attach＝即データ可能</h3>
+  <p><b>ベアラ（bearer）</b>とは「決まった品質で端末〜P-GW間を運ぶ論理的な通路」のことです。LTEではAttach手順の中で必ず1本、<b>デフォルトベアラ</b>が作られ、P-GWが <b>APN（Access Point Name）</b> に応じたIPアドレスを割り当てます。APNは「どの出口ネットワークにつなぐか」を示す名前で、たとえばインターネット向けと、閉域網（企業網）向けで別のAPNが用意されていることがあります（第2章参照）。</p>
+  <p>3Gまでは「網に登録（Attach）」と「データ通信の開始（PDPコンテキスト有効化）」が別手順でしたが、LTEでは両方がまとめて行われます。そのため、APNの設定が間違っていると<b>Attachそのものが拒否される</b>ことがあります。この点は後のトラブルシュートで重要になります。</p>
+  <details class="more"><summary>もっと詳しく：APNはいつ送られる？ IPv4とIPv6は？</summary>
+    <p>APNはAttach要求に同梱できますが、APNは暗号化前に送らない方が望ましいため、端末が「ESM情報は後で送る」フラグを立て、セキュリティ確立後に <b>ESM Information</b> として送る方式もよく使われます。端末がAPNを指定しなければ、HSSに登録された契約上のデフォルトAPNが使われます。</p>
+    <p>PDNタイプとして IPv4 / IPv6 / IPv4v6（デュアルスタック）を要求でき、事業者によってはIPv6のみを割り当ててIPv4はNAT64で変換する場合もあります。サーバー側がIPv4しか持たない構成では注意が必要です。</p>
+  </details>
+
+  <h2>4. RRC Idle と RRC Connected — 「待受」と「通話中」</h2>
+  <p>アタッチが終わった端末は、ずっと基地局と専用接続を保っているわけではありません。しばらく通信がないと、基地局は無線リソースを解放して端末を <b>RRC Idle（待受）</b> 状態に戻します。この無通信タイマーの長さは事業者の設定次第で、数秒〜数十秒程度が一般的です。</p>
+  <p>大事なのは、<b>RRC Idleでもコア網への登録・IPアドレス・デフォルトベアラは残っている</b>ことです。専用窓口は閉じたけれど、ホテルの部屋（IPアドレス）はそのまま、という状態です。再び送信したいときは、RACHからRRC接続を張り直して <b>Service Request</b> を送るだけで、数十〜百数十ミリ秒程度で通信を再開できます。網側からデータが届いた場合は、端末が属するトラッキングエリア全体に <b>ページング（呼び出し）</b> が送られ、端末がそれに応えて接続します。</p>
+
+  <figure class="figure" data-hotspots data-hs-default="st-conn">
+    <div class="hint">四角い状態をクリック（タップ）すると解説が表示されます</div>
+    <svg viewBox="0 0 480 350" role="img" aria-label="RRC状態の遷移図">
+      <rect x="4" y="112" width="472" height="234" rx="12" fill="none" stroke="var(--c3)" stroke-dasharray="6 5" stroke-width="1.5"/>
+      <text x="14" y="336" font-size="12" class="t-muted">コア網に登録済み（EMM-REGISTERED）</text>
+
+      <g data-hs="st-off">
+        <rect x="140" y="12" width="200" height="58" rx="10" class="box" style="stroke:var(--c6);stroke-width:2"/>
+        <text x="240" y="37" text-anchor="middle" font-size="14" font-weight="700">未登録（電源OFF等）</text>
+        <text x="240" y="57" text-anchor="middle" font-size="12" class="t-muted">EMM-DEREGISTERED</text>
+      </g>
+      <g data-hs="st-conn">
+        <rect x="14" y="130" width="170" height="64" rx="10" class="box" style="stroke:var(--c1);stroke-width:2"/>
+        <text x="99" y="157" text-anchor="middle" font-size="14" font-weight="700">RRC Connected</text>
+        <text x="99" y="178" text-anchor="middle" font-size="12" class="t-muted">専用の無線接続あり</text>
+      </g>
+      <g data-hs="st-idle">
+        <rect x="296" y="130" width="170" height="64" rx="10" class="box" style="stroke:var(--c2);stroke-width:2"/>
+        <text x="381" y="157" text-anchor="middle" font-size="14" font-weight="700">RRC Idle</text>
+        <text x="381" y="178" text-anchor="middle" font-size="12" class="t-muted">DRX・eDRXで待受</text>
+      </g>
+      <g data-hs="st-psm">
+        <rect x="296" y="250" width="170" height="64" rx="10" class="box" style="stroke:var(--c5);stroke-width:2"/>
+        <text x="381" y="277" text-anchor="middle" font-size="14" font-weight="700">PSM</text>
+        <text x="381" y="298" text-anchor="middle" font-size="12" class="t-muted">電波も聞かず熟睡</text>
+      </g>
+
+      <!-- 遷移 -->
+      <line x1="170" y1="70" x2="104" y2="124" class="line"/>
+      <polygon points="100,128 104,117 111,123" fill="var(--text-muted)"/>
+      <text x="152" y="108" font-size="12">Attach</text>
+
+      <line x1="186" y1="150" x2="288" y2="150" class="line"/>
+      <polygon points="294,150 284,145 284,155" fill="var(--text-muted)"/>
+      <text x="240" y="142" text-anchor="middle" font-size="12">無通信で解放</text>
+
+      <line x1="294" y1="176" x2="192" y2="176" class="line"/>
+      <polygon points="186,176 196,171 196,181" fill="var(--text-muted)"/>
+      <text x="240" y="194" text-anchor="middle" font-size="12">送信 / 呼出</text>
+
+      <line x1="381" y1="196" x2="381" y2="242" class="line"/>
+      <polygon points="381,248 376,238 386,238" fill="var(--text-muted)"/>
+      <text x="390" y="226" font-size="12">T3324 満了</text>
+
+      <polyline points="294,282 99,282 99,202" class="line"/>
+      <polygon points="99,196 94,206 104,206" fill="var(--text-muted)"/>
+      <text x="112" y="274" font-size="12">送信 or 定期TAU</text>
+    </svg>
+    <div class="hs-panel"></div>
+    <figcaption>図3：RRC・登録状態の遷移（簡略）。点線の枠内はすべて「コア網に登録済み」です。</figcaption>
+    <template data-hs-content="st-off"><h4>未登録（EMM-DEREGISTERED）</h4><p>電源OFF、SIMなし、Attach前、またはDetach後の状態です。網はこの端末の存在を知らず、IPアドレスもありません。ここからAttach手順（本章の図1）を経て Connected に移ります。<b>EMM（EPS Mobility Management）</b>はコア網から見た登録状態の管理を指します。</p></template>
+    <template data-hs-content="st-conn"><h4>RRC Connected（接続中）</h4><p>基地局が端末専用の無線リソースを割り当て、データをすぐに送受信できる状態です。消費電力は最も大きく、送信中は数百mAクラスの電流が流れることもあります。この状態で移動すると、<b>網の指示によるハンドオーバー</b>で基地局が切り替わります（第2章）。</p></template>
+    <template data-hs-content="st-idle"><h4>RRC Idle（待受）</h4><p>無線の専用接続は解放済みですが、コア網への登録とIPアドレスは残っています。端末は決まった周期（DRX周期）だけ目を覚まして、自分宛てのページングがないか確認します。移動した場合は、端末が自分で良いセルを選び直す<b>セル再選択</b>を行い、トラッキングエリアが変わったときだけ網に位置を知らせます（TAU：Tracking Area Update）。</p></template>
+    <template data-hs-content="st-psm"><h4>PSM（Power Saving Mode）</h4><p>Idleに入ってからタイマー T3324（アクティブタイマー）が切れると、端末はページングの確認すらやめて深いスリープに入ります。登録は網に残っているので、起きたときにAttachし直す必要はありません。起床するのは、自分が送信したいときか、定期位置登録タイマー T3412 が満了して TAU を送るときだけです。<b>PSM中は網から呼び出せない</b>点に注意してください。</p></template>
+  </figure>
+
+  <div class="table-wrap"><table>
+    <thead><tr><th></th><th>RRC Connected</th><th>RRC Idle</th></tr></thead>
+    <tbody>
+      <tr><td>無線の専用接続</td><td>あり</td><td>なし（報知とページングを聞くだけ）</td></tr>
+      <tr><td>コア網の登録・IP</td><td>あり</td><td>あり（残っている）</td></tr>
+      <tr><td>移動時の基地局切替</td><td>ハンドオーバー（網が指示）</td><td>セル再選択（端末が判断）</td></tr>
+      <tr><td>網が端末の位置を知る粒度</td><td>セル単位</td><td>トラッキングエリア単位</td></tr>
+      <tr><td>消費電力</td><td>大</td><td>小</td></tr>
+      <tr><td>データ送信開始まで</td><td>即時</td><td>RRC再接続が必要（数十〜百数十ms程度）</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="callout robot"><span class="title">ロボットでは：キープアライブと状態遷移のバランス</span>
+    <p>遠隔監視のためにMQTTなどでサーバーへ常時接続する場合、キープアライブ（生存確認）の送信のたびに Idle → Connected の遷移が起きます。周期が短すぎるとほぼ常時Connectedになり電力を消費し、長すぎると事業者のCGNAT（第2章）がセッションを忘れて、サーバーからの指令が届かなくなります。一般には数十秒〜数分の範囲で、実回線で試験して決めます。</p>
+  </div>
+
+  <h2>5. 省電力の仕組み：DRX・eDRX・PSM</h2>
+  <p>Idle中の端末は、ずっと受信機を動かしているわけではありません。<b>DRX（Discontinuous Reception：間欠受信）</b>により、決まった周期（通常0.32〜2.56秒、典型的には1.28秒）ごとに一瞬だけ目を覚まし、自分宛ての呼び出しがあるかを確認します。IoT向けにはこれをさらに伸ばした <b>eDRX（extended DRX）</b> と、呼び出し確認すら止めて眠る <b>PSM（Power Saving Mode）</b> が用意されています。</p>
+  <p>どれも「<b>どれだけ眠るか</b>」と「<b>網から呼ばれてどれだけ早く反応できるか</b>」のトレードオフです。下のウィジェットでモードと周期を変えると、1時間のあいだに受信機が何回起きるか（縦線）と、呼び出しへの最大待ち時間がどう変わるかを確認できます。</p>
+
+  <figure class="figure" id="pw-fig">
+    <div class="hint">モードを選び、スライダーで周期を変えてみましょう（1時間分の動作イメージ）</div>
+    <div class="pw-controls">
+      <div class="chips" role="group" aria-label="動作モード">
+        <button class="chip" data-mode="conn" aria-pressed="false">Connected</button>
+        <button class="chip" data-mode="drx" aria-pressed="true">Idle＋DRX</button>
+        <button class="chip" data-mode="edrx" aria-pressed="false">eDRX</button>
+        <button class="chip" data-mode="psm" aria-pressed="false">PSM</button>
+      </div>
+      <div class="pw-slider-wrap"><label for="pw-range"><span id="pw-range-label">周期</span>：<b id="pw-range-val"></b></label><br><input type="range" id="pw-range" min="0" max="3" step="1" value="2"></div>
+    </div>
+    <svg id="pw-svg" viewBox="0 0 800 230" role="img" aria-label="消費電流の時間変化のイメージ"></svg>
+    <div class="pw-stats">
+      <div class="pw-stat"><span class="k">1時間に受信のため起きる回数</span><span class="v" id="pw-wakes"></span></div>
+      <div class="pw-stat"><span class="k">網からの呼出しが届くまでの最大待ち</span><span class="v" id="pw-wait"></span></div>
+      <div class="pw-stat"><span class="k">待受時の消費電力（相対的な目安）</span><span class="v" id="pw-power"></span></div>
+    </div>
+    <div class="pw-note" id="pw-note" aria-live="polite"></div>
+    <figcaption>図4：各モードの消費電流の時間変化（縦軸は対数的に誇張した模式図。実際の電流値はモジュールと網設定で大きく変わります）。</figcaption>
+  </figure>
+
+  <div class="table-wrap"><table>
+    <thead><tr><th>機能</th><th>何をするか</th><th>設定できる周期の例</th><th>網からの到達性</th><th>主な用途</th></tr></thead>
+    <tbody>
+      <tr><td>DRX（Idle）</td><td>周期的に起きてページングを確認</td><td>0.32〜2.56秒</td><td><span class="badge ok">ほぼ即時</span></td><td>スマホ、常時待受の機器</td></tr>
+      <tr><td>eDRX</td><td>起きる間隔を大幅に延長</td><td>LTE（LTE-M含む）で最大約43.7分、NB-IoTで最大約2.9時間</td><td><span class="badge warn">周期分遅れる</span></td><td>メーター、トラッカー</td></tr>
+      <tr><td>PSM</td><td>アクティブタイマー（T3324）後は受信も停止</td><td>定期TAU（T3412延長値）は最大約413日</td><td><span class="badge bad">次に起きるまで不可</span></td><td>1日数回の送信だけの電池機器</td></tr>
+    </tbody>
+  </table></div>
+  <p>eDRXとPSMは、端末が「この値でお願いします」と要求し（モジュールでは <code>AT+CEDRXS</code>、<code>AT+CPSMS</code>）、<b>網が最終的な値を決めて返す</b>方式です。要求しても網が対応していなければ使えません。LTE-MやNB-IoTでは広く使われますが、Cat-1/Cat-4の通常のLTE網ではeDRX/PSMを提供していない事業者もあるため、輸出先の事業者ごとに確認が必要です（カテゴリの違いは<a href="05-categories.html">第5章</a>）。</p>
+
+  <div class="callout robot"><span class="title">ロボットでは：PSMが役立つ場面・困る場面</span>
+    <p>稼働中のロボットはモーターやコンピュータがLTEの何百倍も電力を使うので、LTEの省電力はあまり効きません。むしろ「遠隔から今すぐ停止・呼び出し」ができないPSMは<b>稼働中は使うべきではありません</b>。一方、<b>輸送中・倉庫保管中・電源OFF時の位置トラッキング</b>を小さな補助バッテリーで続けたい、といった用途ではPSM/eDRXが大きな武器になります。「稼働モード」と「保管モード」で設定を切り替える設計も考えられます。</p>
+  </div>
+
+  <h2>6. 登録状態を確認する：<code>AT+CEREG?</code></h2>
+  <p>LTEモジュールは、ホストCPUから <b>ATコマンド</b>（モデムに文字で命令を送る古典的な方式）で制御します。アタッチがうまくいったかを確かめる最も基本的なコマンドが、EPS（LTEのパケット網）への登録状態を返す <code>AT+CEREG?</code> です。</p>
+  <div class="terminal">
+    <div class="in">AT+CEREG=2</div>
+    <div class="out">OK</div>
+    <div class="note"># 位置情報（TAC・セルID）付きで状態を報告するよう設定</div>
+    <div class="in">AT+CEREG?</div>
+    <div class="out">+CEREG: 2,1,"1A2B","01C3D405",7</div>
+    <div class="out">OK</div>
+    <div class="note"># n=2（報告モード）, stat=1（ホーム網に登録済み）, TAC=1A2B, セルID=01C3D405, AcT=7（E-UTRAN＝LTE）</div>
+  </div>
+  <p>応答の形式は <code>+CEREG: &lt;n&gt;,&lt;stat&gt;[,&lt;tac&gt;,&lt;ci&gt;,&lt;AcT&gt;…]</code> です。最初の <code>n</code> は「状態変化を自動で通知するか」の設定値で、<b>2番目の <code>stat</code> が登録状態</b>です（値は例示です）。</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th class="center">stat</th><th>意味</th><th>読み方・よくある原因</th></tr></thead>
+    <tbody>
+      <tr><td class="center"><b>0</b></td><td>未登録・検索もしていない</td><td>無線OFF（<code>AT+CFUN=0/4</code>）、SIM未挿入、手動で登録を止めている</td></tr>
+      <tr><td class="center"><b>1</b></td><td><span class="badge ok">登録済み（ホーム網）</span></td><td>正常。自社SIMで自社網につながっている</td></tr>
+      <tr><td class="center"><b>2</b></td><td>未登録・検索中／登録試行中</td><td>起動直後なら待つ。ずっと続くなら電波・アンテナ・バンド非対応を疑う</td></tr>
+      <tr><td class="center"><b>3</b></td><td><span class="badge bad">登録拒否</span></td><td>網は見つかったが断られた。SIM未開通・契約・ローミング不可・APNを疑う</td></tr>
+      <tr><td class="center"><b>4</b></td><td>不明</td><td>LTEの圏外など、状態が判定できない</td></tr>
+      <tr><td class="center"><b>5</b></td><td><span class="badge ok">登録済み（ローミング）</span></td><td>正常。グローバルSIMや海外での日本SIMではこれが正常値</td></tr>
+    </tbody>
+  </table></div>
+  <p>このほか、緊急通報のみ可能な状態（8）なども定義されています。末尾の <code>AcT</code>（アクセス技術）は 7 がLTE（E-UTRAN）、9 がNB-IoTです。<code>AT+CEREG=3</code> にすると、拒否されたときの<b>理由コード（reject cause）</b>も返すモジュールがあり、原因の切り分けに役立ちます。電波の強さを見る <code>AT+CESQ</code>、SIMの状態を見る <code>AT+CPIN?</code> などと組み合わせた実践的な使い方は<a href="08-software.html">第8章</a>で扱います。</p>
+  <div class="callout warn"><span class="title">「登録できた＝通信できる」とは限らない</span>
+    <p>stat が 1 か 5 でも、APNの設定ミスやファイアウォールで実際のデータが通らないことがあります。アプリ側では、最終的にサーバーとの疎通（例：MQTT接続の成功）で判定しましょう。</p>
+  </div>
+
+  <h2>7. 「つながらない」ときのトラブルシュート</h2>
+  <p>現地で「LTEがつながらない」と言われたとき、闇雲に設定を変える前に、<b>アタッチ手順のどこで止まっているか</b>を考えると原因が絞れます。基本的には下から順に、「電波が届いているか → セルが見えるか → 加入者として受け入れられるか → IPが得られるか → 目的のサーバーに届くか」と積み上げて確認します。</p>
+
+  <figure class="figure" data-hotspots data-hs-default="ts-antenna">
+    <div class="hint">各カードをクリック（タップ）すると、原因と対処が表示されます。①から順に確認するのが基本です</div>
+    <div class="ts-flow">
+      <div class="ts-node l-radio" data-hs="ts-antenna"><span class="lv">① 物理・電波</span><span class="nm">アンテナ・電波環境</span><span class="sym">CEREG 2/4 のまま、CESQ が「不明」や極端に弱い</span></div>
+      <div class="ts-node l-radio" data-hs="ts-band"><span class="lv">② セルサーチ</span><span class="nm">バンド非対応</span><span class="sym">電波はあるはずなのに CEREG 2 が続く</span></div>
+      <div class="ts-node l-sim" data-hs="ts-sim"><span class="lv">③ SIM</span><span class="nm">SIM未挿入・未開通</span><span class="sym">CPIN エラー、または CEREG 3（拒否）</span></div>
+      <div class="ts-node l-sim" data-hs="ts-roam"><span class="lv">④ 網選択・認証</span><span class="nm">ローミング不可・PLMN拒否</span><span class="sym">海外で CEREG 3、特定事業者だけ失敗</span></div>
+      <div class="ts-node l-core" data-hs="ts-apn"><span class="lv">⑤ ベアラ</span><span class="nm">APN誤り</span><span class="sym">CEREG 3 を繰り返す／登録済みでもIPなし</span></div>
+      <div class="ts-node l-dev" data-hs="ts-device"><span class="lv">⑥ 端末の許可</span><span class="nm">機器認証・IMEI制限</span><span class="sym">同じSIMでも自社機器だけつながらない</span></div>
+      <div class="ts-node l-ext" data-hs="ts-ip"><span class="lv">⑦ IP到達性</span><span class="nm">IPはあるのにサーバーに届かない</span><span class="sym">CEREG 1/5・IPあり、でも通信失敗</span></div>
+    </div>
+    <p class="ts-legend">図5：アタッチ手順の段階ごとの「つながらない」原因。色分け：紫＝無線／桃＝SIM・加入者／緑＝コア網／青＝端末／橙＝外部ネットワーク</p>
+    <div class="hs-panel"></div>
+    <template data-hs-content="ts-antenna"><h4>① アンテナ・電波環境</h4>
+      <p><b>症状：</b><code>+CEREG: x,2</code>（検索中）や 4（不明）のまま。<code>AT+CESQ</code> や <code>AT+CSQ</code> で受信レベルが「不明（99/255）」または極端に低い。</p>
+      <p><b>よくある原因：</b>アンテナ未接続・コネクタ半挿し、ケーブルの断線、金属筐体の内側にアンテナを置いた、地下・屋内奥、主アンテナとダイバーシティアンテナの取り違え。</p>
+      <p><b>対処：</b>スマホで同じ場所の電波状況を確認し、窓際や屋外で再試験。RSRP の値を記録して比較。筐体設計ではアンテナ位置と金属の影響を早期に評価します（<a href="06-hardware.html">第6章</a>）。</p></template>
+    <template data-hs-content="ts-band"><h4>② バンド非対応</h4>
+      <p><b>症状：</b>スマホは普通につながる場所なのに、モジュールは <code>+CEREG: x,2</code> のまま何分たってもセルを見つけられない。</p>
+      <p><b>よくある原因：</b>現地事業者が使うLTEバンドにモジュールが対応していない。日本向けモジュールを海外に持ち出した、または設定でバンドを絞り込みすぎている。LTE-M/NB-IoT専用モジュールで、その国がLTE-Mを提供していない、なども同類です。</p>
+      <p><b>対処：</b>輸出先事業者のバンドとモジュールの対応表を照合（<a href="../tools/band-checker.html">バンド共通化チェッカー</a>）。モジュールのバンド設定（ベンダー固有のATコマンド）を確認。設計段階でグローバル対応モジュールを選ぶ（<a href="11-commonization.html">第11章</a>）。</p></template>
+    <template data-hs-content="ts-sim"><h4>③ SIM未挿入・未開通</h4>
+      <p><b>症状：</b><code>AT+CPIN?</code> が <code>+CME ERROR: 10</code>（SIM未挿入）や PIN要求を返す。SIMは読めているのに <code>+CEREG: x,3</code>（拒否）。</p>
+      <p><b>よくある原因：</b>SIMの接触不良・向き違い、SIM回路の電圧や配線ミス、回線の開通手続き（アクティベーション）前、利用停止・料金未払い、データ通信を含まない契約。</p>
+      <p><b>対処：</b>SIM管理画面で回線ステータスを確認（開通・停止・プラン）。別の端末にSIMを挿して切り分け。チップSIM／eSIMの場合はプロファイルの有効化状態を確認（<a href="07-sim.html">第7章</a>）。</p></template>
+    <template data-hs-content="ts-roam"><h4>④ ローミング不可・PLMN拒否</h4>
+      <p><b>症状：</b>海外で <code>+CEREG: x,3</code>。国内では問題ない。特定の現地事業者の網でだけ失敗する。一度失敗するとその後もなかなか再試行しない。</p>
+      <p><b>よくある原因：</b>SIMの契約でローミングが無効、その国・事業者とのローミング契約がない、LTE-M/NB-IoTのローミング未提供、拒否された網が禁止PLMNリスト（FPLMN）に入った。国によっては長期ローミングを規制している場合もあります。</p>
+      <p><b>対処：</b>回線事業者に「その国・その事業者・そのRAT（LTE/LTE-M/NB-IoT）」でローミング可能かを確認。<code>AT+COPS=?</code> で見える網を一覧し、手動選択で試す。長期的には現地SIMや現地プロファイル（eSIM）を検討（<a href="07-sim.html">第7章</a>、<a href="10-asia.html">第10章</a>）。</p></template>
+    <template data-hs-content="ts-apn"><h4>⑤ APN誤り</h4>
+      <p><b>症状：</b>Attachが「APNが不明」などの理由で拒否され、<code>+CEREG: x,3</code> と再試行を繰り返す。あるいは登録（1/5）はできてもデータ用のPDN接続が確立せず、IPアドレスが得られない。</p>
+      <p><b>よくある原因：</b>APN名のつづり違い、別事業者・別プランのAPNを設定、閉域網用APNとインターネット用APNの取り違え、ユーザー名・パスワード（PAP/CHAP）の要否の誤り、PDNタイプ（IPv4/IPv6）の不一致。</p>
+      <p><b>対処：</b>回線事業者の指定するAPN・認証方式・PDNタイプを <code>AT+CGDCONT</code> などで設定し直す。LTEではAttach時にデフォルトベアラを作るので、<b>APNの誤りが“登録できない”という形で現れる</b>点に注意（<a href="02-network.html">第2章</a>、<a href="08-software.html">第8章</a>）。</p></template>
+    <template data-hs-content="ts-device"><h4>⑥ 機器認証・IMEI制限</h4>
+      <p><b>症状：</b>同じSIMをスマホに挿すとつながるのに、自社のロボットだけつながらない（または一定期間後に遮断される）。</p>
+      <p><b>よくある原因：</b>事業者が登録済み・認証済みの機器（IMEIの型番部分＝TAC）以外を受け付けない、現地の電波認証や事業者認証を取っていない機器を網が排除する運用（例：インドや一部の国の端末登録制度）、SIMロック。</p>
+      <p><b>対処：</b>輸出先の認証と事業者認証を計画に入れる（<a href="09-certification.html">第9章</a>、<a href="10-asia.html">第10章</a>）。試作段階では事業者・MVNOに評価用の許可を相談する。</p></template>
+    <template data-hs-content="ts-ip"><h4>⑦ IPはあるのにサーバーに届かない</h4>
+      <p><b>症状：</b><code>+CEREG: x,1</code>（または5）でIPアドレスも取得済みなのに、サーバーへの接続が失敗する。あるいはロボット→サーバーはできるが、サーバー→ロボットの接続ができない。</p>
+      <p><b>よくある原因：</b>DNS設定、ホスト側のルーティング（LTEをデフォルト経路にしていない）、閉域APNでインターネットに出られない、CGNAT配下で外からの着信ができない、MTUが大きすぎて大きなパケットだけ落ちる、キープアライブ不足でNATセッションが切れる。</p>
+      <p><b>対処：</b>まず <code>ping</code> やDNS解決で段階的に確認。遠隔操作はロボット側から外へ張る接続（MQTT、VPN）を基本にする。固定IPや閉域網サービスの利用も検討（<a href="02-network.html">第2章</a>）。</p></template>
+  </figure>
+
+  <p>現地や工場で初めて通信を試すときは、次のチェックリストを上から確認していくと、原因の切り分けがスムーズです。チェック状態はこのブラウザに保存されます。</p>
+  <ul data-checklist="ch03-first-bringup">
+    <li>アンテナ（主・ダイバーシティ）が正しいコネクタに確実に接続されている</li>
+    <li><code>AT+CPIN?</code> が <code>READY</code> を返す（SIMが読めている）</li>
+    <li>回線管理画面で、SIMが「開通済み」かつデータ通信可能なプランである</li>
+    <li>現地事業者のバンドにモジュールが対応し、バンド設定で除外していない</li>
+    <li>海外なら、その国・事業者・方式（LTE/LTE-M/NB-IoT）でローミングが許可されている</li>
+    <li>APN・認証方式・PDNタイプが事業者の指定どおり設定されている</li>
+    <li><code>AT+CEREG?</code> の stat が 1 または 5 になる</li>
+    <li>IPアドレスが割り当てられ、DNS解決とサーバーへの接続ができる</li>
+    <li>状態（CEREG・拒否理由・RSRP等）がロボットのログに記録されている</li>
+  </ul>
+
+  <div class="callout robot"><span class="title">ロボットでは：現地サポートのために“ログに残す”</span>
+    <p>輸出したロボットが現地でつながらないとき、開発者がその場にいるとは限りません。<code>AT+CEREG</code> の stat と拒否理由、接続中の PLMN（MCC/MNC）、RSRP/RSRQ、SIMのICCID、モジュールのファームウェア版数を定期的にログに残し、後から取り出せるようにしておくと、上の①〜⑦のどこで止まったかを遠隔で判断できます。</p>
+  </div>
+
+  <h2>まとめ</h2>
+  <ul>
+    <li>電源ONからの流れは <b>PLMN選択 → セルサーチ（PSS/SSS）→ MIB/SIB → RACH → RRC接続 → Attach要求 → 認証（AKA）→ セキュリティ確立 → デフォルトベアラ・IP割当</b>。</li>
+    <li>前半（〜RRC接続）は端末と基地局の「無線の手続き」、後半（Attach以降）は端末とコア網の「加入者の手続き（NAS）」。</li>
+    <li>認証では SIM と HSS が同じ秘密鍵 K で同じ問題を解き、答えを照合する。K 自体は電波に乗らない。</li>
+    <li>LTEではAttachの中でIPアドレスまで割り当てられる（常時接続）。そのためAPNの誤りが登録失敗として現れることがある。</li>
+    <li>無通信になると RRC Idle に戻るが、登録とIPは残る。DRX・eDRX・PSMは「省電力」と「網からの到達性」のトレードオフ。</li>
+    <li><code>AT+CEREG?</code> の stat：1・5 は登録済み、2 は検索中、3 は拒否。2が続けば電波・バンド、3なら SIM・契約・ローミング・APN を疑う。</li>
+  </ul>
+
+  <h2>用語</h2>
+  <dl class="terms">
+    <dt>PLMN</dt><dd>Public Land Mobile Network。事業者の携帯網。MCC（国番号）＋MNC（事業者番号）で識別する。</dd>
+    <dt>PSS / SSS</dt><dd>Primary / Secondary Synchronization Signal。基地局が常時送る同期信号。組み合わせで物理セルID（PCI）がわかる。</dd>
+    <dt>MIB / SIB</dt><dd>Master / System Information Block。セルの報知情報。帯域幅、PLMN、TAC、アクセス方法などが入る。</dd>
+    <dt>RACH</dt><dd>Random Access Channel。端末が最初に基地局へ合図を送るための手順・チャネル。</dd>
+    <dt>RRC</dt><dd>Radio Resource Control。端末と基地局の間の無線制御プロトコル。Idle / Connected の状態を持つ。</dd>
+    <dt>NAS / AS</dt><dd>Non-Access Stratum（端末〜コア網の会話）／Access Stratum（端末〜基地局の会話）。</dd>
+    <dt>Attach</dt><dd>端末がコア網に自分を登録する手順。LTEではデフォルトベアラ確立とIP割当も含む。</dd>
+    <dt>IMSI / GUTI</dt><dd>IMSI は SIM 固有の加入者識別番号。GUTI は網が割り当てる一時ID で、IMSI の露出を減らす。</dd>
+    <dt>AKA</dt><dd>Authentication and Key Agreement。SIM と HSS が共有する秘密鍵 K を使った相互認証・鍵合意の方式。</dd>
+    <dt>SMC</dt><dd>Security Mode Command。使う暗号・完全性保護アルゴリズムを決めて保護を開始する手順（NAS と AS の2段階）。</dd>
+    <dt>ベアラ</dt><dd>一定の品質で端末〜P-GW間のデータを運ぶ論理的な通路。Attach時に作られるものをデフォルトベアラと呼ぶ。</dd>
+    <dt>APN</dt><dd>Access Point Name。どの出口ネットワーク（インターネット、閉域網など）につなぐかを示す名前。</dd>
+    <dt>TAU</dt><dd>Tracking Area Update。Idle中の端末が、トラッキングエリアの移動時や定期的に位置を網へ知らせる手順。</dd>
+    <dt>DRX / eDRX</dt><dd>(extended) Discontinuous Reception。周期的に起きて呼び出しを確認する間欠受信。eDRXは周期を大幅に延長したもの。</dd>
+    <dt>PSM</dt><dd>Power Saving Mode。登録を保ったまま、受信も止めて深く眠るモード。T3324・T3412 タイマーで制御。</dd>
+    <dt>CEREG</dt><dd>EPS（LTEパケット網）への登録状態を問い合わせ・通知する標準ATコマンド（3GPP TS 27.007）。</dd>
+  </dl>
+
+  <h2>確認クイズ</h2>
+  <div class="quiz" data-quiz="03"></div>
+
+  <section class="sources"><h2>参考・出典</h2><ul>
+    <li><a href="https://www.3gpp.org/ftp/Specs/archive/23_series/23.401/">3GPP TS 23.401 — GPRS enhancements for E-UTRAN access（5.3.2 Attach procedure、PSM）</a></li>
+    <li><a href="https://www.3gpp.org/ftp/Specs/archive/24_series/24.301/">3GPP TS 24.301 — NAS protocol for EPS（EMM/ESM、Attach・T3324/T3412）</a></li>
+    <li><a href="https://www.3gpp.org/ftp/Specs/archive/36_series/36.331/">3GPP TS 36.331 — E-UTRA RRC protocol specification（MIB/SIB、RRC接続）</a></li>
+    <li><a href="https://www.3gpp.org/ftp/Specs/archive/36_series/36.321/">3GPP TS 36.321 — E-UTRA MAC protocol specification（ランダムアクセス手順）</a></li>
+    <li><a href="https://www.3gpp.org/ftp/Specs/archive/36_series/36.211/">3GPP TS 36.211 — E-UTRA Physical channels and modulation（PSS/SSS、PCI）</a></li>
+    <li><a href="https://www.3gpp.org/ftp/Specs/archive/33_series/33.401/">3GPP TS 33.401 — 3GPP System Architecture Evolution: Security architecture（EPS-AKA、EEA/EIA）</a></li>
+    <li><a href="https://www.3gpp.org/ftp/Specs/archive/27_series/27.007/">3GPP TS 27.007 — AT command set for User Equipment（+CEREG、+CPSMS、+CEDRXS）</a></li>
+    <li><a href="https://onomondo.com/blog/at-command-cereg/">Onomondo: AT+CEREG – Registration Status for LTE and NB-IoT</a></li>
+    <li><a href="https://onomondo.com/blog/edrx-and-psm-for-lte-low-power-iot/">Onomondo: eDRX and PSM for IoT — Battery-saving features explained</a></li>
+    <li><a href="https://academy.nordicsemi.com/courses/cellular-iot-fundamentals/lessons/lesson-1-cellular-fundamentals/topic/lesson-1-power-saving-techniques/">Nordic Developer Academy: Power saving techniques（PSM・eDRX）</a></li>
+    <li><a href="https://www.arkessa.com/news-blog/power-saving-in-cellular-lpwan/">Arkessa: Power Saving in cellular LPWAN（T3412延長値の最大約413日）</a></li>
+  </ul><p>確認日: 2026-09</p></section>
+</main>
+</div>
+
+<script>
+/* ===== 図1：アタッチ手順シーケンス図（app.js より前に実行し、stepper に data-show-from を渡す） ===== */
+(function () {
+  "use strict";
+  var svg = document.getElementById("seq-svg");
+  var fig = document.getElementById("seq-fig");
+  if (!svg || !fig) return;
+  var NS = "http://www.w3.org/2000/svg";
+  var LANES = [
+    { id: "UE", x: 50, c: "--c1" }, { id: "eNB", x: 210, c: "--c2" }, { id: "MME", x: 380, c: "--c3" },
+    { id: "HSS", x: 520, c: "--c5" }, { id: "S-GW", x: 640, c: "--c3" }, { id: "P-GW", x: 750, c: "--c3" }
+  ];
+  var X = {}; LANES.forEach(function (l) { X[l.id] = l.x; });
+  // [ステップ, 送信元, 宛先, ラベル, 色, 種別]  種別: "b"=報知(点線), "self"=内部処理, "data"=ユーザーデータ
+  var M = [
+    [1, "UE", "UE", "電源ON → PLMN選択", "--c1", "self"],
+    [2, "eNB", "UE", "PSS / SSS（同期信号）", "--c2", "b"],
+    [3, "eNB", "UE", "MIB（基本情報）", "--c2", "b"],
+    [3, "eNB", "UE", "SIB1 / SIB2 …", "--c2", "b"],
+    [4, "UE", "eNB", "Msg1 プリアンブル", "--c2"],
+    [4, "eNB", "UE", "Msg2 ランダムアクセス応答", "--c2"],
+    [5, "UE", "eNB", "Msg3 RRC接続要求", "--c2"],
+    [5, "eNB", "UE", "Msg4 RRC接続セットアップ", "--c2"],
+    [5, "UE", "eNB", "RRC完了＋Attach要求", "--c2"],
+    [6, "eNB", "MME", "Attach要求（S1-AP）", "--c1"],
+    [7, "MME", "HSS", "認証情報要求", "--c5"],
+    [7, "HSS", "MME", "認証ベクトル", "--c5"],
+    [7, "MME", "UE", "認証要求（RAND, AUTN）", "--c5"],
+    [7, "UE", "MME", "認証応答（RES）", "--c5"],
+    [8, "MME", "UE", "NASセキュリティモード", "--c5"],
+    [8, "UE", "MME", "完了（以後NASを暗号化）", "--c5"],
+    [8, "MME", "HSS", "位置登録", "--c3"],
+    [8, "HSS", "MME", "契約情報・APN", "--c3"],
+    [9, "MME", "S-GW", "セッション作成要求", "--c3"],
+    [9, "S-GW", "P-GW", "セッション作成", "--c3"],
+    [9, "P-GW", "S-GW", "応答（IP割当）", "--c3"],
+    [9, "S-GW", "MME", "セッション作成応答", "--c3"],
+    [10, "MME", "eNB", "Attach受諾＋コンテキスト", "--c1"],
+    [10, "eNB", "UE", "AS SMC・RRC再設定", "--c2"],
+    [10, "UE", "MME", "Attach完了", "--c1"],
+    [10, "MME", "S-GW", "ベアラ更新（eNBの受口）", "--c3"],
+    [11, "UE", "P-GW", "ユーザーデータ（IPパケット）⇄ インターネット", "--c4", "data"]
+  ];
+  function el(tag, attrs, text) {
+    var e = document.createElementNS(NS, tag);
+    for (var k in attrs) e.setAttribute(k, attrs[k]);
+    if (text != null) e.textContent = text;
+    return e;
+  }
+  var y = 64, prev = 0, rows = [];
+  M.forEach(function (m) {
+    if (prev && m[0] !== prev) y += 10;
+    prev = m[0];
+    rows.push(y);
+    y += m[5] === "data" ? 40 : 25;
+  });
+  var H = y + 6;
+  svg.setAttribute("viewBox", "0 0 800 " + H);
+
+  // レーン
+  var laneEls = {};
+  LANES.forEach(function (l) {
+    svg.appendChild(el("line", { x1: l.x, y1: 44, x2: l.x, y2: H - 4, "class": "line dash" }));
+    var g = el("g", { "class": "lane" });
+    g.appendChild(el("rect", { x: l.x - 38, y: 10, width: 76, height: 32, rx: 8, fill: "var(--surface-2)", stroke: "var(" + l.c + ")", "stroke-width": 2 }));
+    g.appendChild(el("text", { x: l.x, y: 31, "text-anchor": "middle", "font-size": 14, "font-weight": 700 }, l.id));
+    svg.appendChild(g);
+    laneEls[l.id] = g;
+  });
+
+  var involved = {};
+  M.forEach(function (m, i) {
+    var s = m[0], from = m[1], to = m[2], label = m[3], col = "var(" + m[4] + ")", kind = m[5], yy = rows[i];
+    involved[s] = involved[s] || {};
+    involved[s][from] = true; involved[s][to] = true;
+    var g = el("g", { "class": "msg", "data-show-from": String(s), "data-s": String(s) });
+    if (kind === "self") {
+      g.appendChild(el("rect", { x: 12, y: yy - 15, width: 150, height: 24, rx: 6, fill: col, "fill-opacity": ".15", stroke: col }));
+      g.appendChild(el("text", { x: 87, y: yy + 2, "text-anchor": "middle", "class": "lbl" }, label));
+    } else if (kind === "data") {
+      var x1 = X[from], x2 = X[to];
+      g.appendChild(el("line", { x1: x1 + 8, y1: yy + 8, x2: x2 - 8, y2: yy + 8, stroke: col, "stroke-width": 6, "stroke-linecap": "round", "stroke-opacity": ".85" }));
+      g.appendChild(el("polygon", { points: (x1 - 2) + "," + (yy + 8) + " " + (x1 + 12) + "," + (yy + 1) + " " + (x1 + 12) + "," + (yy + 15), fill: col }));
+      g.appendChild(el("polygon", { points: (x2 + 2) + "," + (yy + 8) + " " + (x2 - 12) + "," + (yy + 1) + " " + (x2 - 12) + "," + (yy + 15), fill: col }));
+      ["eNB", "S-GW"].forEach(function (n) {
+        g.appendChild(el("circle", { cx: X[n], cy: yy + 8, r: 6, fill: "var(--surface)", stroke: col, "stroke-width": 2 }));
+      });
+      g.appendChild(el("text", { x: 400, y: yy - 4, "text-anchor": "middle", "class": "lbl" }, label));
+      g.appendChild(el("text", { x: X.MME, y: yy + 28, "text-anchor": "middle", "class": "lbl t-muted" }, "（MME・HSSはデータを通さない）"));
+      involved[s] = { UE: 1, eNB: 1, "S-GW": 1, "P-GW": 1 };
+    } else {
+      var a = X[from], b = X[to], dir = b > a ? 1 : -1;
+      var tip = b - dir * 3;
+      var attrs = { x1: a + dir * 3, y1: yy, x2: tip - dir * 8, y2: yy, stroke: col, "stroke-width": 2 };
+      if (kind === "b") attrs["stroke-dasharray"] = "5 4";
+      g.appendChild(el("line", attrs));
+      g.appendChild(el("polygon", { points: tip + "," + yy + " " + (tip - dir * 10) + "," + (yy - 5) + " " + (tip - dir * 10) + "," + (yy + 5), fill: col }));
+      g.appendChild(el("text", { x: (a + b) / 2, y: yy - 6, "text-anchor": "middle", "class": "lbl" }, label));
+    }
+    svg.appendChild(g);
+  });
+  // 報知（点線）の凡例
+  svg.appendChild(el("text", { x: 790, y: H - 8, "text-anchor": "end", "class": "lbl t-muted" }, "点線＝報知（全端末向け）"));
+
+  var groups = svg.querySelectorAll(".msg");
+  fig.addEventListener("stepchange", function (e) {
+    var st = e.detail.step;
+    for (var i = 0; i < groups.length; i++) groups[i].classList.toggle("is-cur", +groups[i].getAttribute("data-s") === st);
+    LANES.forEach(function (l) { laneEls[l.id].classList.toggle("is-inv", !!(involved[st] && involved[st][l.id])); });
+  });
+})();
+
+/* ===== 図4：省電力モードの動作イメージ ===== */
+(function () {
+  "use strict";
+  var svg = document.getElementById("pw-svg");
+  if (!svg) return;
+  var range = document.getElementById("pw-range");
+  var rangeWrap = document.querySelector(".pw-slider-wrap");
+  var chips = document.querySelectorAll("#pw-fig .chip");
+  var X0 = 96, X1 = 784, T = 3600; // 1時間
+  var Y = { zero: 196, psm: 190, sleep: 182, rx: 132, conn: 76, tx: 42 };
+  var MODES = {
+    conn: { label: null, values: [] },
+    drx: { label: "DRX周期", values: [0.32, 0.64, 1.28, 2.56], def: 2 },
+    edrx: { label: "eDRX周期", values: [5.12, 20.48, 81.92, 163.84, 327.68, 655.36, 1310.72, 2621.44], def: 2 },
+    psm: { label: "起床（送信・TAU）間隔", values: [600, 1200, 1800, 3600, 21600, 86400], def: 1 }
+  };
+  var mode = "drx";
+  function fmt(sec) {
+    if (sec < 60) return (Math.round(sec * 100) / 100) + " 秒";
+    if (sec < 3600) return (Math.round(sec / 6) / 10) + " 分";
+    return (Math.round(sec / 360) / 10) + " 時間";
+  }
+  function px(t) { return X0 + (X1 - X0) * t / T; }
+  function spikes(period, start, end, top, floor) {
+    // 間隔が狭すぎる場合は帯として描く
+    var out = "";
+    var gap = (X1 - X0) * period / T;
+    if (gap < 3) {
+      out += '<rect x="' + px(start) + '" y="' + top + '" width="' + (px(end) - px(start)) + '" height="' + (floor - top) + '" fill="var(--c1)" fill-opacity=".35"/>';
+      return out;
+    }
+    for (var t = start; t <= end; t += period) {
+      var x = px(t).toFixed(1);
+      out += '<line x1="' + x + '" y1="' + floor + '" x2="' + x + '" y2="' + top + '" stroke="var(--c1)" stroke-width="2"/>';
+    }
+    return out;
+  }
+  function floorLine(y, a, b, color) {
+    return '<line x1="' + px(a) + '" y1="' + y + '" x2="' + px(b) + '" y2="' + y + '" stroke="' + (color || "var(--c1)") + '" stroke-width="2"/>';
+  }
+  function txBurst(t, w) {
+    return '<rect x="' + px(t) + '" y="' + Y.tx + '" width="' + Math.max(4, (X1 - X0) * w / T) + '" height="' + (Y.zero - Y.tx) + '" fill="var(--c4)" fill-opacity=".75"/>';
+  }
+  function axes() {
+    var s = '<line x1="' + X0 + '" y1="' + Y.zero + '" x2="' + X1 + '" y2="' + Y.zero + '" class="line"/>';
+    for (var m = 0; m <= 60; m += 10) {
+      var x = px(m * 60);
+      s += '<line x1="' + x + '" y1="' + Y.zero + '" x2="' + x + '" y2="' + (Y.zero + 5) + '" class="line"/>';
+      s += '<text x="' + x + '" y="' + (Y.zero + 20) + '" text-anchor="middle" font-size="12" class="t-muted">' + m + '分</text>';
+    }
+    s += '<text x="8" y="' + (Y.tx + 5) + '" font-size="12" class="t-muted">送信</text>';
+    s += '<text x="8" y="' + (Y.conn + 5) + '" font-size="12" class="t-muted">接続中</text>';
+    s += '<text x="8" y="' + (Y.rx + 5) + '" font-size="12" class="t-muted">受信確認</text>';
+    s += '<text x="8" y="' + (Y.sleep - 2) + '" font-size="12" class="t-muted">スリープ</text>';
+    return s;
+  }
+  function render() {
+    var def = MODES[mode];
+    var v = def.values.length ? def.values[+range.value] : 0;
+    var body = "", wakes, wait, power, note;
+    if (mode === "conn") {
+      body += '<rect x="' + X0 + '" y="' + Y.conn + '" width="' + (X1 - X0) + '" height="' + (Y.zero - Y.conn) + '" fill="var(--c1)" fill-opacity=".18"/>';
+      body += floorLine(Y.conn, 0, T);
+      [120, 700, 1300, 1500, 2300, 2900, 3300].forEach(function (t) { body += txBurst(t, 20); });
+      wakes = "常に受信中"; wait = "ほぼ即時（数十ms）"; power = 5;
+      note = "<b>RRC Connected を維持</b>：常に基地局と専用接続を保つので反応は最速ですが、待受だけでも電流が流れ続けます。実際には無通信タイマーで網が Idle に戻すため、この状態を“ずっと”保つには定期的な通信が必要です。";
+    } else if (mode === "drx") {
+      body += floorLine(Y.sleep, 0, T);
+      body += spikes(v, 0, T, Y.rx, Y.sleep);
+      [600, 2400].forEach(function (t) { body += txBurst(t, 15); });
+      wakes = Math.round(T / v).toLocaleString() + " 回"; wait = "最大 約" + fmt(v); power = 3;
+      note = "<b>Idle＋DRX</b>：スマホの待受と同じ状態です。" + fmt(v) + "ごとに一瞬起きてページングを確認するので、1時間の図では縦線が詰まって“帯”に見えます。網からの呼び出しにも1〜2秒以内で応答でき、ロボットの稼働中はこの状態が基本です。";
+    } else if (mode === "edrx") {
+      body += floorLine(Y.sleep + 4, 0, T);
+      body += spikes(v, 0, T, Y.rx, Y.sleep + 4);
+      [600, 2400].forEach(function (t) { body += txBurst(t, 15); });
+      wakes = (T / v < 1 ? "1 回以下" : Math.round(T / v).toLocaleString() + " 回"); wait = "最大 約" + fmt(v); power = v < 30 ? 2 : 1.5;
+      note = "<b>eDRX</b>：受信確認の間隔を" + fmt(v) + "に延ばしています。起きる回数が減るほど電力は下がりますが、その分サーバーからの指令は最大" + fmt(v) + "待たされます。LTE-Mでは最大2621.44秒（約43.7分）、NB-IoTでは最大10485.76秒（約2.9時間）まで設定できます（網が許可した場合）。";
+    } else {
+      // PSM: 起床→送信→アクティブタイマー60秒（DRX）→深いスリープ
+      var active = 60;
+      for (var t = 0; t < T; t += v) {
+        body += txBurst(t, 12);
+        body += spikes(1.28, t + 12, Math.min(T, t + 12 + active), Y.rx, Y.sleep);
+        body += floorLine(Y.psm, Math.min(T, t + 12 + active), Math.min(T, t + v), "var(--c5)");
+      }
+      wakes = "受信確認は起床直後の約60秒だけ"; wait = "次の起床まで（最大 約" + fmt(v) + "）"; power = 1;
+      note = "<b>PSM</b>：送信後、アクティブタイマー（T3324、ここでは60秒と仮定）の間だけページングを確認し、その後は受信機も止めて数µA級のスリープに入ります（桃色の線）。" + fmt(v) + "ごとに自分から起きて送信やTAUを行います。<b>その間サーバーからは一切呼び出せません。</b>";
+    }
+    svg.innerHTML = axes() + body;
+    document.getElementById("pw-wakes").textContent = wakes;
+    document.getElementById("pw-wait").textContent = wait;
+    var full = Math.round(power), meter = "";
+    for (var i = 1; i <= 5; i++) meter += i <= full ? "●" : "○";
+    document.getElementById("pw-power").innerHTML = '<span class="meter">' + meter + '</span> ' + ["", "最小", "小", "中", "大", "最大"][full];
+    document.getElementById("pw-note").innerHTML = note;
+    if (def.label) {
+      document.getElementById("pw-range-label").textContent = def.label;
+      document.getElementById("pw-range-val").textContent = fmt(v);
+    }
+  }
+  function setMode(m) {
+    mode = m;
+    chips.forEach(function (c) { c.setAttribute("aria-pressed", String(c.getAttribute("data-mode") === m)); });
+    var def = MODES[m];
+    rangeWrap.hidden = !def.values.length;
+    if (def.values.length) { range.max = String(def.values.length - 1); range.value = String(def.def); }
+    render();
+  }
+  chips.forEach(function (c) { c.addEventListener("click", function () { setMode(c.getAttribute("data-mode")); }); });
+  range.addEventListener("input", render);
+  setMode("drx");
+})();
+</script>
+<script src="../assets/data/quiz/ch03.js"></script>
+<script src="../assets/app.js"></script>
+</body>
+</html>

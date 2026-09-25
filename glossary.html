@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>用語集｜LTE Study</title>
+  <link rel="stylesheet" href="assets/style.css">
+  <style>
+    .search { width: 100%; font: inherit; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); color: var(--text); }
+    .gl-list { display: grid; gap: 8px; margin-top: 16px; }
+    .gl-item { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 14px; }
+    .gl-item .term { font-weight: 700; color: var(--accent); font-family: var(--mono); }
+    .gl-item .full { color: var(--text-muted); font-size: .85rem; margin-left: 6px; }
+    .gl-item p { margin: 4px 0 0; font-size: .93rem; line-height: 1.7; }
+    .gl-item .meta { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+    mark { background: var(--warn-soft); color: inherit; padding: 0 2px; border-radius: 3px; }
+  </style>
+</head>
+<body data-root="">
+<div class="page">
+<main>
+  <header class="chapter-hero">
+    <div class="eyebrow">GLOSSARY</div>
+    <h1>用語集</h1>
+    <p class="lead">LTE・SIM・認証・開発工程でよく出てくる略語をまとめました。英字でも日本語でも検索できます。</p>
+  </header>
+  <input class="search" id="q" type="search" placeholder="例: APN、技適、eSIM、RSRP…" aria-label="用語を検索">
+  <div class="chips" id="cats"></div>
+  <p class="small muted" id="count"></p>
+  <div class="gl-list" id="list"></div>
+</main>
+</div>
+<script src="assets/app.js"></script>
+<script>
+(function () {
+  const { esc, CHAPTERS } = window.LTE;
+  // [用語, 正式名称, 説明, カテゴリ, 章]
+  const G = [
+    ["周波数", "Frequency", "電波が1秒間に振動する回数（Hz）。低いほど遠くまで届き建物を回り込みやすく、高いほど多くのデータを運べるが届きにくい。", "基礎", "01"],
+    ["帯域幅", "Bandwidth", "通信に使う周波数の幅。道路の車線数のようなもので、広いほど速い。LTEでは1.4〜20MHzのチャネル幅がある。", "基礎", "01"],
+    ["変調", "Modulation", "データを電波の振幅や位相の変化に乗せる方式。QPSK→16QAM→64QAM→256QAMと多値になるほど速いが、電波状態が良くないと使えない。", "基礎", "01"],
+    ["免許帯", "Licensed band", "国から免許を受けた事業者（携帯キャリア等）だけが使える周波数。LTEは基本的に免許帯を使うため、混信が少なく品質が安定する。", "基礎", "01"],
+    ["ISMバンド", "Industrial, Scientific and Medical band", "免許不要で使える周波数帯（2.4GHz帯など）。Wi-FiやBluetoothが使う。誰でも使える分、混雑や干渉が起きやすい。", "基礎", "01"],
+    ["I/Q", "In-phase / Quadrature", "搬送波を cos 成分（I）と −sin 成分（Q）の2つの座標で表したもの。1つのシンボルは I/Q 平面上の1点（ベクトル）になる。", "基礎", "A1"],
+    ["信号空間", "Signal space", "波形をベクトルとして扱う考え方。cos と −sin を基底とすると、1シンボルの波形は2次元ベクトルになり、内積・距離で復調や誤りを説明できる。", "基礎", "A1"],
+    ["コンステレーション", "Constellation", "変調方式が使う信号点（ベクトル）の集合を I/Q 平面に描いた図。点の数 M で1シンボルのビット数 log₂M が決まる。", "基礎", "A1"],
+    ["グレイ符号", "Gray code", "隣り合う信号点のビット列が1ビットだけ違うように割り当てる方法。隣の点に誤判定しても誤りが1ビットで済む。", "基礎", "A1"],
+    ["OFDM", "Orthogonal Frequency Division Multiplexing", "互いに直交する多数のサブキャリア（LTEでは15kHz間隔）にデータを分けて同時に送る方式。LTEの下り方式（上りは派生のSC-FDMA）。", "基礎", "A1"],
+    ["LPWA", "Low Power Wide Area", "低消費電力・長距離・低速の無線通信の総称。LTE-M、NB-IoT、LoRaWAN、Sigfoxなど。", "基礎", "01"],
+    ["3GPP", "3rd Generation Partnership Project", "LTEや5Gの技術仕様を策定する国際的な標準化団体。仕様はRelease（Rel-8、Rel-13…）単位で発行される。", "認証", "09"],
+    ["UE", "User Equipment", "端末のこと。スマホもLTE搭載ロボットもUE。", "ネットワーク", "02"],
+    ["eNodeB", "Evolved Node B（eNB）", "LTEの基地局。端末と電波でやりとりし、コア網につなぐ。5Gの基地局はgNodeB（gNB）。", "ネットワーク", "02"],
+    ["E-UTRAN", "Evolved UMTS Terrestrial Radio Access Network", "LTEの無線アクセス網（基地局群）の正式名称。", "ネットワーク", "02"],
+    ["EPC", "Evolved Packet Core", "LTEのコア網。MME・S-GW・P-GW・HSSなどで構成され、認証・移動管理・IP割当・インターネット接続を担う。", "ネットワーク", "02"],
+    ["MME", "Mobility Management Entity", "コア網の制御役。端末の登録（アタッチ）、認証の仲介、位置（どのエリアにいるか）の管理を行う。", "ネットワーク", "02"],
+    ["S-GW", "Serving Gateway", "ユーザーデータの中継点。基地局をまたいで端末が移動してもデータの流れを保つアンカーになる。", "ネットワーク", "02"],
+    ["P-GW", "PDN Gateway", "コア網とインターネット/企業網との出入口。端末にIPアドレスを割り当てる。", "ネットワーク", "02"],
+    ["HSS", "Home Subscriber Server", "加入者情報データベース。SIMと同じ秘密鍵情報を持ち、認証に使う。", "ネットワーク", "02"],
+    ["APN", "Access Point Name", "端末がどのネットワーク（インターネット、閉域網など）につなぐかを指定する名前。設定を間違えるとつながらない代表的原因。", "ネットワーク", "02"],
+    ["CGNAT", "Carrier-Grade NAT", "キャリアが多数の端末で1つのグローバルIPを共有させる仕組み。外部からロボットへ直接アクセスできない原因になる。", "ネットワーク", "02"],
+    ["閉域網", "Private network / VPN", "インターネットを経由せず、キャリア網から直接企業のサーバへつなぐ専用の網。セキュリティ上有利。", "ネットワーク", "02"],
+    ["MNO", "Mobile Network Operator", "自前の基地局と周波数免許を持つ携帯キャリア（docomo、KDDI、SoftBank、楽天モバイルなど）。", "ネットワーク", "02"],
+    ["MVNO", "Mobile Virtual Network Operator", "MNOの網を借りてサービスを提供する事業者。IoT向け回線サービスの多くはMVNO。", "ネットワーク", "02"],
+    ["ハンドオーバー", "Handover", "通信中の端末が移動に伴って接続先の基地局（セル）を切り替えること。", "ネットワーク", "02"],
+    ["PLMN", "Public Land Mobile Network", "キャリアの網のこと。MCC（国番号）＋MNC（事業者番号）で識別される（例: 440-10）。", "接続", "03"],
+    ["アタッチ", "Attach", "端末が網に登録し、通信可能な状態になるまでの手続き。認証とデフォルトベアラ確立を含む。", "接続", "03"],
+    ["RRC", "Radio Resource Control", "端末と基地局の間の無線接続を管理するプロトコル。IdleとConnectedの状態がある。", "接続", "03"],
+    ["RACH", "Random Access Channel", "端末が基地局に最初に「話しかける」ためのチャネル。", "接続", "03"],
+    ["AKA", "Authentication and Key Agreement", "SIMとHSSが同じ秘密鍵を使って互いを確認し、暗号鍵を生成する認証手順。", "接続", "03"],
+    ["ベアラ", "Bearer", "端末とP-GWの間に張られるデータの通り道。アタッチ時にデフォルトベアラが作られる。", "接続", "03"],
+    ["PSM", "Power Saving Mode", "端末が網に登録したまま長時間眠ることで電力を節約する仕組み。主にLTE-M/NB-IoT向け。", "接続", "03"],
+    ["eDRX", "extended Discontinuous Reception", "受信待ちの間隔を延ばして省電力化する仕組み。呼び出しへの応答は遅くなる。", "接続", "03"],
+    ["バンド", "Operating band", "3GPPが番号で定義した周波数の区分（B1=2.1GHz帯、B3=1.8GHz帯など）。端末は使いたい国・キャリアのバンドに対応している必要がある。", "バンド", "04"],
+    ["FDD", "Frequency Division Duplex", "上りと下りで別々の周波数を使う方式。LTEの多くのバンドはFDD。", "バンド", "04"],
+    ["TDD", "Time Division Duplex", "同じ周波数を時間で区切って上り/下りを切り替える方式。B38〜B41などが該当し、中国・インドなどで多く使われる。", "バンド", "04"],
+    ["CA", "Carrier Aggregation", "複数の周波数を束ねて速度を上げる技術。", "バンド", "04"],
+    ["MIMO", "Multiple-Input Multiple-Output", "複数のアンテナで同時に送受信して速度や安定性を上げる技術。2x2 MIMOならアンテナ2本。", "バンド", "04"],
+    ["UEカテゴリ", "UE Category", "端末の性能区分（Cat-1、Cat-4など）。最大通信速度や必要なアンテナ数が決まる。", "カテゴリ", "05"],
+    ["Cat-1", "LTE UE Category 1", "下り最大約10Mbps・上り約5Mbpsの低中速カテゴリ。通常アンテナ2本（受信ダイバーシティ）。", "カテゴリ", "05"],
+    ["Cat-1bis", "LTE UE Category 1bis", "Cat-1をアンテナ1本で動作できるようにした仕様（3GPP Rel-13）。小型・低コストで中国を中心に普及。", "カテゴリ", "05"],
+    ["Cat-4", "LTE UE Category 4", "下り最大150Mbps・上り50Mbps。映像伝送など中高速用途の定番。", "カテゴリ", "05"],
+    ["LTE-M", "LTE-M / Cat-M1 (eMTC)", "IoT向けの省電力LTE。最大約1Mbps、移動・ハンドオーバーや音声に対応。提供状況は国・キャリアで異なる。", "カテゴリ", "05"],
+    ["NB-IoT", "Narrowband IoT (Cat-NB1/NB2)", "180kHz幅の超狭帯域を使う超低速・超省電力のIoT向け規格。移動体には不向き。", "カテゴリ", "05"],
+    ["RedCap", "Reduced Capability (5G NR)", "5Gの機能を絞った中速IoT向け規格（3GPP Rel-17）。LTE Cat-4前後の後継として期待される。", "カテゴリ", "05"],
+    ["LTEモジュール", "Cellular module", "チップセット・RF回路・電源などを1つにまとめた通信部品。認証済みのものを使うと開発・認証の負担が大きく減る。", "ハードウェア", "06"],
+    ["チップセット", "Chipset / Baseband", "通信処理の中核となるIC。Qualcomm、UNISOC、ASR、MediaTekなどが供給し、モジュールベンダーがそれを搭載する。", "ハードウェア", "06"],
+    ["LGA", "Land Grid Array", "裏面の電極で基板に直接はんだ付けする部品形状。振動に強く小型だが交換は困難。", "ハードウェア", "06"],
+    ["M.2 / Mini PCIe", "Card form factor", "コネクタに差し込むカード型のモジュール。交換や地域別の差し替えがしやすい。", "ハードウェア", "06"],
+    ["50Ω", "Characteristic impedance", "RF配線の標準インピーダンス。モジュールからアンテナまでの配線を50Ωに設計しないと電力が反射して性能が落ちる。", "ハードウェア", "06"],
+    ["U.FL", "U.FL / IPEX connector", "基板とアンテナケーブルをつなぐ超小型同軸コネクタ。", "ハードウェア", "06"],
+    ["VSWR", "Voltage Standing Wave Ratio", "アンテナの整合の良さを表す指標。1に近いほど反射が少ない。", "ハードウェア", "06"],
+    ["デセンス", "Desensitization", "機器自身が出すノイズ（モーター、DC-DC、CPUクロック等）で受信感度が落ちる現象。", "ハードウェア", "06"],
+    ["SIM", "Subscriber Identity Module", "加入者を識別し、認証用の秘密鍵を保持するICカード。", "SIM", "07"],
+    ["IMSI", "International Mobile Subscriber Identity", "SIMに書かれた加入者識別番号。MCC＋MNC＋加入者番号。", "SIM", "07"],
+    ["ICCID", "Integrated Circuit Card ID", "SIMカード自体の製造番号。", "SIM", "07"],
+    ["IMEI", "International Mobile Equipment Identity", "端末（モジュール）固有の15桁の識別番号。一部の国では登録制度がある。", "SIM", "07"],
+    ["MFF2", "Machine Form Factor 2", "基板にはんだ付けするチップ型SIM（5×6mm）。振動・温度に強く産業機器で使われる。", "SIM", "07"],
+    ["eSIM / eUICC", "embedded UICC", "通信事業者のプロファイルを遠隔で書き込み・切り替えできるSIM。形状は問わない（MFF2でもカードでもよい）。", "SIM", "07"],
+    ["SGP.32", "GSMA eSIM IoT Specification", "IoT機器向けの新しいeSIM仕様。画面のない機器でもプロファイル管理をしやすくする。", "SIM", "07"],
+    ["iSIM", "integrated SIM", "SIM機能を通信チップの中に統合したもの。", "SIM", "07"],
+    ["恒久ローミング", "Permanent roaming", "外国のSIMのまま長期間その国で使い続けること。規制や事業者の制限がある国がある。", "SIM", "07"],
+    ["ATコマンド", "AT command", "ホストからモジュールを操作するテキスト命令（例: AT+CSQ）。3GPP TS 27.007で標準化された共通部分とベンダー独自部分がある。", "ソフトウェア", "08"],
+    ["QMI / MBIM", "Qualcomm MSM Interface / Mobile Broadband Interface Model", "USB経由でモジュールを高速データ通信用のネットワークインターフェースとして使うためのプロトコル。", "ソフトウェア", "08"],
+    ["PPP", "Point-to-Point Protocol", "シリアル回線上でIP通信を行う古典的な方式。UART接続のときに使われる。", "ソフトウェア", "08"],
+    ["RSRP", "Reference Signal Received Power", "基地局からの電波の強さ（dBm）。-80dBm以上なら非常に良好、-110dBm以下だと弱い、が目安。", "ソフトウェア", "08"],
+    ["RSRQ / SINR", "Reference Signal Received Quality / Signal to Interference plus Noise Ratio", "電波の「質」を表す指標。強くても干渉が多いと質は下がる。", "ソフトウェア", "08"],
+    ["FOTA", "Firmware Over-The-Air", "通信経由でファームウェアを更新すること。モジュール自体のFW更新とホスト側ソフトの更新がある。", "ソフトウェア", "08"],
+    ["MQTT", "Message Queuing Telemetry Transport", "IoTでよく使われる軽量な通信プロトコル。端末から外へ接続するため、外部からの接続を受けられない回線でも使える。", "ソフトウェア", "08"],
+    ["技適", "技術基準適合証明・工事設計認証", "日本で無線機を使うために必要な認証（電波法）。認証済みモジュールを条件どおり使えば、製品側での再取得が不要な場合がある。", "認証", "09"],
+    ["GCF", "Global Certification Forum", "携帯端末の相互接続性を確認する業界認証。欧州・アジアなど多くのキャリアが参照する。", "認証", "09"],
+    ["PTCRB", "PCS Type Certification Review Board", "北米のキャリアが要求する端末認証。", "認証", "09"],
+    ["キャリア認証", "Carrier certification", "各携帯キャリアが自社網に接続する端末に課す試験・承認。", "認証", "09"],
+    ["モジュラー認証", "Modular approval", "認証済みモジュールの認証を、条件付きで最終製品に引き継げる仕組み。国によって可否や条件が異なる。", "認証", "09"],
+    ["EMC", "Electromagnetic Compatibility", "電磁両立性。機器が不要な電磁ノイズを出さず、また外部ノイズで誤動作しないこと。", "認証", "09"],
+    ["SAR", "Specific Absorption Rate", "人体が吸収する電波エネルギーの指標。人体の近くで使う機器では評価が必要な場合がある。", "認証", "09"],
+    ["該非判定", "Export control classification", "輸出する製品や技術が輸出規制（外為法など）の対象に該当するかどうかの判定。暗号機能を持つ通信機器は確認が必要。", "認証", "09"],
+    ["SRRC", "State Radio Regulation of China", "中国の無線機器型式認証。", "認証", "10"],
+    ["CTA", "China Type Approval / 進網許可", "中国で公衆通信網に接続する端末に必要な入網許可（MIIT）。", "認証", "10"],
+    ["CCC", "China Compulsory Certification", "中国の強制製品認証（安全等）。対象品目の場合に必要。", "認証", "10"],
+    ["KC", "Korea Certification", "韓国の認証マーク。無線機器はRRA（国立電波研究院）の適合性評価が必要。", "認証", "10"],
+    ["NCC", "National Communications Commission", "台湾の通信規制当局。無線機器の型式認証を行う。", "認証", "10"],
+    ["TKDN", "Tingkat Komponen Dalam Negeri", "インドネシアの現地調達率要件。4G端末などに一定比率の国内付加価値が求められる。", "認証", "10"],
+    ["SKU", "Stock Keeping Unit", "在庫管理上の品番。国別に部品が異なるとSKUが増え、在庫や管理コストが上がる。", "開発", "11"],
+    ["EVT", "Engineering Validation Test", "最初の本格試作段階。設計が意図どおり動くかを確認する。", "開発", "12"],
+    ["DVT", "Design Validation Test", "設計の検証段階。環境・EMC・RFなどの試験で仕様を満たすかを確認し、設計を固める。", "開発", "12"],
+    ["PVT", "Production Validation Test", "量産工程の検証段階。量産ラインで品質と歩留まりを確認する。", "開発", "12"],
+    ["MP", "Mass Production", "量産。", "開発", "12"],
+    ["OTA", "Over-The-Air test", "電波暗室でアンテナ込みの製品全体の送受信性能を測る試験。TRP・TISが代表的指標。", "開発", "12"],
+    ["TRP / TIS", "Total Radiated Power / Total Isotropic Sensitivity", "製品全体としての送信電力の総和と受信感度。キャリアによっては基準値がある。", "開発", "12"],
+    ["EOL", "End of Life", "部品の生産終了。モジュールのEOLは量産製品にとって大きなリスクで、後継品への切替計画が必要。", "開発", "12"],
+  ];
+
+  const cats = ["すべて", ...new Set(G.map((g) => g[3]))];
+  let cat = "すべて";
+  const catBox = document.getElementById("cats");
+  cats.forEach((c) => {
+    const b = document.createElement("button");
+    b.className = "chip"; b.textContent = c;
+    b.addEventListener("click", () => { cat = c; render(); });
+    catBox.append(b);
+  });
+  const chLabel = (id) => { const c = CHAPTERS.find((c) => c.id === id); return c ? window.LTE.label(c) : ""; };
+  const chTitle = (id) => (CHAPTERS.find((c) => c.id === id) || {}).title || "";
+  const chFile = (id) => (CHAPTERS.find((c) => c.id === id) || {}).file || "#";
+  const hl = (s, q) => {
+    const t = esc(s);
+    if (!q) return t;
+    const i = s.toLowerCase().indexOf(q.toLowerCase());
+    if (i < 0) return t;
+    return esc(s.slice(0, i)) + "<mark>" + esc(s.slice(i, i + q.length)) + "</mark>" + esc(s.slice(i + q.length));
+  };
+  const input = document.getElementById("q");
+  function render() {
+    const q = input.value.trim();
+    catBox.querySelectorAll(".chip").forEach((b) => b.setAttribute("aria-pressed", String(b.textContent === cat)));
+    const rows = G.filter((g) => (cat === "すべて" || g[3] === cat) && (!q || (g[0] + g[1] + g[2]).toLowerCase().includes(q.toLowerCase())));
+    document.getElementById("count").textContent = `${rows.length} 語`;
+    document.getElementById("list").innerHTML = rows.map((g) => `
+      <div class="gl-item">
+        <span class="term">${hl(g[0], q)}</span><span class="full">${hl(g[1], q)}</span>
+        <p>${hl(g[2], q)}</p>
+        <div class="meta"><span class="badge">${esc(g[3])}</span><a class="badge accent" href="${chFile(g[4])}" style="text-decoration:none">${esc(chLabel(g[4]))} ${esc(chTitle(g[4]))}</a></div>
+      </div>`).join("") || `<p class="muted">該当する用語がありません。</p>`;
+  }
+  input.addEventListener("input", render);
+  render();
+})();
+</script>
+</body>
+</html>

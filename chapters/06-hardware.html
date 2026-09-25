@@ -1,0 +1,701 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ハードウェア構成｜LTE Study</title>
+  <link rel="stylesheet" href="../assets/style.css">
+  <style>
+    /* ---- 第6章 ページローカル ---- */
+    .fig-narrow > svg { max-width: 560px; margin: 0 auto; }
+    .fig-mid > svg { max-width: 680px; margin: 0 auto; }
+    svg .blk { stroke-width: 1.5; }
+    svg .lbl { font-size: 14px; font-weight: 700; }
+    svg .sub { font-size: 12px; fill: var(--text-muted); }
+    svg .wire { stroke: var(--text-muted); stroke-width: 1.5; fill: none; }
+    svg .wire.pwr { stroke: var(--c4); stroke-width: 4; }
+    svg .wire.rf { stroke: var(--c2); stroke-width: 2.5; }
+    svg .wire.sim { stroke: var(--c5); stroke-width: 2; }
+    svg .vline { stroke: var(--text-muted); stroke-width: 1.5; opacity: .35; transition: opacity .2s, stroke .2s; }
+    svg .vline.on { stroke: var(--accent); stroke-width: 3; opacity: 1; }
+    .widget { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; margin: 20px 0; box-shadow: var(--shadow); }
+    .widget h4 { margin: 0 0 8px; }
+    .w-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px 18px; }
+    .w-grid label { display: block; font-size: .88rem; color: var(--text-muted); }
+    .w-grid input[type=range] { width: 100%; accent-color: var(--accent); }
+    .w-grid select, .w-grid input[type=number] { width: 100%; font: inherit; color: var(--text); background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; }
+    .w-grid output { font-family: var(--mono); color: var(--text); font-weight: 600; }
+    .w-result { margin-top: 12px; padding: 10px 14px; border-radius: var(--radius-sm); background: var(--surface-2); }
+    .w-result .big { font-family: var(--mono); font-size: 1.4rem; font-weight: 700; }
+    .w-result.ok { background: var(--ok-soft); }
+    .w-result.warn { background: var(--warn-soft); }
+    .w-result.bad { background: var(--bad-soft); }
+    .bar-row { display: grid; grid-template-columns: 7.5em 1fr; gap: 8px; align-items: center; margin: 6px 0; font-size: .88rem; }
+    .bar-track { background: var(--surface-2); border-radius: 6px; height: 22px; overflow: hidden; }
+    .bar-fill { height: 100%; border-radius: 6px; transition: width .3s; display: flex; align-items: center; padding: 0 6px; font-family: var(--mono); font-size: .78rem; color: var(--accent-text); white-space: nowrap; }
+    .bar-fill.m { background: var(--c1); }
+    .bar-fill.c { background: var(--c2); }
+    .cmp-card h3 { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .cmp-card dl { margin: 0; display: grid; grid-template-columns: 6.5em 1fr; gap: 4px 10px; font-size: .9rem; }
+    .cmp-card dt { color: var(--text-muted); }
+    .cmp-card dd { margin: 0; }
+  </style>
+</head>
+<body data-root="../" data-chapter="06">
+<div class="page">
+<main>
+  <header class="chapter-hero">
+    <div class="eyebrow">CHAPTER 06</div>
+    <h1>ハードウェア構成</h1>
+    <p class="lead">LTEで通信するロボットの制御基板には、何をどうつなげばよいのでしょうか。モジュール・ホストとの配線・電源・RF（高周波）配線・アンテナ・SIMまで、基板の「部品表」と「設計の勘所」を一枚の図から順にたどります。</p>
+    <div class="goals"><h2>この章のゴール</h2><ul>
+      <li>LTE通信部のブロック図を描き、各ブロックの役割を説明できる</li>
+      <li>はんだ付け型（LGA/LCC）とカード型（Mini PCIe/M.2）モジュールの長所・短所を比べられる</li>
+      <li>電源のピーク電流・50Ω配線・アンテナ離隔など、よくある不具合の原因と対策がわかる</li>
+      <li>「モジュール採用」と「チップダウン設計」のどちらを選ぶべきか判断材料を持てる</li>
+      <li>ロボット特有の課題（振動・モーターノイズ・金属筐体・温度）を設計レビューで指摘できる</li>
+    </ul></div>
+  </header>
+
+  <h2>1. LTE通信部の全体像</h2>
+  <p>スマートフォンの中を開けると、LTEの通信回路は小さなチップの集まりとして基板に直接載っています。一方、ロボットや産業機器のような「LTEを付け足したい製品」では、<strong>LTEモジュール</strong>という、通信に必要な部品を一枚の小さな基板にまとめて金属シールドで覆った部品を使うのが一般的です。モジュールの中には、デジタル信号を処理する<strong>ベースバンド</strong>、電波の送受信を担う<strong>RFトランシーバ</strong>と<strong>パワーアンプ（PA）</strong>、フィルタ、電源IC、メモリなどが入っています。</p>
+  <p>モジュールは「LTE通信の心臓部」ですが、それだけでは通信できません。ロボットの頭脳である<strong>ホスト</strong>（SoCやマイコン）とつなぐ配線、十分な電流を出せる<strong>電源</strong>、電波を空間に出し入れする<strong>アンテナ</strong>とそこまでの<strong>RF配線</strong>、加入者情報を持つ<strong>SIM</strong>が必要です。下の図は、典型的なロボット制御基板のLTE周りを描いたものです。</p>
+
+  <figure class="figure fig-narrow" data-hotspots data-hs-default="module">
+    <div class="hint">図のブロックをクリック（タップ）すると解説が表示されます</div>
+    <svg viewBox="0 0 520 620" role="img" aria-label="ロボット制御基板のLTE周辺ブロック図">
+      <!-- wires -->
+      <path class="wire rf" d="M90 76 V100 M260 76 V100 M430 76 V100"/>
+      <path class="wire rf" d="M180 150 V180 M320 150 V180 M455 150 V180"/>
+      <path class="wire rf" d="M400 212 H385"/>
+      <path class="wire" d="M250 310 V340 M250 395 V420"/>
+      <path class="wire" d="M400 375 H385"/>
+      <path class="wire sim" d="M400 292 H385"/>
+      <path class="wire dash line" d="M100 212 H115"/>
+      <path class="wire dash line" d="M100 282 H115"/>
+      <path class="wire pwr" d="M100 415 H107 V260 H115"/>
+      <path class="wire pwr" d="M100 460 H115"/>
+
+      <g data-hs="ant">
+        <rect class="blk" x="20" y="16" width="140" height="60" rx="8" fill="var(--c2)" fill-opacity=".14" stroke="var(--c2)"/>
+        <text class="lbl" x="90" y="42" text-anchor="middle">メインANT</text>
+        <text class="sub" x="90" y="62" text-anchor="middle">送受信（TX/RX）</text>
+      </g>
+      <g data-hs="div">
+        <rect class="blk" x="190" y="16" width="140" height="60" rx="8" fill="var(--c2)" fill-opacity=".14" stroke="var(--c2)"/>
+        <text class="lbl" x="260" y="42" text-anchor="middle">ダイバーシティ</text>
+        <text class="sub" x="260" y="62" text-anchor="middle">受信専用（MIMO）</text>
+      </g>
+      <g data-hs="gnssant">
+        <rect class="blk" x="360" y="16" width="140" height="60" rx="8" fill="var(--c2)" fill-opacity=".14" stroke="var(--c2)"/>
+        <text class="lbl" x="430" y="42" text-anchor="middle">GNSS ANT</text>
+        <text class="sub" x="430" y="62" text-anchor="middle">測位（受信のみ）</text>
+      </g>
+
+      <g data-hs="rf">
+        <rect class="blk" x="20" y="100" width="480" height="50" rx="8" fill="var(--c2)" fill-opacity=".08" stroke="var(--c2)" stroke-dasharray="6 4"/>
+        <text class="lbl" x="260" y="122" text-anchor="middle">RF配線 50Ω・整合回路・同軸</text>
+        <text class="sub" x="260" y="141" text-anchor="middle">マイクロストリップ / CPW / π型マッチング / U.FL</text>
+      </g>
+
+      <g data-hs="esd">
+        <rect class="blk" x="20" y="180" width="80" height="65" rx="8" fill="var(--c6)" fill-opacity=".12" stroke="var(--c6)"/>
+        <text class="lbl" x="60" y="208" text-anchor="middle">ESD</text>
+        <text class="sub" x="60" y="228" text-anchor="middle">サージ対策</text>
+      </g>
+      <g data-hs="thermal">
+        <rect class="blk" x="20" y="255" width="80" height="55" rx="8" fill="var(--c6)" fill-opacity=".12" stroke="var(--c6)"/>
+        <text class="lbl" x="60" y="280" text-anchor="middle">熱</text>
+        <text class="sub" x="60" y="298" text-anchor="middle">放熱経路</text>
+      </g>
+
+      <g data-hs="module">
+        <rect class="blk" x="115" y="180" width="270" height="130" rx="10" fill="var(--c1)" fill-opacity=".14" stroke="var(--c1)" stroke-width="2"/>
+        <text class="lbl" x="250" y="215" text-anchor="middle" style="font-size:16px">LTEモジュール</text>
+        <text class="sub" x="250" y="240" text-anchor="middle">ベースバンド + RF + PA + 電源IC</text>
+        <text class="sub" x="250" y="262" text-anchor="middle">LGA/LCC はんだ付け型</text>
+        <text class="sub" x="250" y="282" text-anchor="middle">または Mini PCIe / M.2 カード型</text>
+      </g>
+
+      <g data-hs="gnss">
+        <rect class="blk" x="400" y="180" width="100" height="65" rx="8" fill="var(--c3)" fill-opacity=".14" stroke="var(--c3)"/>
+        <text class="lbl" x="450" y="208" text-anchor="middle">GNSS</text>
+        <text class="sub" x="450" y="228" text-anchor="middle">内蔵/外付</text>
+      </g>
+      <g data-hs="sim">
+        <rect class="blk" x="400" y="255" width="100" height="75" rx="8" fill="var(--c5)" fill-opacity=".14" stroke="var(--c5)"/>
+        <text class="lbl" x="450" y="282" text-anchor="middle">SIM</text>
+        <text class="sub" x="450" y="300" text-anchor="middle">ソケット/</text>
+        <text class="sub" x="450" y="317" text-anchor="middle">MFF2/eSIM</text>
+      </g>
+      <g data-hs="tp">
+        <rect class="blk" x="400" y="340" width="100" height="70" rx="8" fill="var(--c6)" fill-opacity=".12" stroke="var(--c6)"/>
+        <text class="lbl" x="450" y="367" text-anchor="middle">テスト</text>
+        <text class="sub" x="450" y="387" text-anchor="middle">USB/UART</text>
+        <text class="sub" x="450" y="402" text-anchor="middle">FW更新</text>
+      </g>
+
+      <g data-hs="hostif">
+        <rect class="blk" x="115" y="340" width="270" height="55" rx="8" fill="var(--c1)" fill-opacity=".06" stroke="var(--c1)" stroke-dasharray="6 4"/>
+        <text class="lbl" x="250" y="362" text-anchor="middle">ホストI/F</text>
+        <text class="sub" x="250" y="382" text-anchor="middle">UART・USB2.0・PCIe・SDIO＋制御信号</text>
+      </g>
+
+      <g data-hs="power">
+        <rect class="blk" x="20" y="340" width="80" height="150" rx="8" fill="var(--c4)" fill-opacity=".14" stroke="var(--c4)"/>
+        <text class="lbl" x="60" y="385" text-anchor="middle">電源</text>
+        <text class="sub" x="60" y="408" text-anchor="middle">3.3〜</text>
+        <text class="sub" x="60" y="424" text-anchor="middle">4.2V</text>
+        <text class="sub" x="60" y="446" text-anchor="middle">ピーク</text>
+        <text class="sub" x="60" y="462" text-anchor="middle">約2A</text>
+      </g>
+
+      <g data-hs="host">
+        <rect class="blk" x="115" y="420" width="385" height="70" rx="10" fill="var(--c6)" fill-opacity=".14" stroke="var(--c6)" stroke-width="2"/>
+        <text class="lbl" x="307" y="450" text-anchor="middle" style="font-size:15px">ホスト SoC / MCU</text>
+        <text class="sub" x="307" y="472" text-anchor="middle">ロボットの頭脳（Linux SoC・マイコン）</text>
+      </g>
+
+      <text class="sub" x="20" y="520">ロボット側の環境要因</text>
+      <g data-hs="motor">
+        <rect class="blk" x="20" y="530" width="150" height="70" rx="8" fill="var(--bad)" fill-opacity=".10" stroke="var(--bad)"/>
+        <text class="lbl" x="95" y="560" text-anchor="middle">モーター</text>
+        <text class="sub" x="95" y="582" text-anchor="middle">ノイズ→デセンス</text>
+      </g>
+      <g data-hs="enclosure">
+        <rect class="blk" x="185" y="530" width="150" height="70" rx="8" fill="var(--bad)" fill-opacity=".10" stroke="var(--bad)"/>
+        <text class="lbl" x="260" y="560" text-anchor="middle">金属筐体</text>
+        <text class="sub" x="260" y="582" text-anchor="middle">バッテリー・フレーム</text>
+      </g>
+      <g data-hs="vibe">
+        <rect class="blk" x="350" y="530" width="150" height="70" rx="8" fill="var(--bad)" fill-opacity=".10" stroke="var(--bad)"/>
+        <text class="lbl" x="425" y="560" text-anchor="middle">振動・温度</text>
+        <text class="sub" x="425" y="582" text-anchor="middle">コネクタ抜け・熱</text>
+      </g>
+    </svg>
+    <div class="hs-panel"></div>
+    <template data-hs-content="module"><h4>LTEモジュール</h4><p>ベースバンド（デジタル処理）・RFトランシーバ・パワーアンプ・フィルタ・電源IC・メモリを1つにまとめ、シールド缶で覆った部品です。メーカーが各国の電波認証や通信事業者（キャリア）認証を取得済みの状態で販売されるため、その認証を<strong>製品側で再利用</strong>できるのが最大の利点です（詳しくは<a href="09-certification.html">第9章</a>）。形状は基板に直接はんだ付けする LGA/LCC 型と、コネクタに挿す Mini PCIe / M.2 のカード型があります（次節）。</p></template>
+    <template data-hs-content="hostif"><h4>ホストインターフェース（I/F）</h4><p>ホストとモジュールの間でデータと制御をやり取りする配線です。データ用に <strong>UART</strong>（シリアル、ATコマンド中心で低速）、<strong>USB 2.0</strong>（最も一般的、最大480Mbit/s）、<strong>PCIe</strong>（5Gや高速カテゴリ向け）、<strong>SDIO</strong>（一部のWi-Fi/LTEコンボ等）が使われます。加えて電源投入・リセット・状態通知のための制御信号（PWRKEY / RESET_N / STATUS / RI / DTR など）が必要です。3.3V系のホストと1.8V系のモジュールをつなぐときは<strong>レベル変換</strong>が要ります。</p></template>
+    <template data-hs-content="host"><h4>ホスト SoC / MCU</h4><p>ロボットのアプリケーションを動かすプロセッサです。Linuxが動く SoC（Arm系アプリケーションプロセッサ等）なら USB でモジュールをつなぎ、OS標準のドライバ（USBシリアル・QMI/MBIM・ECM/RNDIS 等）でネットワークインターフェースとして扱うのが定番です。小さなマイコンなら UART で AT コマンドを送り、モジュール内蔵の TCP/IP スタックを使います。ソフト側の話は<a href="08-software.html">第8章</a>で扱います。</p></template>
+    <template data-hs-content="power"><h4>電源（VBAT）</h4><p>多くのLTEモジュールは、リチウムイオン電池1セルを想定した <strong>約3.3〜4.2V（公称3.8V）</strong> で動きます。送信時には瞬間的に大きな電流が流れ、2G（GSM）対応品ではバースト時に<strong>最大約2A</strong>、LTE専用品でも1A前後のピークが出ることがあります。電圧が下限を割るとモジュールがリセットし、「たまに通信が切れる」不具合になります。大容量・低ESRコンデンサ、太く短いパターン、余裕のあるDC-DCで対策します（4節）。</p></template>
+    <template data-hs-content="rf"><h4>RF配線</h4><p>モジュールのアンテナ端子からアンテナまでの高周波の通り道です。特性インピーダンスを <strong>50Ω</strong> に揃えた配線（マイクロストリップ線路やコプレーナ導波路 CPW）で引き、アンテナ直前に <strong>π型マッチング回路</strong>（部品3つ分のパッド）を用意します。基板外のアンテナへは U.FL/IPEX などの小型同軸コネクタとケーブルでつなぎます。ケーブルは長いほど損失が増えます（5節の計算機で体験できます）。</p></template>
+    <template data-hs-content="ant"><h4>メインアンテナ</h4><p>送信と受信の両方を担う最重要のアンテナです。LTEは700MHz帯〜2.7GHz帯まで幅広い周波数を使うため、<strong>広帯域</strong>なアンテナが必要です。特に低い周波数（700〜900MHz帯）は波長が長く（900MHzで約33cm）、小さなアンテナでは効率が落ちやすいので、配置スペースの確保が肝心です。</p></template>
+    <template data-hs-content="div"><h4>ダイバーシティ（副）アンテナ</h4><p>受信専用のもう1本のアンテナです。2本で受けることで、フェージング（電波の強弱の揺らぎ）に強くなり、MIMO（複数アンテナで同時に別データを運ぶ技術）で速度も上がります。<strong>Cat-4 以上では2本受信が前提</strong>で、キャリアによっては必須要件です。Cat-1bis・LTE-M・NB-IoT は1本受信が基本です（<a href="05-categories.html">第5章</a>）。2本のアンテナは互いに離し、アイソレーション（結合の少なさ）と ECC（相関係数）を確保します。</p></template>
+    <template data-hs-content="gnssant"><h4>GNSSアンテナ</h4><p>GPS・みちびき（QZSS）・GLONASS・Galileo・BeiDou などの衛星測位の電波（主に1.575GHz付近のL1帯）を受けます。電波が極めて弱いので、上空が見える位置に置き、必要に応じてLNA（低雑音アンプ）付きのアクティブアンテナを使います。LTE送信の強い電波が回り込むと受信が妨害されるため、LTEアンテナとの離隔も必要です。</p></template>
+    <template data-hs-content="gnss"><h4>GNSS受信機</h4><p>多くのLTEモジュールはGNSS受信機を内蔵していますが、LTEと同時に動かせるか、どの衛星系に対応するかは型番次第です。ロボットの自律移動で高精度測位（RTK等）が必要なら専用のGNSSモジュールを別に載せることもあります。屋内ロボットならGNSS自体が不要かもしれません。</p></template>
+    <template data-hs-content="sim"><h4>SIM回路</h4><p>SIMカードソケット、はんだ付けするチップ型SIM（MFF2）、または eSIM（eUICC）をつなぎます。信号は VCC・CLK・DATA（I/O）・RST の4本＋GND。ソケットの近くに<strong>ESD保護素子</strong>を置き、配線は短く、クロック線の近くに他の高速信号を通さないのが基本です。抜き差しを検知する SIM_DET 信号もあります。詳しくは6節と<a href="07-sim.html">第7章</a>。</p></template>
+    <template data-hs-content="tp"><h4>テストポイント・FW更新</h4><p>量産後に「モジュールのファームウェアを更新したい」「ログを取りたい」ことは必ず起きます。モジュールの USB（D+/D−/VBUS/GND）、デバッグ用UART、強制ダウンロードモードに入るためのブート端子などを、<strong>テストポイント（TP）やピンヘッダとして基板に引き出しておく</strong>のが鉄則です。ホスト経由のFOTA（無線でのFW更新）が失敗したときの「最後の命綱」になります。</p></template>
+    <template data-hs-content="esd"><h4>ESD・サージ対策</h4><p>人が触れるSIMスロットや外部アンテナコネクタ、USBポートは静電気放電（ESD）の侵入口です。TVSダイオード等の保護素子を<strong>入口のすぐそば</strong>に置きます。RFラインのESD素子は容量が大きいと信号を劣化させるので、低容量品（0.5pF以下など）を選びます。</p></template>
+    <template data-hs-content="thermal"><h4>熱</h4><p>連続送信するとモジュールは発熱し、PAの効率低下や保護による出力制限、最悪は停止につながります。モジュール底面のGNDパッドから基板のGNDベタ・サーマルビアを通じて熱を逃がし、密閉筐体なら放熱シートで筐体へ逃がします。動作温度範囲（例：−35〜+75℃で規格性能、−40〜+85℃で拡張動作 など）はデータシートで確認します。</p></template>
+    <template data-hs-content="motor"><h4>モーター・駆動回路のノイズ</h4><p>モータードライバのPWMスイッチング、DC-DCコンバータ、カメラやDDRメモリの高速クロックから出るノイズが、アンテナに回り込むと<strong>受信感度が劣化（デセンス）</strong>します。数dBの劣化でも圏内が狭くなり、セル端で切れやすくなります。7節で対策を扱います。</p></template>
+    <template data-hs-content="enclosure"><h4>金属筐体・バッテリー</h4><p>金属は電波を遮り、アンテナの近くにあると特性（共振周波数・効率）を大きく変えます。アルミフレームのロボットの内部にアンテナを置くと、ほとんど電波が出ないこともあります。樹脂の窓・カバーを設けるか、外付けアンテナにします。</p></template>
+    <template data-hs-content="vibe"><h4>振動・温度</h4><p>走行ロボットの振動・衝撃で、カード型モジュールや同軸コネクタが外れたり、はんだが疲労破壊したりします。ロック付きコネクタ、固定ネジ、接着剤による補強、はんだ付け型モジュールの採用が対策です。屋外やモーター近傍では温度範囲にも注意します。</p></template>
+    <figcaption>図1 ロボット制御基板のLTE周辺ブロック図（概念図）。太い橙線は電源、紫線はRF、桃線はSIM。</figcaption>
+  </figure>
+
+  <div class="callout robot"><span class="title">わたしたちのロボットに当てはめると</span>
+    <p>最初に決めたいのは「LTE部分を<strong>ホスト基板に直接載せる</strong>か、<strong>通信専用の子基板</strong>に分けるか」です。子基板にしておくと、国ごとにモジュールを差し替えた版を作りやすく（<a href="11-commonization.html">第11章</a>の共通化戦略）、モーター駆動回路から物理的に離しやすいという利点があります。</p>
+  </div>
+
+  <h2>2. モジュールの形：はんだ付け型か、カード型か</h2>
+  <p>LTEモジュールには大きく2つの実装形態があります。ひとつは基板に直接はんだ付けする<strong>表面実装（SMT）型</strong>で、端子の形によって <strong>LCC</strong>（Leadless Chip Carrier：側面に半円状の端子が見える）と <strong>LGA</strong>（Land Grid Array：裏面に格子状の端子が並ぶ）に分かれます。最近はLCCとLGAを組み合わせた端子配置も多いです。もうひとつはパソコンの無線カードと同じ<strong>カード型</strong>で、<strong>Mini PCIe</strong>（ミニPCIエクスプレス）や <strong>M.2</strong>（エムドットツー）のコネクタに挿してネジで固定します。</p>
+
+  <div data-tabs>
+    <div class="tab-list">
+      <button data-tab="lga">LGA / LCC（はんだ付け）</button>
+      <button data-tab="mpcie">Mini PCIe</button>
+      <button data-tab="m2">M.2</button>
+    </div>
+    <div data-tab-panel="lga">
+      <figure class="figure fig-mid">
+        <svg viewBox="0 0 560 150" role="img" aria-label="LGAモジュールの断面図">
+          <rect x="20" y="118" width="520" height="16" fill="var(--c3)" fill-opacity=".25" stroke="var(--c3)"/>
+          <text class="sub" x="30" y="148">ロボット制御基板（メイン基板）</text>
+          <rect x="140" y="40" width="280" height="62" rx="4" fill="var(--c6)" fill-opacity=".25" stroke="var(--c6)"/>
+          <text class="lbl" x="280" y="68" text-anchor="middle">シールド缶</text>
+          <text class="sub" x="280" y="88" text-anchor="middle">中にベースバンド・RF・PA</text>
+          <rect x="140" y="102" width="280" height="10" fill="var(--c1)" fill-opacity=".35" stroke="var(--c1)"/>
+          <g fill="var(--c4)">
+            <rect x="150" y="112" width="14" height="6"/><rect x="180" y="112" width="14" height="6"/><rect x="210" y="112" width="14" height="6"/><rect x="240" y="112" width="14" height="6"/><rect x="270" y="112" width="14" height="6"/><rect x="300" y="112" width="14" height="6"/><rect x="330" y="112" width="14" height="6"/><rect x="360" y="112" width="14" height="6"/><rect x="396" y="112" width="14" height="6"/>
+          </g>
+          <text class="sub" x="440" y="100">はんだ接合</text>
+          <path class="line" d="M437 104 L412 114"/>
+          <text class="sub" x="20" y="30">高さ 約2〜3mm・リフローで一括実装</text>
+        </svg>
+        <figcaption>はんだ付け型（LGA）の断面イメージ。裏面の端子でメイン基板に直接接合します。</figcaption>
+      </figure>
+      <p><span class="badge ok">振動に強い</span> <span class="badge ok">薄い・安い</span> <span class="badge warn">交換しにくい</span> <span class="badge warn">検査にX線</span></p>
+      <p>リフローはんだ付けで他の部品と一緒に実装できるため、組立コストが低く、<strong>振動・衝撃でも外れません</strong>。量産品のロボットには基本的にこちらを勧めます。一方、一度載せると交換が難しく、国別にモジュールを変えるには基板を作り分けるか、<strong>ピン互換ファミリー</strong>（同じフットプリントで地域版・カテゴリ違いを載せ替えられる製品群。例：同一メーカーの Cat-1 / Cat-4 / LTE-M 品が同じ外形・端子配置）を活用します。LGAは接合部が見えないので、量産ではX線検査やボイド率の管理が必要です。</p>
+    </div>
+    <div data-tab-panel="mpcie">
+      <figure class="figure fig-mid">
+        <svg viewBox="0 0 560 150" role="img" aria-label="Mini PCIeカードの実装イメージ">
+          <rect x="20" y="118" width="520" height="16" fill="var(--c3)" fill-opacity=".25" stroke="var(--c3)"/>
+          <text class="sub" x="30" y="148">ロボット制御基板</text>
+          <rect x="60" y="86" width="60" height="32" fill="var(--c6)" fill-opacity=".3" stroke="var(--c6)"/>
+          <text class="sub" x="90" y="80" text-anchor="middle">コネクタ</text>
+          <rect x="110" y="70" width="330" height="10" fill="var(--c1)" fill-opacity=".35" stroke="var(--c1)" transform="rotate(0)"/>
+          <rect x="200" y="50" width="160" height="20" rx="3" fill="var(--c6)" fill-opacity=".25" stroke="var(--c6)"/>
+          <text class="sub" x="280" y="44" text-anchor="middle">カード（約51×30mm）</text>
+          <rect x="430" y="80" width="14" height="38" fill="var(--c6)" fill-opacity=".4"/>
+          <text class="sub" x="455" y="100">固定ネジ</text>
+          <circle cx="395" cy="62" r="5" fill="var(--c2)"/>
+          <text class="sub" x="380" y="30">U.FL同軸</text>
+          <path class="line" d="M400 34 L396 56"/>
+        </svg>
+        <figcaption>Mini PCIe カードの実装イメージ。コネクタに斜めに挿して倒し、ネジで固定します。</figcaption>
+      </figure>
+      <p><span class="badge ok">交換・差替えが容易</span> <span class="badge ok">試作が速い</span> <span class="badge warn">振動に注意</span> <span class="badge warn">高さ・単価</span></p>
+      <p>パソコン由来の規格で、カード自体はLGAモジュールを小さな基板に載せたものです。コネクタに挿すだけなので、<strong>試作機で複数のモジュールを試す</strong>、<strong>仕向け国に応じて差し替える</strong>のに便利です。LTEのMini PCIeカードは名前に反してPCIeではなく、<strong>USB 2.0 信号</strong>で通信するものがほとんどです。電源はコネクタの3.3V（許容範囲はおおむね3.0〜3.6V程度、製品により異なる）から取るため、ホスト側の3.3V電源にもピーク電流の余裕が必要です。アンテナは U.FL（IPEX）同軸で接続します。</p>
+    </div>
+    <div data-tab-panel="m2">
+      <figure class="figure fig-mid">
+        <svg viewBox="0 0 560 150" role="img" aria-label="M.2カードの実装イメージ">
+          <rect x="20" y="118" width="520" height="16" fill="var(--c3)" fill-opacity=".25" stroke="var(--c3)"/>
+          <text class="sub" x="30" y="148">ロボット制御基板</text>
+          <rect x="60" y="92" width="50" height="26" fill="var(--c6)" fill-opacity=".3" stroke="var(--c6)"/>
+          <text class="sub" x="85" y="86" text-anchor="middle">Key B</text>
+          <rect x="100" y="80" width="300" height="10" fill="var(--c1)" fill-opacity=".35" stroke="var(--c1)"/>
+          <rect x="170" y="62" width="160" height="18" rx="3" fill="var(--c6)" fill-opacity=".25" stroke="var(--c6)"/>
+          <text class="sub" x="250" y="54" text-anchor="middle">3042 / 3052 など（幅30mm）</text>
+          <rect x="392" y="90" width="12" height="28" fill="var(--c6)" fill-opacity=".4"/>
+          <text class="sub" x="415" y="108">スタンドオフ＋ネジ</text>
+        </svg>
+        <figcaption>M.2カードの実装イメージ。平置きでネジ固定します。</figcaption>
+      </figure>
+      <p><span class="badge ok">高速I/F（USB3/PCIe）</span> <span class="badge ok">5Gへの移行が容易</span> <span class="badge warn">振動に注意</span> <span class="badge warn">LTE低カテゴリ品は少なめ</span></p>
+      <p>ノートPCやゲートウェイで主流の新しいカード規格です。セルラー用は主に <strong>Key B</strong> のコネクタで、サイズは幅×長さで「3042（30×42mm）」「3052（30×52mm）」のように呼びます。USB 2.0/3.x や PCIe で接続でき、Cat-4以上のLTEや5Gモジュールで多く使われます。将来5G（RedCap含む）へ移行する可能性があるなら、M.2で「差し替え口」を用意しておくのも一案です。ただしCat-1などの低価格品はM.2版が少ない点に注意します。</p>
+    </div>
+  </div>
+
+  <div class="table-wrap"><table>
+    <thead><tr><th>観点</th><th>LGA / LCC（はんだ付け）</th><th>Mini PCIe / M.2（カード）</th></tr></thead>
+    <tbody>
+      <tr><td>振動・衝撃</td><td><span class="badge ok">強い</span> はんだで固定</td><td><span class="badge warn">要対策</span> ネジ固定・抜け止め、同軸の固定</td></tr>
+      <tr><td>国別の差替え</td><td>基板の作り分け or ピン互換品で載せ替え</td><td>カードを差し替えるだけ</td></tr>
+      <tr><td>部品単価</td><td>安い（モジュール単体）</td><td>カード基板・コネクタ分だけ高い</td></tr>
+      <tr><td>高さ・面積</td><td>薄い（数mm）・小さい</td><td>コネクタ＋カードで高く、面積も大きい</td></tr>
+      <tr><td>電源・I/Fの自由度</td><td>VBAT直結・UART/USB/PCM等すべての端子が使える</td><td>規格で決まった端子のみ（3.3V・USB中心）</td></tr>
+      <tr><td>製造・検査</td><td>リフロー＋X線検査、実装条件の管理</td><td>組立時の挿入・ネジ締め工程</td></tr>
+      <tr><td>向く段階</td><td>DVT以降〜量産</td><td>PoC・EVT・少量多品種</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="callout robot"><span class="title">試作と量産で形を変えてもよい</span>
+    <p>「試作（EVT）はM.2やMini PCIeで複数キャリア・複数カテゴリを試し、量産（DVT/PVT）は同じチップセット系のLGA品に切り替える」という進め方はよく使われます。ただし形を変えると<strong>アンテナ性能（OTA）や電源の評価はやり直し</strong>になるので、切替えは認証試験の前に済ませます（<a href="12-roadmap.html">第12章</a>）。</p>
+  </div>
+
+  <h2>3. ホストとの接続：データ線と制御信号</h2>
+  <p>モジュールはホストから見ると「電話回線につながったモデム」です。データ線でパケットやATコマンド（モジュールに命令する文字列。例：<code>AT+CSQ</code> で電波強度を問い合わせる）をやり取りし、制御信号で電源のON/OFFや省電力状態を管理します。</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>I/F</th><th>速度の目安</th><th>向いている用途</th><th>注意点</th></tr></thead>
+    <tbody>
+      <tr><td>UART</td><td>115.2kbit/s〜数Mbit/s</td><td>マイコン、ATコマンド中心、LTE-M/NB-IoT、Cat-1の低速用途</td><td>Cat-4の速度は出ない。RTS/CTSのハードウェアフロー制御を配線する</td></tr>
+      <tr><td>USB 2.0</td><td>最大480Mbit/s</td><td>Linux SoC、Cat-1〜Cat-6の定番</td><td>90Ω差動配線。1つのUSBで複数の仮想ポート（AT・データ・診断ログ）が見える</td></tr>
+      <tr><td>USB 3.x / PCIe</td><td>Gbit/s級</td><td>Cat-12以上・5G</td><td>高速差動のため配線設計がシビア。ノイズ源にもなる</td></tr>
+      <tr><td>SDIO</td><td>数十〜百Mbit/s級</td><td>一部の組込み向け・コンボチップ</td><td>LTEモジュールでの採用例は少ない</td></tr>
+    </tbody>
+  </table></div>
+  <p>制御信号の名前はメーカーで少し違いますが、役割はほぼ共通です。</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>信号</th><th>方向</th><th>役割</th><th>ロボットでの勘所</th></tr></thead>
+    <tbody>
+      <tr><td><code>PWRKEY</code></td><td>ホスト→</td><td>一定時間Lowにして電源ON/OFF（携帯電話の電源ボタン相当）</td><td>ホストのGPIOからトランジスタ経由で駆動するのが定番。パルス幅はデータシートどおりに</td></tr>
+      <tr><td><code>RESET_N</code></td><td>ホスト→</td><td>強制リセット</td><td>フリーズ時の最終手段。通常のOFFはPWRKEYかATコマンドで行う</td></tr>
+      <tr><td><code>STATUS</code></td><td>→ホスト</td><td>モジュールが起動しているかを示す</td><td>ホストの監視（ウォッチドッグ）に使う</td></tr>
+      <tr><td><code>RI</code></td><td>→ホスト</td><td>着信・SMS・通知（URC）でパルス</td><td>眠っているホストを起こす割込みに</td></tr>
+      <tr><td><code>DTR</code></td><td>ホスト→</td><td>モジュールのスリープ許可/解除</td><td>省電力設計の要。UART接続では特に重要</td></tr>
+      <tr><td><code>W_DISABLE#</code> / <code>AP_READY</code> 等</td><td>ホスト→</td><td>無線OFF（機内モード）、ホスト準備状態の通知</td><td>工場検査や輸送時の無線停止に使える</td></tr>
+      <tr><td><code>NET_STATUS</code></td><td>→LED</td><td>圏内/通信中の表示</td><td>サービス担当者が現場で状態を判断できるよう、外から見えるLEDにすると便利</td></tr>
+      <tr><td><code>USB_BOOT</code> 等</td><td>ホスト→</td><td>強制ダウンロードモード</td><td>FWが壊れたときの復旧用。TPに出しておく</td></tr>
+    </tbody>
+  </table></div>
+  <div class="callout warn"><span class="title">電圧レベルに注意</span>
+    <p>モジュールのI/O電圧は <strong>1.8V</strong> のものが多く、3.3VのマイコンとUARTを直結すると壊れたり誤動作したりします。レベル変換ICを入れるか、I/O電圧を選べるモジュールを使います。また、モジュールの電源が切れている間にホストからI/Oに電圧をかけると、端子経由で電流が回り込む（逆流）ことがあるので、電源シーケンスも確認します。</p>
+  </div>
+
+  <h2>4. 電源設計：一番多い不具合はここ</h2>
+  <p>LTEモジュールのトラブルで最も多いのが電源です。モジュールは送信の瞬間に大電流を引きます。特に2G（GSM）対応モジュールは、約0.577msの送信バーストごとに<strong>最大約2A</strong>が流れます。LTE専用の Cat-1/LTE-M でも、最大出力（23dBm）で送信するときは1A前後のピークになる製品があります。この電流が、配線の抵抗やコンデンサの内部抵抗（ESR：等価直列抵抗）を流れると電圧が下がります。</p>
+  <p>電圧が動作下限（多くの製品で約3.3V）を一瞬でも割ると、モジュールは<strong>低電圧でリセット</strong>したり、ネットワークから切断されたりします。症状は「電波が弱い場所でだけ時々切れる」（電波が弱いほど送信出力が上がり、電流が増えるため）という、原因がわかりにくい形で出ます。データシートの参考回路では、モジュールの電源端子のそばに <strong>100µF級以上の低ESRコンデンサ</strong>と、高周波ノイズ用の小容量セラミックコンデンサ（100nF・33pF・10pF など）を並べるよう指示されていることが多いです。</p>
+
+  <div class="widget" id="pwr-widget">
+    <h4>電圧降下シミュレータ（簡易モデル）</h4>
+    <p class="small muted" style="margin-top:0">送信バーストの瞬間、コンデンサが電流を肩代わりし、電源ICが追いつくまで（ここでは20µsと仮定）に電圧が下がる様子を計算します。値は理解のための目安です。</p>
+    <div class="w-grid">
+      <div><label for="pw-v">設定電圧 <output id="pw-v-o"></output></label><input id="pw-v" type="range" min="3.5" max="4.2" step="0.05" value="3.8"></div>
+      <div><label for="pw-i">ピーク電流 <output id="pw-i-o"></output></label><input id="pw-i" type="range" min="0.5" max="2.5" step="0.1" value="2.0"></div>
+      <div><label for="pw-r">配線＋コネクタの抵抗 <output id="pw-r-o"></output></label><input id="pw-r" type="range" min="10" max="200" step="5" value="80"></div>
+      <div><label for="pw-c">バルクコンデンサ容量 <output id="pw-c-o"></output></label><input id="pw-c" type="range" min="0" max="7" step="1" value="2"></div>
+      <div><label for="pw-esr">コンデンサの種類</label><select id="pw-esr"><option value="0.02">低ESR（ポリマー/セラミック 約20mΩ）</option><option value="0.3" selected>一般的な電解（約300mΩ）</option></select></div>
+    </div>
+    <svg viewBox="0 0 560 170" role="img" aria-label="電源電圧の波形" style="margin-top:10px">
+      <line class="line" x1="40" y1="150" x2="550" y2="150"/>
+      <line class="line" x1="40" y1="10" x2="40" y2="150"/>
+      <text class="sub" x="36" y="24" text-anchor="end">4.2</text>
+      <text class="sub" x="36" y="150" text-anchor="end">3.0</text>
+      <line id="pw-th" x1="40" x2="550" stroke="var(--bad)" stroke-dasharray="5 4" stroke-width="1.5"/>
+      <text id="pw-th-t" class="sub" x="548" text-anchor="end" style="fill:var(--bad)">下限 3.3V</text>
+      <polyline id="pw-wave" fill="none" stroke="var(--c4)" stroke-width="2.5"/>
+      <text class="sub" x="300" y="166" text-anchor="middle">時間 →（送信バーストのたびに電圧が落ちる）</text>
+    </svg>
+    <div class="w-result" id="pw-res"></div>
+  </div>
+
+  <p>対策の基本は次の4つです。</p>
+  <ul>
+    <li><strong>電源ICの能力</strong>：DC-DCコンバータ（またはLDO）は連続2A以上・過渡応答の速いものを選ぶ。LDOは入出力の電圧差×電流が熱になるので、5Vや12Vからの降圧にはDC-DCが向く。</li>
+    <li><strong>太く短い配線</strong>：電源ICからモジュールのVBAT端子まで、幅の広いパターン（目安2mm以上）やベタで引き、GNDの戻り経路も確保する。コネクタやケーブルを経由するなら接触抵抗も含めて見積もる。</li>
+    <li><strong>低ESRの大容量コンデンサ</strong>：VBAT端子の直近に100µF〜数百µFの低ESRコンデンサ＋小容量セラミックを並列に。</li>
+    <li><strong>実機での測定</strong>：最大送信出力（電波の弱い場所や、シールドボックスで基地局シミュレータを使い最大出力を強制）で、オシロスコープでVBAT端子の最低電圧を確認する。</li>
+  </ul>
+  <div class="callout robot"><span class="title">ロボットはバッテリー電圧が大きく動く</span>
+    <p>ロボットの主電源は24Vや48Vのバッテリーで、モーターの加速・急停止で電圧が大きく揺れたり、回生でサージが乗ったりします。LTE用の3.8V電源は、<strong>モーター系と分けたDC-DCから独立に作り</strong>、入力側にもサージ保護とフィルタを入れましょう。また「バッテリー交換中もLTEで位置を報告したい」なら、小さな補助電源（バックアップ電池やスーパーキャパシタ）の要否も要件として検討します。</p>
+  </div>
+
+  <h2>5. RF配線とアンテナ</h2>
+  <h3>5-1. 50Ωの道を作る</h3>
+  <p>高周波の信号は、配線を「電線」ではなく「波の通り道（伝送線路）」として扱う必要があります。途中で通り道の性質（<strong>特性インピーダンス</strong>）が変わると、そこで波が反射して、アンテナに届く電力が減ります。無線機器では慣習的に <strong>50Ω</strong> に揃えます。基板上では、配線の幅・下のGND層までの距離・基板材料の誘電率で特性インピーダンスが決まります。代表的な形は2つです。</p>
+  <ul>
+    <li><strong>マイクロストリップ線路</strong>：表層の配線と、その直下のGND層で構成。シンプル。</li>
+    <li><strong>コプレーナ導波路（CPW、GND付き）</strong>：配線の左右にもGNDを置き、ビアを密に打つ。周囲へのノイズ放射や、周囲からの飛び込みに強く、モジュール周りでよく使われます。</li>
+  </ul>
+  <p>基板メーカーに「この層構成でこの線を50Ωにしたい」と伝えると、線幅を調整したうえで<strong>インピーダンス管理</strong>付きで製造してくれます。アンテナの手前には、コンデンサやインダクタを載せられる <strong>π型マッチング回路</strong>（直列1つ＋並列2つのパッド）を必ず用意しておきます。初めは直列を0Ω抵抗、並列を未実装にしておき、実際の筐体に組み込んだ状態でネットワークアナライザを使い最適な定数を決めます（アンテナチューニング）。</p>
+
+  <h3>5-2. ケーブルとコネクタの損失</h3>
+  <p>アンテナを基板から離れた場所（ロボットの頭頂部など）に置くには同軸ケーブルを使いますが、細いケーブルほど損失が大きく、周波数が高いほど損失が増えます。損失はそのまま「送信電力が減る」「受信感度が悪くなる」ことを意味します。3dBの損失で電力は半分です。</p>
+
+  <div class="widget" id="rf-widget">
+    <h4>RFケーブル損失計算機（目安）</h4>
+    <div class="w-grid">
+      <div><label for="rf-f">周波数帯</label><select id="rf-f"><option value="0">低い帯域（700〜900MHz）</option><option value="1" selected>中間（1.7〜2.1GHz）</option><option value="2">高い帯域（2.3〜2.7GHz）</option></select></div>
+      <div><label for="rf-t">ケーブル種類</label><select id="rf-t"><option value="0" selected>φ1.13mm 極細同軸</option><option value="1">φ1.37mm 極細同軸</option><option value="2">RG178（φ約1.8mm）</option><option value="3">RG174（φ約2.8mm）</option></select></div>
+      <div><label for="rf-l">ケーブル長 <output id="rf-l-o"></output></label><input id="rf-l" type="range" min="5" max="150" step="5" value="30"></div>
+      <div><label for="rf-n">コネクタ（嵌合箇所）数 <output id="rf-n-o"></output></label><input id="rf-n" type="range" min="0" max="4" step="1" value="2"></div>
+    </div>
+    <div class="w-result" id="rf-res"></div>
+    <p class="small muted">減衰量はメーカー公表値を丸めた目安（dB/m）。コネクタ1嵌合あたり0.2dB、基板上の配線・整合回路で0.3dBと仮定。実際はケーブルのデータシートで確認してください。</p>
+  </div>
+
+  <h3>5-3. アンテナの種類と置き方</h3>
+  <div class="table-wrap"><table>
+    <thead><tr><th>種類</th><th>特徴</th><th>向くケース</th></tr></thead>
+    <tbody>
+      <tr><td>チップ/PCBパターンアンテナ（基板上）</td><td>最も安く、組立工程なし。GNDの大きさ・形に性能が強く依存し、低い帯域の効率は出にくい</td><td>樹脂筐体で基板を筐体の端に置ける小型機</td></tr>
+      <tr><td>FPC（フレキ）アンテナ</td><td>薄いフィルム状で筐体内側に貼る。U.FLケーブルでつなぐ。比較的性能が出しやすく、筐体の形に合わせやすい</td><td>樹脂カバーの内側に貼れるロボット</td></tr>
+      <tr><td>外付けアンテナ（SMA/ねじ込み・シャークフィン等）</td><td>最も性能が出る。筐体に穴・防水処理が必要。見た目・破損の懸念</td><td>金属筐体、屋外、電波の弱い現場</td></tr>
+    </tbody>
+  </table></div>
+  <p>アンテナはGND（基板の広い銅面）と一緒になって初めて働くものが多く、「アンテナ単体の性能」より「<strong>製品に組み込んだ状態の性能</strong>」が重要です。この性能は、電波暗室でのOTA（Over The Air）試験で <strong>TRP</strong>（Total Radiated Power：全方向に出た送信電力の合計）と <strong>TIS</strong>（Total Isotropic Sensitivity：全方向の平均受信感度）として測ります。北米などではキャリアがTRP/TISの基準値を求めることがあり、ここで不合格になると筐体からやり直しになりかねません。</p>
+  <p>2本以上のアンテナを使う場合（メイン＋ダイバーシティ）は、次の2つが大切です。</p>
+  <ul>
+    <li><strong>アイソレーション</strong>：2本の間の結合の小ささ。一方から出た電力がもう一方にどれだけ漏れるか。目安として10〜15dB以上を目指し、アンテナ同士はできるだけ離して向きも変えます。</li>
+    <li><strong>ECC</strong>（Envelope Correlation Coefficient：包絡線相関係数）：2本が受ける信号がどれだけ似ているか。似すぎているとダイバーシティ/MIMOの効果が出ません。一般に0.5未満（小さいほど良い）が目安とされます。</li>
+  </ul>
+  <div class="callout robot"><span class="title">金属フレームのロボットでは</span>
+    <p>アンテナは「金属に囲まれない場所」が絶対条件です。目安として金属・バッテリー・モーターから<strong>数cm〜10cm以上</strong>離し、樹脂カバーの内側や頭頂部・背面の上部に置きます。金属筐体の中に基板を入れるなら、最初から外付けアンテナ（または樹脂窓の裏のFPCアンテナ）を前提にします。人が触れる場所・手で覆われやすい場所も避けます。アンテナメーカーやモジュールメーカーの多くは、<strong>筐体を持ち込んでのチューニング支援</strong>をしているので、EVTの段階で相談するのが近道です。</p>
+  </div>
+
+  <h2>6. SIM回路</h2>
+  <p>SIMの種類そのものは<a href="07-sim.html">第7章</a>で詳しく扱いますが、基板設計としては3つの選択肢があります。</p>
+  <div class="card-grid">
+    <div class="card"><h3>SIMソケット（4FF/nano 等）</h3><p class="small">カードを差し替えられるので試作や国別の回線切替に便利。振動でカードが接触不良を起こしやすく、<strong>ロック（ヒンジ・トレイ）付き</strong>のソケットを選ぶ。抜き差し口はESD対策必須。</p></div>
+    <div class="card"><h3>チップSIM（MFF2）</h3><p class="small">5×6mmのパッケージを基板に直接はんだ付け。振動に強く、盗難・抜き取りも防げる。回線会社を後から変えるには eSIM 機能が必要。</p></div>
+    <div class="card"><h3>eSIM（eUICC）</h3><p class="small">MFF2形状などのeUICCに、回線の契約情報（プロファイル）を遠隔で書き込める。出荷後に国・キャリアを切り替えられる。<a href="07-sim.html">第7章</a>参照。</p></div>
+  </div>
+  <p>回路上の注意点は共通です。</p>
+  <ul>
+    <li>SIM信号（VCC・CLK・DATA・RST）はモジュールの近くに置き、<strong>配線を短く</strong>（目安10cm以内、できれば数cm）。CLKはノイズ源になるのでRF配線やアンテナから離す。</li>
+    <li>各信号に<strong>低容量のTVSダイオード</strong>（ESD保護）と、データシート推奨のダンピング抵抗・小容量コンデンサを入れる。</li>
+    <li>ソケットを使うなら <code>SIM_DET</code>（カード検出）を配線し、抜去→再挿入を検知できるようにする。</li>
+    <li>ソケットとMFF2の<strong>両方を実装できるフットプリント</strong>（片方は未実装）にしておくと、試作はソケット、量産はMFF2、と切り替えられる。モジュールによってはSIMを2系統（デュアルSIM）持てるものもある。</li>
+  </ul>
+
+  <h2>7. ロボット特有の課題</h2>
+  <p>ロボットは「動く機械」であり、スマートフォンやルーターにはない課題があります。</p>
+  <div class="card-grid">
+    <div class="card"><h3>振動・衝撃</h3><p class="small">カード型モジュールの浮き、SIMカードの接触不良、U.FLコネクタの外れが典型。対策：LGAのはんだ付け型、MFF2チップSIM、<strong>ロック付き同軸コネクタ</strong>（例：I-PEX MHF系のロック機構付き品）、ケーブルのクランプ固定、接着剤（ステーキング）による補強。規格の振動試験（IEC 60068-2-6/-64 等）を製品要件に入れる。</p></div>
+    <div class="card"><h3>モーターノイズとデセンス</h3><p class="small">モータードライバのPWM、DC-DCのスイッチング、カメラやDDRの高速クロックの高調波が、LTEの受信帯域に入ると感度が数dB〜十数dB落ちる。対策：アンテナを駆動系から離す、ケーブルのシールドとフェライト、スイッチング周波数・クロックの調整（スペクトラム拡散）、LTE部のシールド缶。<strong>モーターを回した状態と止めた状態で受信感度（TIS/RSRP）を比較</strong>して確認する。</p></div>
+    <div class="card"><h3>金属筐体</h3><p class="small">金属の中ではアンテナが働かない。外付け、樹脂窓、筐体の一部をアンテナにする（スロットアンテナ）などを設計初期に決める。「後からアンテナを付ける場所がない」は最も高くつく失敗。</p></div>
+    <div class="card"><h3>温度範囲</h3><p class="small">屋外・倉庫・工場では−20℃以下や夏の車内並みの高温もある。モジュールは多くが−40〜+85℃の拡張範囲を持つが、規格性能を満たすのはもう少し狭い範囲であることが多い。SIMカード・コンデンサ・電池も含めて温度範囲を揃える。</p></div>
+  </div>
+  <details class="more"><summary>もっと詳しく：デセンスの考え方</summary>
+    <p>基地局からの信号がアンテナに届くとき、受信機はそれを周囲のノイズと区別する必要があります。もし基板から出たノイズがアンテナに入ると、受信機から見た「ノイズの床」が上がり、それまで受けられていた弱い信号が埋もれてしまいます。たとえば6dBのデセンスは、受信電力が1/4になったのと同じで、圏内の範囲（セル端）が目に見えて縮みます。特に低い周波数帯（700〜900MHz）は多くの機器のクロック高調波が重なりやすく、またアンテナ効率も低くなりがちなので、影響が大きく出ます。</p>
+    <p>診断には、基地局シミュレータ（または実網）で受信感度を測りながら、モーター・カメラ・Wi-Fiなどを1つずつON/OFFして犯人を探すのが確実です。</p>
+  </details>
+
+  <h2>8. モジュール採用か、チップダウン設計か</h2>
+  <p>スマートフォンのようにチップセット（ベースバンドチップ、RFトランシーバ等）を自社基板に直接載せる設計を<strong>チップダウン</strong>と呼びます。部品代は安くなりますが、RFの設計・調整、各国の認証取得をすべて自社で行う必要があります。</p>
+  <div class="card-grid">
+    <div class="card cmp-card"><h3>モジュール採用 <span class="badge ok">推奨</span></h3>
+      <dl>
+        <dt>認証</dt><dd>モジュールの認証（電波法・FCC・CE、GCF/PTCRB、キャリア認証等）を<strong>再利用</strong>できる。製品では差分試験で済む場合が多い</dd>
+        <dt>開発期間</dt><dd>数か月〜。RF専門家が少なくても可能</dd>
+        <dt>NRE</dt><dd>小〜中（数百万〜数千万円規模：認証差分・OTA・キャリア試験）</dd>
+        <dt>単価</dt><dd>チップダウンより高い（モジュールの利益・シールド・小基板分）</dd>
+        <dt>サポート</dt><dd>メーカーのFAE・参考設計・FW更新が受けられる</dd>
+      </dl>
+    </div>
+    <div class="card cmp-card"><h3>チップダウン <span class="badge warn">大量生産向け</span></h3>
+      <dl>
+        <dt>認証</dt><dd><strong>すべて自社で取得</strong>。国ごと・キャリアごとに試験</dd>
+        <dt>開発期間</dt><dd>1〜2年以上。RF・ベースバンド・プロトコルの専門チームが必要</dd>
+        <dt>NRE</dt><dd>大（数億円規模になりうる：開発・校正設備・認証・ライセンス）</dd>
+        <dt>単価</dt><dd>安い。ただしチップベンダーは大口顧客しか直接取引しないことが多い</dd>
+        <dt>その他</dt><dd>生産ラインでのRF校正（キャリブレーション）工程が必要</dd>
+      </dl>
+    </div>
+  </div>
+
+  <div class="widget" id="be-widget">
+    <h4>損益分岐のイメージ（仮の数字で試算）</h4>
+    <p class="small muted" style="margin-top:0">初期費用（NRE）と1台あたりの差額から、何台作ればチップダウンが得になるかを見ます。数字は説明用の仮定です。自社の見積もりに置き換えてください。</p>
+    <div class="w-grid">
+      <div><label for="be-v">累計生産台数 <output id="be-v-o"></output></label><input id="be-v" type="range" min="0" max="100" step="1" value="40"></div>
+      <div><label for="be-mu">モジュール方式 単価（円）</label><input id="be-mu" type="number" min="0" step="100" value="2500"></div>
+      <div><label for="be-cu">チップダウン 部材単価（円）</label><input id="be-cu" type="number" min="0" step="100" value="1500"></div>
+      <div><label for="be-mn">モジュール方式 NRE（万円）</label><input id="be-mn" type="number" min="0" step="100" value="1500"></div>
+      <div><label for="be-cn">チップダウン NRE（万円）</label><input id="be-cn" type="number" min="0" step="1000" value="30000"></div>
+    </div>
+    <div class="bar-row"><span>モジュール</span><div class="bar-track"><div class="bar-fill m" id="be-bm"></div></div></div>
+    <div class="bar-row"><span>チップダウン</span><div class="bar-track"><div class="bar-fill c" id="be-bc"></div></div></div>
+    <div class="w-result" id="be-res"></div>
+  </div>
+  <div class="callout robot"><span class="title">わたしたちの判断</span>
+    <p>量産数が数千〜数万台規模のロボットでは、<strong>モジュール採用がほぼ一択</strong>です。チップダウンが視野に入るのは、同じ設計で数十万〜百万台以上を作る場合です。さらに輸出先が多いほど認証の手間が掛け算で増えるので、モジュールの「取得済み認証の束」の価値は大きくなります。</p>
+  </div>
+
+  <h2>9. 主要ベンダーの関係</h2>
+  <p>LTEモジュールの中身（心臓部のチップセット）を作る<strong>チップセットベンダー</strong>と、それを使ってモジュールを作る<strong>モジュールベンダー</strong>は別の会社であることがほとんどです。同じモジュールメーカーでも、型番ごとに中のチップが違います。チップセットによって対応カテゴリ・FW更新の方針・長期供給・価格帯が変わるので、モジュールを選ぶときは「中のチップは何か」も確認します。</p>
+  <figure class="figure fig-mid" data-hotspots id="vendor-fig">
+    <div class="hint">会社名をクリックすると、代表的なつながり（線）と特徴が表示されます</div>
+    <svg viewBox="0 0 600 470" role="img" aria-label="チップセットベンダーとモジュールベンダーの関係図">
+      <text class="lbl" x="105" y="22" text-anchor="middle">チップセット</text>
+      <text class="lbl" x="495" y="22" text-anchor="middle">モジュール</text>
+      <g id="vlines">
+        <line class="vline" data-link="qcom quectel" x1="190" y1="55" x2="410" y2="53"/>
+        <line class="vline" data-link="qcom simcom" x1="190" y1="55" x2="410" y2="99"/>
+        <line class="vline" data-link="qcom fibocom" x1="190" y1="55" x2="410" y2="145"/>
+        <line class="vline" data-link="qcom telit" x1="190" y1="55" x2="410" y2="191"/>
+        <line class="vline" data-link="qcom sierra" x1="190" y1="55" x2="410" y2="237"/>
+        <line class="vline" data-link="qcom ublox" x1="190" y1="55" x2="410" y2="283"/>
+        <line class="vline" data-link="unisoc quectel" x1="190" y1="110" x2="410" y2="53"/>
+        <line class="vline" data-link="unisoc fibocom" x1="190" y1="110" x2="410" y2="145"/>
+        <line class="vline" data-link="asr simcom" x1="190" y1="165" x2="410" y2="99"/>
+        <line class="vline" data-link="asr quectel" x1="190" y1="165" x2="410" y2="53"/>
+        <line class="vline" data-link="mtk quectel" x1="190" y1="220" x2="410" y2="53"/>
+        <line class="vline" data-link="mtk simcom" x1="190" y1="220" x2="410" y2="99"/>
+        <line class="vline" data-link="mtk fibocom" x1="190" y1="220" x2="410" y2="145"/>
+        <line class="vline" data-link="altair murata" x1="190" y1="275" x2="410" y2="329"/>
+        <line class="vline" data-link="altair sierra" x1="190" y1="275" x2="410" y2="237"/>
+        <line class="vline" data-link="sequans sqnmod" x1="190" y1="330" x2="410" y2="375"/>
+        <line class="vline" data-link="sequans telit" x1="190" y1="330" x2="410" y2="191"/>
+      </g>
+      <g data-hs="qcom"><rect x="20" y="35" width="170" height="40" rx="8" fill="var(--c2)" fill-opacity=".14" stroke="var(--c2)"/><text class="lbl" x="105" y="60" text-anchor="middle">Qualcomm</text></g>
+      <g data-hs="unisoc"><rect x="20" y="90" width="170" height="40" rx="8" fill="var(--c2)" fill-opacity=".14" stroke="var(--c2)"/><text class="lbl" x="105" y="115" text-anchor="middle">UNISOC</text></g>
+      <g data-hs="asr"><rect x="20" y="145" width="170" height="40" rx="8" fill="var(--c2)" fill-opacity=".14" stroke="var(--c2)"/><text class="lbl" x="105" y="170" text-anchor="middle">ASR</text></g>
+      <g data-hs="mtk"><rect x="20" y="200" width="170" height="40" rx="8" fill="var(--c2)" fill-opacity=".14" stroke="var(--c2)"/><text class="lbl" x="105" y="225" text-anchor="middle">MediaTek</text></g>
+      <g data-hs="altair"><rect x="20" y="255" width="170" height="40" rx="8" fill="var(--c2)" fill-opacity=".14" stroke="var(--c2)"/><text class="lbl" x="105" y="280" text-anchor="middle">Sony (Altair)</text></g>
+      <g data-hs="sequans"><rect x="20" y="310" width="170" height="40" rx="8" fill="var(--c2)" fill-opacity=".14" stroke="var(--c2)"/><text class="lbl" x="105" y="335" text-anchor="middle">Sequans</text></g>
+
+      <g data-hs="quectel"><rect x="410" y="35" width="170" height="36" rx="8" fill="var(--c1)" fill-opacity=".14" stroke="var(--c1)"/><text class="lbl" x="495" y="58" text-anchor="middle">Quectel</text></g>
+      <g data-hs="simcom"><rect x="410" y="81" width="170" height="36" rx="8" fill="var(--c1)" fill-opacity=".14" stroke="var(--c1)"/><text class="lbl" x="495" y="104" text-anchor="middle">SIMCom</text></g>
+      <g data-hs="fibocom"><rect x="410" y="127" width="170" height="36" rx="8" fill="var(--c1)" fill-opacity=".14" stroke="var(--c1)"/><text class="lbl" x="495" y="150" text-anchor="middle">Fibocom</text></g>
+      <g data-hs="telit"><rect x="410" y="173" width="170" height="36" rx="8" fill="var(--c1)" fill-opacity=".14" stroke="var(--c1)"/><text class="lbl" x="495" y="196" text-anchor="middle">Telit Cinterion</text></g>
+      <g data-hs="sierra"><rect x="410" y="219" width="170" height="36" rx="8" fill="var(--c1)" fill-opacity=".14" stroke="var(--c1)"/><text class="lbl" x="495" y="242" text-anchor="middle">Sierra Wireless</text></g>
+      <g data-hs="ublox"><rect x="410" y="265" width="170" height="36" rx="8" fill="var(--c1)" fill-opacity=".14" stroke="var(--c1)"/><text class="lbl" x="495" y="288" text-anchor="middle">u-blox</text></g>
+      <g data-hs="murata"><rect x="410" y="311" width="170" height="36" rx="8" fill="var(--c1)" fill-opacity=".14" stroke="var(--c1)"/><text class="lbl" x="495" y="334" text-anchor="middle">村田製作所</text></g>
+      <g data-hs="sqnmod"><rect x="410" y="357" width="170" height="36" rx="8" fill="var(--c1)" fill-opacity=".14" stroke="var(--c1)"/><text class="lbl" x="495" y="380" text-anchor="middle">Sequans（自社）</text></g>
+
+      <g data-hs="nordic"><rect x="20" y="410" width="560" height="44" rx="8" fill="var(--c3)" fill-opacity=".14" stroke="var(--c3)"/><text class="lbl" x="300" y="437" text-anchor="middle">Nordic nRF91（チップ〜SiPまで自社・LTE-M/NB-IoT）</text></g>
+    </svg>
+    <div class="hs-panel"></div>
+    <template data-hs-content="qcom"><h4>Qualcomm（米）</h4><p>スマートフォン向けで最大手のモデムチップメーカー。IoT向けにも Cat-1bis〜Cat-6以上、LTE-M/NB-IoT、5G まで幅広く、多くのモジュールメーカーが採用しています。キャリア認証の実績が多く、北米向けに強いのが特徴。2024年にはSequansの4G IoT技術を買収しています。</p></template>
+    <template data-hs-content="unisoc"><h4>UNISOC（紫光展鋭・中国）</h4><p>低価格の Cat-1/Cat-1bis チップ（例：8910系・8850系）で大きなシェアを持ちます。中国・新興国向けの低価格モジュールに多く使われます。輸出先によっては採用可否の社内方針（地政学・調達規制）を確認しておきます。</p></template>
+    <template data-hs-content="asr"><h4>ASR（翱捷科技・中国）</h4><p>Cat-1/Cat-1bis やCat-4の低価格チップ。SIMCom の A76xx シリーズなどに使われています。</p></template>
+    <template data-hs-content="mtk"><h4>MediaTek（台湾）</h4><p>スマートフォンSoCの大手。IoTではNB-IoT（MT2625等）や5Gモデムで使われ、NB-IoTモジュール（Quectel BC66、SIMCom SIM7020 など）の採用例があります。</p></template>
+    <template data-hs-content="altair"><h4>Sony Semiconductor Israel（旧 Altair）</h4><p>ソニーグループのLTE-M/NB-IoTチップ（ALT1250 など）。低消費電力が特徴で、村田製作所の Type 1SC や Sierra Wireless の HL78 シリーズなどに使われています。日本のキャリア認証の実績もあります。</p></template>
+    <template data-hs-content="sequans"><h4>Sequans（仏）</h4><p>LTE-M/NB-IoT（Monarch）、Cat-1/1bis（Calliope）、Cat-4/6（Cassiopeia）のチップを持つIoT専業メーカー。2024年9月に4G IoT技術をQualcommへ売却しましたが、永続ライセンスで4G製品の販売・開発を継続しています。自社モジュール（GM02S 等）も販売。</p></template>
+    <template data-hs-content="nordic"><h4>Nordic Semiconductor（ノルウェー）</h4><p>nRF91シリーズは、LTE-M/NB-IoT モデム・アプリケーション用マイコン（Arm Cortex-M33）・GNSS・電源管理を1パッケージにした SiP（System in Package）。チップもモジュールも自社という珍しい形です。ホストマイコンを別に置かずに済むので、低速・低消費電力の小型機器に向きます。Cat-1/Cat-4 級の速度は出ません。</p></template>
+    <template data-hs-content="quectel"><h4>Quectel（移遠通信・中国）</h4><p>出荷数量で世界最大級のモジュールメーカー。Qualcomm・UNISOC・ASR・MediaTek など複数のチップを使い分け、同じ外形でカテゴリ違い・地域違いを揃えた製品ファミリーが豊富です。各国の認証取得済みリストが公開されており、日本にも代理店・サポートがあります。</p></template>
+    <template data-hs-content="simcom"><h4>SIMCom（芯訊通・中国）</h4><p>低価格帯に強いモジュールメーカー。Qualcomm・ASR・MediaTek など複数のチップ系統の製品があります。</p></template>
+    <template data-hs-content="fibocom"><h4>Fibocom（広和通・中国）</h4><p>M.2 カード型やPC・ゲートウェイ向けに強いメーカー。UNISOC系のCat-1品（L610等）やQualcomm/MediaTek系の5Gモジュールなど。</p></template>
+    <template data-hs-content="telit"><h4>Telit Cinterion（米/伊・独）</h4><p>2023年にTelitがThales（旧Gemalto Cinterion）のIoTモジュール事業を統合して誕生。産業・車載向けの実績が長く、長期供給を重視する顧客に選ばれます。Qualcomm系のほか、Sequans系チップを使った製品もあります。</p></template>
+    <template data-hs-content="sierra"><h4>Sierra Wireless（加）</h4><p>2023年にSemtechが買収。産業向けモジュール（HLシリーズ、EM/MC カード型等）で実績があります。<strong>2026年8月、Semtechはセルラーモジュール事業を台湾Compalへ売却する契約を発表</strong>しており、今後の製品ロードマップ・サポート体制は要確認です。</p></template>
+    <template data-hs-content="ublox"><h4>u-blox（スイス）</h4><p>GNSSで有名なメーカーで、自社チップ（UBX-R5）とQualcomm系のセルラーモジュールを出していましたが、<strong>2025年1月にセルラーモジュール事業からの撤退を発表</strong>しました。既存品は段階的に終息するため、新規設計での採用は避け、既存採用品は後継品の検討が必要です。このように<strong>モジュールの長期供給性（EOLリスク）</strong>は選定の重要項目です。</p></template>
+    <template data-hs-content="murata"><h4>村田製作所（日本）</h4><p>超小型のLTE-Mモジュール（Type 1SC：Sony/Altair ALT1250 系）などを提供。日本の会社なので日本語のサポートが受けやすい一方、対応カテゴリはLTE-M/NB-IoT中心で、Cat-1/Cat-4の選択肢はQuectel等に比べ限られます。最新の製品群は公式サイトで確認してください。</p></template>
+    <template data-hs-content="sqnmod"><h4>Sequans 自社モジュール</h4><p>チップメーカーのSequansは、自社チップを載せたモジュール（LTE-M/NB-IoTの GM02S 等）も販売しています。</p></template>
+    <figcaption>図2 チップセットとモジュールの代表的な関係（2026年9月時点の公開情報に基づく代表例。型番ごとに異なるため必ずデータシートで確認）。</figcaption>
+  </figure>
+  <div class="callout warn"><span class="title">業界再編が続いています</span>
+    <p>u-bloxの撤退（2025年）、Sierra Wireless事業の売却（2026年発表）のように、セルラーモジュール業界は価格競争で再編が続いています。ロボットは製品寿命が5〜10年と長いので、<strong>長期供給の保証（ロンジェビティ・プログラム）</strong>、ピン互換の代替品、セカンドソースの有無を選定基準に入れましょう。</p>
+  </div>
+
+  <h2>10. 設計レビュー用チェックリスト</h2>
+  <p>回路図・基板レイアウトのレビュー時に使えるチェックリストです。チェック状態はブラウザに保存されます。</p>
+  <ul data-checklist="ch06-review">
+    <li>モジュールのハードウェア設計ガイド（Hardware Design）と参考回路を入手し、推奨回路との差分を一覧にした</li>
+    <li>VBAT電源：連続2A以上（または製品のピーク電流以上）供給でき、最大送信時の最低電圧を実測で確認する計画がある</li>
+    <li>VBAT端子の直近に低ESRの大容量コンデンサと小容量セラミックを配置し、パターンは太く短い</li>
+    <li>LTE用電源はモーター系と分離し、入力にサージ・逆接保護がある</li>
+    <li>I/O電圧（1.8V/3.3V）の整合とレベル変換、電源OFF時の逆流対策を確認した</li>
+    <li>PWRKEY・RESET_N・STATUS・RI・DTR をホストGPIOに接続し、ウォッチドッグでの復帰手順を決めた</li>
+    <li>USB（D+/D−）とデバッグUART、強制ダウンロード端子をテストポイントに引き出した</li>
+    <li>RF配線は50Ωインピーダンス管理、GND付きCPWで周囲にビアを打ち、π型マッチング用パッドを用意した</li>
+    <li>アンテナは金属・バッテリー・モーターから離れ、メイン/ダイバーシティ間のアイソレーションを確保できる位置にある</li>
+    <li>同軸ケーブル長と損失を見積もり、ロック付きコネクタ・ケーブル固定を指定した</li>
+    <li>SIM配線は短く、ESD保護素子があり、SIM_DET を配線した（または MFF2/eSIM を採用）</li>
+    <li>外部に出るコネクタ（SIMスロット・アンテナ・USB）にESD/サージ保護がある</li>
+    <li>モジュール下のGNDとサーマルビアで放熱経路を確保し、筐体内の最高温度を見積もった</li>
+    <li>ダイバーシティアンテナの要否（カテゴリ・キャリア要件）を確認した</li>
+    <li>モーター・カメラ・DC-DCのON/OFFでデセンスを評価する試験を計画した</li>
+    <li>OTA（TRP/TIS）試験と、必要ならキャリア要件の目標値を確認した</li>
+    <li>モジュールの長期供給性、ピン互換の代替品、仕向け国の認証取得状況を確認した</li>
+  </ul>
+
+  <h2>まとめ</h2>
+  <ul>
+    <li>LTE通信部は「モジュール＋ホストI/F＋電源＋RF配線＋アンテナ＋SIM」でできている。モジュールだけでは通信できない。</li>
+    <li>量産ロボットには振動に強い<strong>LGA/LCCはんだ付け型</strong>が基本。試作や差替え前提ならMini PCIe/M.2も有効。</li>
+    <li>一番多い不具合は<strong>電源の瞬間的な電圧降下</strong>。ピーク約2Aを想定し、低ESR大容量コンデンサ・太い配線で対策し、実測する。</li>
+    <li>RFは<strong>50Ω</strong>の配線とπ型整合、ケーブルは短く。アンテナは金属・モーターから離し、製品状態でOTA評価する。</li>
+    <li>ロボット特有の<strong>振動・デセンス・金属筐体・温度</strong>を設計初期から要件にする。</li>
+    <li>数千〜数万台規模なら<strong>モジュール採用</strong>が合理的。長期供給性とベンダーの再編リスクも選定基準に。</li>
+  </ul>
+
+  <h2>用語</h2>
+  <dl class="terms">
+    <dt>LTEモジュール</dt><dd>LTE通信に必要なチップ・部品を小基板にまとめ、認証取得済みで販売される部品。</dd>
+    <dt>LGA / LCC</dt><dd>Land Grid Array / Leadless Chip Carrier。基板にはんだ付けする表面実装パッケージの端子形状。</dd>
+    <dt>Mini PCIe / M.2</dt><dd>コネクタに挿して使うカード型の規格。LTEカードはUSB信号で接続するものが多い。</dd>
+    <dt>ホスト</dt><dd>モジュールを制御する側のプロセッサ（SoC・MCU）。</dd>
+    <dt>PWRKEY</dt><dd>モジュールの電源をON/OFFする制御端子。一定時間Lowにして操作する。</dd>
+    <dt>ESR</dt><dd>Equivalent Series Resistance。コンデンサの内部抵抗。小さいほど瞬間的な大電流に強い。</dd>
+    <dt>特性インピーダンス</dt><dd>伝送線路が高周波に対して示す抵抗のような値。無線機器では50Ωに揃える。</dd>
+    <dt>CPW</dt><dd>Coplanar Waveguide。配線の両脇にGNDを置いた伝送線路。</dd>
+    <dt>π型マッチング</dt><dd>直列1つ・並列2つの部品でアンテナのインピーダンスを調整する回路。</dd>
+    <dt>U.FL / IPEX</dt><dd>基板とケーブルをつなぐ超小型の同軸コネクタ（ヒロセ電機のU.FL、I-PEXのMHF等）。</dd>
+    <dt>MIMO / ダイバーシティ</dt><dd>複数アンテナで受信品質や速度を上げる技術。</dd>
+    <dt>アイソレーション / ECC</dt><dd>アンテナ間の結合の小ささ / 受信信号の相関の強さ。</dd>
+    <dt>TRP / TIS</dt><dd>製品全体の放射電力の合計 / 全方向の平均受信感度。OTA試験で測る。</dd>
+    <dt>デセンス</dt><dd>Desensitization。自機のノイズで受信感度が劣化すること。</dd>
+    <dt>MFF2</dt><dd>基板にはんだ付けするチップ型SIMの形状（5×6mm）。</dd>
+    <dt>チップダウン</dt><dd>モジュールを使わず、チップセットを自社基板に直接搭載する設計。</dd>
+    <dt>NRE</dt><dd>Non-Recurring Engineering。開発・認証などの一度きりの費用。</dd>
+    <dt>SiP</dt><dd>System in Package。複数のチップを1パッケージに収めた部品。</dd>
+  </dl>
+
+  <h2>確認クイズ</h2>
+  <div class="quiz" data-quiz="06"></div>
+
+  <section class="sources"><h2>参考・出典</h2><ul>
+    <li><a href="https://www.quectel.com/">Quectel 公式サイト（各モジュールの Hardware Design ドキュメント）</a></li>
+    <li><a href="https://www.es.co.th/Documents/EC21_DESIGN1.PDF">Quectel EC21 Series Hardware Design（電源範囲3.3〜4.3V、2A以上の供給能力、100µF低ESRコンデンサ推奨の記述）</a></li>
+    <li><a href="https://www.data-alliance.net/blog/ufl-cables-coax-types-compared-113mm-132mm-137mm-rg174-rg178">U.FL Cables Coax Types Compared: 1.13mm, 1.32mm, 1.37mm, RG174, RG178（ケーブル損失の目安）</a></li>
+    <li><a href="https://www.rcrwireless.com/20250115/internet-of-things/u-blox-quits-cellular-iot">RCR Wireless: Module maker u-blox quits cellular IoT（2025年1月）</a></li>
+    <li><a href="https://iotbusinessnews.com/2026/08/13/semtech-to-sell-cellular-module-business-to-compal-for-62-million/">IoT Business News: Semtech to Sell Cellular Module Business to Compal（2026年8月）</a></li>
+    <li><a href="https://www.qualcomm.com/news/releases/2024/09/qualcomm-and-sequans-complete-sale-of-4g-iot-technology">Qualcomm: Qualcomm and Sequans Complete Sale of 4G IoT Technology（2024年9月）</a></li>
+    <li><a href="https://www.nordicsemi.com/Products/nRF9160">Nordic Semiconductor nRF91 シリーズ</a></li>
+    <li><a href="https://www.murata.com/ja-jp/products/connectivitymodule/lpwa">村田製作所 LPWAモジュール</a></li>
+    <li><a href="https://www.telit.com/">Telit Cinterion 公式サイト</a></li>
+  </ul><p>確認日: 2026-09</p></section>
+</main>
+</div>
+<script src="../assets/data/quiz/ch06.js"></script>
+<script src="../assets/app.js"></script>
+<script>
+(function () {
+  "use strict";
+  var $ = function (id) { return document.getElementById(id); };
+
+  /* ---- 電圧降下シミュレータ ---- */
+  var CAPS = [0, 47, 100, 220, 330, 470, 680, 1000];
+  function pwr() {
+    var v = +$("pw-v").value, i = +$("pw-i").value, r = +$("pw-r").value / 1000;
+    var c = CAPS[+$("pw-c").value] * 1e-6, esr = +$("pw-esr").value;
+    $("pw-v-o").textContent = v.toFixed(2) + " V";
+    $("pw-i-o").textContent = i.toFixed(1) + " A";
+    $("pw-r-o").textContent = Math.round(r * 1000) + " mΩ";
+    $("pw-c-o").textContent = c ? Math.round(c * 1e6) + " µF" : "なし";
+    var tr = 20e-6; /* 電源ICが追従するまでの時間（仮定） */
+    var dCap = c > 0 ? i * esr + i * tr / c : i * 1.0; /* コンデンサなし：配線インダクタンス等で大きく落ちると仮定 */
+    dCap = Math.min(dCap, i * 1.0);
+    var vSteady = v - i * r;
+    var vMin = vSteady - dCap;
+    var y = function (val) { return 150 - (Math.max(3.0, Math.min(4.2, val)) - 3.0) / 1.2 * 140; };
+    var pts = [], x = 40, seg = 510 / 4;
+    for (var k = 0; k < 4; k++) {
+      var x0 = 40 + k * seg;
+      pts.push([x0, y(v)], [x0 + seg * 0.45, y(v)], [x0 + seg * 0.46, y(vMin)], [x0 + seg * 0.52, y(vSteady)], [x0 + seg * 0.62, y(vSteady)], [x0 + seg * 0.63, y(v)], [x0 + seg, y(v)]);
+    }
+    $("pw-wave").setAttribute("points", pts.map(function (p) { return p[0].toFixed(1) + "," + p[1].toFixed(1); }).join(" "));
+    var ty = y(3.3);
+    $("pw-th").setAttribute("y1", ty); $("pw-th").setAttribute("y2", ty);
+    $("pw-th-t").setAttribute("y", ty - 4);
+    var res = $("pw-res"), margin = vMin - 3.3;
+    res.className = "w-result " + (margin > 0.15 ? "ok" : margin > 0 ? "warn" : "bad");
+    res.innerHTML = '最低電圧 <span class="big">' + vMin.toFixed(2) + ' V</span><br>' +
+      (margin > 0.15 ? "余裕あり。実機のオシロ測定で確認しましょう。" :
+       margin > 0 ? "ぎりぎりです。温度・電池残量・部品ばらつきで下限を割る恐れがあります。" :
+       "下限3.3Vを割っています。送信の瞬間にリセットや切断が起きる典型的な状態です。コンデンサ・配線を見直しましょう。") +
+      '<br><span class="small muted">内訳：配線抵抗で ' + (i * r).toFixed(2) + ' V、コンデンサ（ESR＋放電）で ' + dCap.toFixed(2) + ' V 低下</span>';
+  }
+  ["pw-v", "pw-i", "pw-r", "pw-c", "pw-esr"].forEach(function (id) { $(id).addEventListener("input", pwr); $(id).addEventListener("change", pwr); });
+  pwr();
+
+  /* ---- RFケーブル損失 ---- */
+  var ATT = [ /* dB/m: [低, 中, 高] 目安 */
+    [2.4, 3.3, 3.8], /* 1.13mm */
+    [2.0, 2.8, 3.2], /* 1.37mm */
+    [1.4, 2.0, 2.5], /* RG178 */
+    [1.0, 1.6, 2.2]  /* RG174 */
+  ];
+  function rf() {
+    var f = +$("rf-f").value, t = +$("rf-t").value, len = +$("rf-l").value, n = +$("rf-n").value;
+    $("rf-l-o").textContent = len + " cm";
+    $("rf-n-o").textContent = n + " 箇所";
+    var cable = ATT[t][f] * len / 100, total = cable + n * 0.2 + 0.3;
+    var remain = Math.pow(10, -total / 10) * 100;
+    var res = $("rf-res");
+    res.className = "w-result " + (total < 1.5 ? "ok" : total < 3 ? "warn" : "bad");
+    res.innerHTML = '合計損失 <span class="big">' + total.toFixed(1) + ' dB</span>（アンテナに届く電力は約 ' + remain.toFixed(0) + '%）<br>' +
+      '<span class="small">ケーブル ' + cable.toFixed(2) + ' dB ＋ コネクタ ' + (n * 0.2).toFixed(1) + ' dB ＋ 基板配線 0.3 dB</span><br>' +
+      (total < 1.5 ? "良好な範囲です。" : total < 3 ? "やや大きめ。ケーブルを短く・太くできないか検討しましょう。" : "損失が大きすぎます。送信電力が半分以下になり、受信感度も同じだけ悪化します。アンテナ位置を見直すか太いケーブルを。");
+  }
+  ["rf-f", "rf-t", "rf-l", "rf-n"].forEach(function (id) { $(id).addEventListener("input", rf); $(id).addEventListener("change", rf); });
+  rf();
+
+  /* ---- 損益分岐 ---- */
+  function vol(p) { return p === 0 ? 0 : Math.round(Math.pow(10, 2 + p / 100 * 4)); } /* 100〜1,000,000台（対数） */
+  function yen(x) { return x >= 1e8 ? (x / 1e8).toFixed(1) + "億円" : Math.round(x / 1e4).toLocaleString() + "万円"; }
+  function be() {
+    var V = vol(+$("be-v").value);
+    var mu = +$("be-mu").value || 0, cu = +$("be-cu").value || 0, mn = (+$("be-mn").value || 0) * 1e4, cn = (+$("be-cn").value || 0) * 1e4;
+    $("be-v-o").textContent = V.toLocaleString() + " 台";
+    var tm = mn + mu * V, tc = cn + cu * V, mx = Math.max(tm, tc, 1);
+    $("be-bm").style.width = (tm / mx * 100) + "%"; $("be-bm").textContent = yen(tm);
+    $("be-bc").style.width = (tc / mx * 100) + "%"; $("be-bc").textContent = yen(tc);
+    var res = $("be-res"), diff = mu - cu, txt;
+    if (diff <= 0) txt = "チップダウンの単価がモジュール以上なので、何台作っても逆転しません。";
+    else {
+      var bev = Math.max(0, (cn - mn) / diff);
+      txt = '損益分岐 <span class="big">約 ' + Math.round(bev).toLocaleString() + ' 台</span><br>' +
+        (V < bev ? "この台数ではモジュール方式が有利です。" : "この台数ではチップダウンが有利な計算です（ただし開発期間・人材・リスクは別途考慮）。");
+    }
+    res.className = "w-result";
+    res.innerHTML = txt;
+  }
+  ["be-v", "be-mu", "be-cu", "be-mn", "be-cn"].forEach(function (id) { $(id).addEventListener("input", be); });
+  be();
+
+  /* ---- ベンダー関係図：線のハイライト ---- */
+  var vf = $("vendor-fig");
+  vf.addEventListener("hotspot", function (e) {
+    var key = e.detail.key;
+    vf.querySelectorAll(".vline").forEach(function (l) {
+      l.classList.toggle("on", l.getAttribute("data-link").split(" ").indexOf(key) >= 0);
+    });
+  });
+})();
+</script>
+</body>
+</html>

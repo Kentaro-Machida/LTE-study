@@ -1,0 +1,666 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>周波数バンドとFDD/TDD｜LTE Study</title>
+  <link rel="stylesheet" href="../assets/style.css">
+  <style>
+    /* ---- 第4章ページ内スタイル（CSS変数のみ使用） ---- */
+    .w-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0; }
+    .w-row label { font-size: .9rem; }
+    .w-out { background: var(--surface-2); border-radius: var(--radius-sm); padding: 10px 14px; font-size: .92rem; margin-top: 10px; }
+    .w-out h4 { margin: 0 0 4px; font-size: 1rem; }
+    .w-out ul { margin: 4px 0; padding-left: 1.2em; }
+    .w-range { width: 100%; accent-color: var(--accent); }
+    .w-kpi { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin-top: 10px; }
+    .w-kpi div { background: var(--surface-2); border-radius: var(--radius-sm); padding: 8px 12px; }
+    .w-kpi b { display: block; font-size: 1.25rem; font-family: var(--mono); }
+    .w-kpi span { font-size: .8rem; color: var(--text-muted); }
+    .band-rect { cursor: pointer; }
+    .band-rect:hover rect { filter: brightness(1.1); }
+    .band-rect.is-dim { opacity: .18; }
+    .band-rect.is-sel rect { stroke: var(--text); stroke-width: 2; }
+    .cov-row { display: grid; grid-template-columns: 5.5em 1fr; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border); }
+    .cov-row:last-child { border-bottom: 0; }
+    .cov-row .name { font-weight: 700; }
+    .mono { font-family: var(--mono); }
+  </style>
+</head>
+<body data-root="../" data-chapter="04">
+<div class="page">
+<main>
+  <header class="chapter-hero">
+    <div class="eyebrow">CHAPTER 04</div>
+    <h1>周波数バンドとFDD/TDD</h1>
+    <p class="lead">LTEの「Band 1」「B28」といった番号は何を意味するのか。上り・下りの周波数の組み合わせ、FDDとTDDの違い、低い周波数と高い周波数の得意・不得意を理解し、「そのモジュールはその国でつながるのか？」を自分で判断できるようになりましょう。</p>
+    <div class="goals"><h2>この章のゴール</h2><ul>
+      <li>3GPPの「バンド番号」が周波数範囲と通信方式（FDD/TDD）の組を表すことを説明できる</li>
+      <li>FDDとTDDの仕組みの違いを、時間軸×周波数軸の図で説明できる</li>
+      <li>低い周波数（プラチナバンド）と高い周波数のトレードオフを理解する</li>
+      <li>日本・中国・韓国・台湾・東南アジア・インドで使われる代表的なバンドを知る</li>
+      <li>キャリアアグリゲーション（CA）とMIMOの概要を知る</li>
+      <li>「モジュールが対応バンドを持っていない」と何が起きるかを具体的に説明できる</li>
+    </ul></div>
+  </header>
+
+  <h2>1. 「バンド」とは周波数の“区画番号”</h2>
+  <p>第1章で見たように、電波は周波数（1秒間に波が何回振動するか。単位はHz＝ヘルツ）ごとに性質が異なり、同じ場所で同じ周波数を複数の人が勝手に使うと混信してしまいます。そのため各国の政府（日本なら総務省）が周波数を用途ごとに区切って、携帯電話事業者（キャリア）に「この範囲を使ってよい」と免許を与えています。</p>
+  <p>ところが、国ごとにバラバラの呼び方をしていると、チップやモジュールを作るメーカーも、基地局メーカーも困ります。そこで、LTEの規格を作っている国際的な標準化団体 <b>3GPP</b>（3rd Generation Partnership Project）は、世界中で使われる周波数の区画に<b>通し番号</b>を付けました。これが「<b>バンド（Band／周波数帯）</b>」です。LTEでは「Band 1」「B1」のように書き、5G NR（New Radio）では「n1」「n78」のように先頭に n を付けます。</p>
+  <p>たとえるなら、バンド番号は「土地の番地」のようなものです。「B1」と言えば、世界中どこでも <b>上り 1920〜1980 MHz／下り 2110〜2170 MHz、方式はFDD</b> という同じ区画を指します。区画の定義は3GPPの仕様書 TS 36.101（端末の無線送受信要件）に表としてまとまっています。</p>
+
+  <div class="callout tip"><span class="title">バンド番号と周波数の呼び名は別物</span>
+    日本では「2GHz帯」「プラチナバンド（700〜900MHz帯）」のように周波数でざっくり呼ぶことが多いですが、機器の仕様書に書かれるのは「B1」「B19」などのバンド番号です。同じ「800MHz帯」でも、ドコモはB19、auはB18/B26、欧州はB20と<b>番号が違う＝別の区画</b>です。</div>
+
+  <h3>上り（UL）と下り（DL）はペアになっている</h3>
+  <p>携帯電話の通信には、端末→基地局へ送る<b>上り（UL：Uplink／アップリンク）</b>と、基地局→端末へ送る<b>下り（DL：Downlink／ダウンリンク）</b>があります。多くのバンドは、上り用と下り用の2つの周波数範囲を<b>ペア</b>で持っています。下の図でB1の構造を見てみましょう。</p>
+
+  <figure class="figure" data-hotspots data-hs-default="b1">
+    <div class="hint">図の各部分（上り・下り・すき間・バンド全体）をクリック（タップ）すると解説が出ます</div>
+    <svg viewBox="0 0 760 250" role="img" aria-label="Band 1 の上り下り周波数ペアの図">
+      <!-- 軸 -->
+      <line class="line" x1="30" y1="170" x2="740" y2="170"/>
+      <text x="740" y="195" text-anchor="end" class="t-muted" font-size="12">周波数 →（MHz）</text>
+      <!-- scale: 1900 -> 40, 2190 -> 730  (px per MHz = 2.379) -->
+      <g data-hs="b1">
+        <rect x="40" y="20" width="690" height="28" rx="6" fill="var(--c6)" opacity=".18"/>
+        <text x="385" y="40" text-anchor="middle" font-size="14" font-weight="700">Band 1（FDD）＝ 上りと下りのセット</text>
+      </g>
+      <g data-hs="ul">
+        <rect x="88" y="70" width="143" height="90" rx="6" fill="var(--c1)" opacity=".85"/>
+        <text x="159" y="108" text-anchor="middle" font-size="14" font-weight="700" fill="var(--surface)">上り UL</text>
+        <text x="159" y="128" text-anchor="middle" font-size="12" fill="var(--surface)">端末 → 基地局</text>
+        <text x="88" y="188" text-anchor="middle" font-size="12">1920</text>
+        <text x="231" y="188" text-anchor="middle" font-size="12">1980</text>
+      </g>
+      <g data-hs="gap">
+        <rect x="231" y="70" width="309" height="90" fill="var(--surface-2)" stroke="var(--border)" stroke-dasharray="5 4"/>
+        <text x="385" y="110" text-anchor="middle" font-size="13">すき間（デュプレックスギャップ）</text>
+        <text x="385" y="130" text-anchor="middle" font-size="12" class="t-muted">上下の間隔 190MHz</text>
+      </g>
+      <g data-hs="dl">
+        <rect x="540" y="70" width="143" height="90" rx="6" fill="var(--c2)" opacity=".85"/>
+        <text x="611" y="108" text-anchor="middle" font-size="14" font-weight="700" fill="var(--surface)">下り DL</text>
+        <text x="611" y="128" text-anchor="middle" font-size="12" fill="var(--surface)">基地局 → 端末</text>
+        <text x="540" y="188" text-anchor="middle" font-size="12">2110</text>
+        <text x="683" y="188" text-anchor="middle" font-size="12">2170</text>
+      </g>
+      <text x="385" y="230" text-anchor="middle" font-size="12" class="t-muted">各キャリアは、この60MHz幅の中から5〜20MHz程度ずつ免許を受けて使う</text>
+    </svg>
+    <div class="hs-panel"></div>
+    <template data-hs-content="b1"><h4>Band 1（通称 2.1GHz帯／IMT帯）</h4><p>3GPPが最初に定義した、世界で最も広く使われるLTEバンドの一つです。上り1920〜1980MHz、下り2110〜2170MHzの<b>2つの範囲がセット</b>で「B1」です。日本（全キャリア）、中国、韓国、台湾、東南アジア、インド、欧州など、北米以外のほとんどの地域で使われます。「迷ったらまずB1」というくらい基本のバンドです。</p></template>
+    <template data-hs-content="ul"><h4>上り（UL: Uplink）1920〜1980 MHz</h4><p>端末（UE: User Equipment、つまり私たちのロボット）が基地局へ電波を送る範囲です。端末は電池やアンテナが小さいので送信電力が弱く（LTEでは通常最大23dBm＝約0.2W）、<b>上りは下りより遅くなりがち</b>です。遠隔操作ロボットでカメラ映像を送るなら、この「上り」がボトルネックになります（第5章で計算します）。</p></template>
+    <template data-hs-content="dl"><h4>下り（DL: Downlink）2110〜2170 MHz</h4><p>基地局から端末へ電波を送る範囲です。基地局は大きな電力・大きなアンテナで送信できるため、一般に下りのほうが高速です。ロボットにとっては、地図データのダウンロードやファームウェア更新（FOTA）が主に下りを使います。</p></template>
+    <template data-hs-content="gap"><h4>デュプレックスギャップ（上下の間隔）</h4><p>自分が送信している強い電波が、同時に受信している弱い電波に漏れ込むと受信できなくなります。そこで上りと下りの周波数を離し、モジュール内の<b>デュプレクサ</b>（送信と受信を周波数で分ける部品・フィルタ）で分離します。B1では上りと下りの差（デュプレックス間隔）が190MHzあります。バンドごとにこの間隔が違うため、<b>バンドごとに専用のフィルタ部品が必要</b>になり、対応バンドを増やすほどモジュールが複雑・高価になります。</p></template>
+  </figure>
+
+  <h2>2. FDDとTDD ― 上りと下りの「分け方」</h2>
+  <p>上りと下りを同時に成り立たせる方法（複信方式、デュプレックス）は2種類あります。</p>
+  <ul>
+    <li><b>FDD（Frequency Division Duplex／周波数分割複信）</b>：上り用と下り用に<b>別々の周波数</b>を使い、両方を<b>同時に</b>送受信します。道路にたとえると「上り車線と下り車線が別々にある片側1車線ずつの道路」です。B1〜B32、B65〜B7x台など多くのバンドがFDDです。</li>
+    <li><b>TDD（Time Division Duplex／時分割複信）</b>：<b>1つの周波数</b>を、時間を細かく区切って上りと下りで<b>交互に</b>使います。「1車線の道路を信号機で交互通行させる」イメージです。B33〜B53あたり（B34, B38, B39, B40, B41, B42など）がTDDです。LTEのTDD版は <b>TD-LTE</b> とも呼ばれます。</li>
+  </ul>
+  <p>下の図で、横軸を時間（LTEの1無線フレーム＝10ms、1マス＝1msのサブフレーム）、縦軸を周波数として、2つの方式を切り替えて比べてみましょう。</p>
+
+  <figure class="figure" id="fddtdd">
+    <div class="hint">「FDD」「TDD」ボタンで切り替え。再生すると時間が進み、各瞬間に上り/下りのどちらが使われているかが分かります</div>
+    <div class="btn-row" style="margin-top:0">
+      <button class="btn primary" data-mode="fdd" aria-pressed="true">FDD</button>
+      <button class="btn" data-mode="tdd" aria-pressed="false">TDD</button>
+      <button class="btn" data-act="play">⏸ 停止</button>
+    </div>
+    <svg viewBox="0 0 760 290" role="img" aria-label="FDDとTDDの時間×周波数図">
+      <text x="20" y="22" font-size="13" font-weight="700" id="ft-title">FDD：上りと下りに別の周波数。常に同時通信</text>
+      <!-- 縦軸ラベル -->
+      <text x="20" y="150" font-size="12" class="t-muted" transform="rotate(-90 20 150)" text-anchor="middle">周波数 ↑</text>
+      <g id="ft-grid"></g>
+      <line class="line" x1="100" y1="250" x2="740" y2="250"/>
+      <text x="740" y="270" text-anchor="end" font-size="12" class="t-muted">時間 →（1マス＝1ms、10マス＝1無線フレーム）</text>
+      <rect id="ft-cursor" x="100" y="40" width="64" height="205" fill="none" stroke="var(--accent)" stroke-width="3" rx="4"/>
+    </svg>
+    <div class="w-out" id="ft-now" aria-live="polite"></div>
+    <figcaption>TDDの図は、LTE TDDの「UL/DL構成1」（D S U U D D S U U D）の例です。D=下り、U=上り、S=特別サブフレーム（下り→上りの切替用の短い空白を含む）。構成はキャリアが選び、下り重視の構成（例：構成2 D S U D D D S U D D）もよく使われます。</figcaption>
+  </figure>
+
+  <div class="table-wrap"><table>
+    <thead><tr><th>観点</th><th>FDD</th><th>TDD</th></tr></thead>
+    <tbody>
+      <tr><td>周波数</td><td>上り・下りで別々の2つの範囲（ペア）</td><td>1つの範囲を共用</td></tr>
+      <tr><td>同時性</td><td>上下を同時に送受信（遅延が小さく安定）</td><td>時間で交互に切替（切替待ちの分、わずかに遅延が増える）</td></tr>
+      <tr><td>上下の比率</td><td>固定（周波数幅で決まる）</td><td>構成で変更可能（下り多め、など）。動画視聴の多い下り重視に向く</td></tr>
+      <tr><td>周波数の確保</td><td>離れた2つの範囲が必要で、確保しにくい</td><td>連続した1ブロックでよく、広帯域を確保しやすい（2.3/2.5/3.5GHz帯など）</td></tr>
+      <tr><td>主なバンド</td><td>B1, B3, B5, B7, B8, B18, B19, B20, B26, B28 など</td><td>B34, B38, B39, B40, B41, B42 など</td></tr>
+      <tr><td>よく使う地域</td><td>世界中</td><td>中国（China Mobileが大規模展開）、インド、日本（B41/B42）、東南アジアの一部</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="callout robot"><span class="title">ロボット視点：FDDかTDDか</span>
+    モジュールを選ぶとき、FDDとTDDの両方に対応した「FDD/TDD両対応」の製品が多く、ロボット側のソフトで意識する場面はほとんどありません。重要なのは<b>輸出先のキャリアがTDDバンドを主力にしているか</b>です。たとえば中国のChina MobileはB39/B40/B41などのTDDバンドを大量に使うため、中国向けにはTDDバンド対応が必須です。また、TDDでは上りに使える時間が短めの構成が多く、<b>カメラ映像のような上り重視の用途では、同じ帯域幅のFDDより上り速度が出にくい</b>ことがあります。</div>
+
+  <h2>3. 低い周波数と高い周波数のトレードオフ</h2>
+  <p>バンドは周波数の高さによって「得意なこと」が違います。大まかにまとめると次のとおりです。</p>
+  <div class="card-grid">
+    <div class="card"><h3>低い周波数（1GHz未満）</h3>
+      <p><span class="badge ok">遠くまで届く</span> <span class="badge ok">建物内・地下に強い</span> <span class="badge warn">帯域幅が狭く容量小</span></p>
+      <p class="small">B8（900MHz）, B5/B18/B19/B26（800MHz）, B20（800MHz 欧州）, B28（700MHz）, B12/B13（700MHz 米国）など。日本では「プラチナバンド」と呼ばれます。郊外・山間部・屋内の「つながる」を支える土台です。</p></div>
+    <div class="card"><h3>中くらいの周波数（1〜2.2GHz）</h3>
+      <p><span class="badge accent">バランス型</span></p>
+      <p class="small">B1（2.1GHz）, B3（1.8GHz）, B2/B4/B66（北米）, B39（中国）, B11/B21（日本の1.5GHz）など。都市部の主力で、LTEの“幹線道路”にあたります。</p></div>
+    <div class="card"><h3>高い周波数（2.3GHz以上）</h3>
+      <p><span class="badge ok">広い帯域幅＝大容量・高速</span> <span class="badge warn">届く範囲が狭い</span> <span class="badge warn">壁に弱い</span></p>
+      <p class="small">B7（2.6GHz）, B38/B41（2.5GHz TDD）, B40（2.3GHz TDD）, B42（3.5GHz TDD）など。駅前など人が密集する場所の容量確保に使われます。</p></div>
+  </div>
+  <p>なぜ低い周波数ほど遠くまで届くのでしょうか。理由は主に3つあります。(1) 同じアンテナ条件なら、周波数が高いほど受信アンテナが実質的に捕まえられる電波のエネルギーが小さくなり、伝搬損失が大きくなる（自由空間では周波数が2倍になると約6dB損失が増える）、(2) 周波数が低いほど建物の角などで回り込む「回折」が起きやすい、(3) 壁やガラス、人体を通るときの減衰（透過損失）が小さい傾向がある、ためです。一方で、低い周波数帯は昔からテレビや無線に使われていて空きが少なく、<b>キャリアが確保できる帯域幅が狭い</b>（5〜20MHz程度）ため、たくさんの人が同時に使うと遅くなります。</p>
+  <p>下のスライダーで周波数を変えて、「同じ基地局出力・同じアンテナで、どれくらい届く範囲が変わるか」を体感してみましょう。</p>
+
+  <figure class="figure" id="freqsim">
+    <div class="hint">スライダーを動かすと、周波数ごとのセル半径（届く範囲）の目安が変わります</div>
+    <label for="fs-range" class="small">周波数：<b id="fs-val">700 MHz</b></label>
+    <input type="range" id="fs-range" class="w-range" min="700" max="3500" step="10" value="700">
+    <div class="chips" id="fs-presets">
+      <button class="chip" data-f="700">B28 700MHz</button><button class="chip" data-f="850">B19/B26 850MHz</button><button class="chip" data-f="900">B8 900MHz</button><button class="chip" data-f="1800">B3 1.8GHz</button><button class="chip" data-f="2100">B1 2.1GHz</button><button class="chip" data-f="2600">B7/B41 2.6GHz</button><button class="chip" data-f="3500">B42 3.5GHz</button>
+    </div>
+    <svg viewBox="0 0 760 300" role="img" aria-label="周波数とセル半径の関係">
+      <!-- 基準円（700MHz） -->
+      <circle cx="220" cy="150" r="130" fill="none" stroke="var(--c6)" stroke-dasharray="5 4" stroke-width="1.5"/>
+      <text x="220" y="14" text-anchor="middle" font-size="12" class="t-muted">点線＝700MHzの範囲</text>
+      <circle id="fs-circle" cx="220" cy="150" r="130" fill="var(--c2)" opacity=".22" stroke="var(--c2)" stroke-width="2"/>
+      <!-- 基地局 -->
+      <rect x="214" y="132" width="12" height="30" rx="2" fill="var(--c2)"/>
+      <path d="M220 124 l-10 -10 M220 124 l10 -10" class="line" stroke="var(--c2)"/>
+      <text x="220" y="180" text-anchor="middle" font-size="12">基地局</text>
+      <!-- 右側バー -->
+      <text x="420" y="50" font-size="13" font-weight="700">700MHzを1としたときの比較</text>
+      <text x="420" y="82" font-size="12">セル半径</text>
+      <rect x="520" y="70" width="220" height="16" rx="4" fill="var(--surface-2)"/>
+      <rect id="fs-bar-r" x="520" y="70" width="220" height="16" rx="4" fill="var(--c2)"/>
+      <text x="420" y="122" font-size="12">カバー面積</text>
+      <rect x="520" y="110" width="220" height="16" rx="4" fill="var(--surface-2)"/>
+      <rect id="fs-bar-a" x="520" y="110" width="220" height="16" rx="4" fill="var(--c3)"/>
+      <text x="420" y="162" font-size="12">必要な基地局数</text>
+      <rect x="520" y="150" width="220" height="16" rx="4" fill="var(--surface-2)"/>
+      <rect id="fs-bar-n" x="520" y="150" width="30" height="16" rx="4" fill="var(--c4)"/>
+      <text x="420" y="202" font-size="12">追加の伝搬損失</text>
+      <text id="fs-db" x="520" y="202" font-size="13" font-weight="700">+0.0 dB</text>
+      <text x="420" y="240" font-size="12" class="t-muted">簡易モデル：伝搬損失 ∝ 20·log₁₀(f)、</text>
+      <text x="420" y="258" font-size="12" class="t-muted">距離減衰係数 3.5（市街地の目安）。</text>
+      <text x="420" y="276" font-size="12" class="t-muted">建物の透過損失の差は含まない</text>
+    </svg>
+    <div class="w-kpi">
+      <div><b id="fs-k-r">1.00×</b><span>セル半径（700MHz比）</span></div>
+      <div><b id="fs-k-a">1.00×</b><span>1局あたりのカバー面積</span></div>
+      <div><b id="fs-k-n">1.0×</b><span>同じ面積に必要な基地局数</span></div>
+    </div>
+    <figcaption>実際の電波の届き方は、地形・建物・アンテナの高さや利得・基地局の出力などで大きく変わります。ここでは「周波数だけを変えたら」という傾向をつかむための簡易計算です。</figcaption>
+  </figure>
+
+  <p>簡易モデルでも、3.5GHzは700MHzに比べて半径が約4割、面積は2割未満となり、同じ面積をカバーするのに6倍前後の基地局が必要になる、という傾向が分かります。だからキャリアは「低い周波数で広く薄くカバー」し、「高い周波数で人の多い場所の容量を足す」という<b>重ね塗り</b>でネットワークを作っています。</p>
+
+  <div class="callout robot"><span class="title">ロボット視点：プラチナバンドは“命綱”</span>
+    屋内の倉庫、地下駐車場、工場の奥、郊外の農地など、ロボットが働く場所はスマホユーザーが多い駅前とは限りません。そういう場所で最後までつながっているのは、たいてい<b>1GHz未満の低いバンド</b>です。輸出先ごとに「そのキャリアのプラチナバンド（B8, B19, B20, B26, B28など）にモジュールが対応しているか」は、最優先で確認すべき項目です。</div>
+
+  <h2>4. 主要LTEバンド早見表</h2>
+  <p>アジア輸出を考えるうえでよく登場するバンドをまとめました。周波数はTS 36.101の定義です（キャリアはこの範囲の一部を使います）。「主な使用地域」は代表例で、国やキャリアによって使っていない場合もあります。</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>バンド</th><th>通称</th><th>上り（MHz）</th><th>下り（MHz）</th><th>方式</th><th>主な使用地域（代表例）</th></tr></thead>
+    <tbody>
+      <tr><td><b>B1</b></td><td>2.1GHz</td><td>1920–1980</td><td>2110–2170</td><td>FDD</td><td>日本・中国・韓国・台湾・東南アジア・インド・欧州（北米以外のほぼ全域）</td></tr>
+      <tr><td><b>B2</b></td><td>PCS 1.9GHz</td><td>1850–1910</td><td>1930–1990</td><td>FDD</td><td>北米・中南米</td></tr>
+      <tr><td><b>B3</b></td><td>1.8GHz</td><td>1710–1785</td><td>1805–1880</td><td>FDD</td><td>中国・韓国・台湾・東南アジア・インド・欧州・日本（ドコモ/ソフトバンク/楽天/au一部）。世界で最も普及したLTEバンドの一つ</td></tr>
+      <tr><td><b>B4</b></td><td>AWS-1</td><td>1710–1755</td><td>2110–2155</td><td>FDD</td><td>北米・中南米</td></tr>
+      <tr><td><b>B5</b></td><td>850MHz</td><td>824–849</td><td>869–894</td><td>FDD</td><td>北米・韓国・中国（China Telecom）・一部東南アジア・インド・豪州</td></tr>
+      <tr><td><b>B7</b></td><td>2.6GHz</td><td>2500–2570</td><td>2620–2690</td><td>FDD</td><td>欧州・韓国・台湾・東南アジア・中南米</td></tr>
+      <tr><td><b>B8</b></td><td>900MHz</td><td>880–915</td><td>925–960</td><td>FDD</td><td>中国・韓国・台湾・東南アジア・インド・欧州・日本（ソフトバンクのプラチナバンド）</td></tr>
+      <tr><td><b>B11</b></td><td>1.5GHz</td><td>1427.9–1447.9</td><td>1475.9–1495.9</td><td>FDD</td><td>日本（au・ソフトバンク）</td></tr>
+      <tr><td><b>B12 / B13</b></td><td>700MHz（米）</td><td>699–716 / 777–787</td><td>729–746 / 746–756</td><td>FDD</td><td>米国（B13はVerizonのLTE-M等で重要）</td></tr>
+      <tr><td><b>B18</b></td><td>800MHz</td><td>815–830</td><td>860–875</td><td>FDD</td><td>日本（auのプラチナバンド）</td></tr>
+      <tr><td><b>B19</b></td><td>800MHz</td><td>830–845</td><td>875–890</td><td>FDD</td><td>日本（ドコモのプラチナバンド）</td></tr>
+      <tr><td><b>B20</b></td><td>800MHz（欧）</td><td>832–862</td><td>791–821</td><td>FDD</td><td>欧州・中東・アフリカ（下りが上りより低い“逆転”配置）</td></tr>
+      <tr><td><b>B21</b></td><td>1.5GHz</td><td>1447.9–1462.9</td><td>1495.9–1510.9</td><td>FDD</td><td>日本（ドコモ）</td></tr>
+      <tr><td><b>B26</b></td><td>拡張850MHz</td><td>814–849</td><td>859–894</td><td>FDD</td><td>日本（au）・米国。B5/B18/B19の範囲を内包する広いバンド</td></tr>
+      <tr><td><b>B28</b></td><td>700MHz（APT）</td><td>703–748</td><td>758–803</td><td>FDD</td><td>日本（全4キャリア）・台湾・東南アジア・豪州・中南米・インドの一部など。アジア太平洋で共通化された“APT700”</td></tr>
+      <tr><td><b>B34</b></td><td>2.0GHz TDD</td><td colspan="2">2010–2025</td><td>TDD</td><td>中国（China Mobile）</td></tr>
+      <tr><td><b>B38</b></td><td>2.6GHz TDD</td><td colspan="2">2570–2620</td><td>TDD</td><td>中国・欧州の一部・東南アジアの一部</td></tr>
+      <tr><td><b>B39</b></td><td>1.9GHz TDD</td><td colspan="2">1880–1920</td><td>TDD</td><td>中国（China Mobile）</td></tr>
+      <tr><td><b>B40</b></td><td>2.3GHz TDD</td><td colspan="2">2300–2400</td><td>TDD</td><td>中国・インド・東南アジアの一部・中東</td></tr>
+      <tr><td><b>B41</b></td><td>2.5GHz TDD</td><td colspan="2">2496–2690</td><td>TDD</td><td>中国（China Mobile）・日本（ソフトバンク/au系）・米国・タイやフィリピンの一部</td></tr>
+      <tr><td><b>B42</b></td><td>3.5GHz TDD</td><td colspan="2">3400–3600</td><td>TDD</td><td>日本（ドコモ・au・ソフトバンク）・一部欧州</td></tr>
+      <tr><td><b>B66</b></td><td>AWS-3拡張</td><td>1710–1780</td><td>2110–2200</td><td>FDD</td><td>北米（B4の拡張版）</td></tr>
+    </tbody>
+  </table></div>
+  <details class="more"><summary>もっと詳しく：バンド同士の「包含関係」</summary>
+    <p>B26はB5・B18・B19の周波数範囲をすべて含み、B66はB4を含みます。ただし「B26に対応していれば、B18/B19のセルにも必ずつながる」とは限りません。基地局が報知する（放送する）バンド番号と端末の対応バンドが一致している必要があるためです。ネットワーク側が複数のバンド番号を同時に報知する仕組み（MFBI：Multiple Frequency Band Indicator）を使っていればつながりますが、キャリアの運用次第なので、<b>モジュールの対応バンド表に目的のバンド番号がそのまま載っているか</b>を確認するのが安全です。</p>
+  </details>
+
+  <h2>5. 周波数軸でバンドを眺める（インタラクティブ帯グラフ）</h2>
+  <p>表だと分かりにくい「バンド同士の位置関係」を、周波数軸上に並べてみました。FDDバンドは上り（濃い色）と下り（薄い色）の2ブロックが細い線でつながっています。国・地域のボタンを押すと、その地域で主に使われるバンドだけが強調されます。各バンドをクリックすると詳細が出ます。</p>
+  <figure class="figure" id="bandmap">
+    <div class="hint">地域ボタンで絞り込み、バンドをクリック（タップ）で詳細表示</div>
+    <div class="chips" id="bm-regions"></div>
+    <svg viewBox="0 0 800 650" id="bm-svg" role="img" aria-label="LTEバンドを周波数軸上に並べた図"></svg>
+    <div class="w-out" id="bm-info" aria-live="polite">バンドをクリックすると、周波数・方式・主な使用国が表示されます。</div>
+    <figcaption>凡例：<span style="color:var(--c1)">■</span> FDD上り　<span style="color:var(--c1);opacity:.45">■</span> FDD下り　<span style="color:var(--c3)">■</span> TDD（上下共用）。使用地域は代表例で、キャリアごとの詳細は <a href="../tools/band-checker.html">バンド共通化チェッカー</a> と <a href="10-asia.html">第10章</a> を参照してください。</figcaption>
+  </figure>
+
+  <p>眺めてみると、いくつかの特徴が見えてきます。</p>
+  <ul>
+    <li><b>800〜900MHz付近は“過密地帯”</b>。B5/B18/B19/B20/B26/B8が少しずつずれて重なり合っており、国ごとに違うバンドを使っています。低い周波数のプラチナバンドほど国ごとのバラつきが大きく、共通化の難所です。</li>
+    <li><b>B1とB3は世界の共通語</b>。北米以外のほぼすべての地域で使われています。</li>
+    <li><b>中国はTDDバンド（B34/B38/B39/B40/B41）が多い</b>。日本向けに設計したモジュールだと、B39/B40などが抜けていることがあります。</li>
+    <li><b>B28（APT700）はアジア太平洋の共通プラチナバンド</b>。日本・台湾・東南アジア・豪州などで使われ、アジア展開では重要です。</li>
+  </ul>
+
+  <h2>6. 日本の主要キャリアのLTEバンド</h2>
+  <p>まずは国内での試作・実証に使う、日本の4キャリアの代表的なLTEバンドです（5G専用の周波数は除く）。各社とも複数のバンドを組み合わせています。</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>キャリア</th><th>プラチナバンド（1GHz未満）</th><th>主力・容量用</th><th>補足</th></tr></thead>
+    <tbody>
+      <tr><td><b>NTTドコモ</b></td><td>B19（800MHz）, B28（700MHz）</td><td>B1（2GHz）, B3（1.7GHz）, B21（1.5GHz）, B42（3.5GHz）</td><td>B19が郊外・屋内の要。B21は一部地域で使用</td></tr>
+      <tr><td><b>KDDI（au）</b></td><td>B18/B26（800MHz）, B28（700MHz）</td><td>B1（2GHz）, B3（1.7GHz・一部）, B11（1.5GHz）, B41（2.5GHz・UQ系）, B42（3.5GHz）</td><td>B18（またはB26）対応がauエリアでは重要</td></tr>
+      <tr><td><b>ソフトバンク</b></td><td>B8（900MHz）, B28（700MHz）</td><td>B1（2GHz）, B3（1.7GHz）, B11（1.5GHz）, B41（2.5GHz・AXGP）, B42（3.5GHz）</td><td>B8は世界共通の900MHzなので海外向けモジュールでも対応していることが多い</td></tr>
+      <tr><td><b>楽天モバイル</b></td><td>B28（700MHz・2024年6月商用開始）, B18（auローミング）</td><td>B3（1.7GHz）</td><td>自社網はB3が主力。プラチナバンドB28は順次拡大中。auローミングの提供範囲は縮小傾向</td></tr>
+    </tbody>
+  </table></div>
+  <p class="small muted">出典：各社公表情報・総務省の周波数割当資料等をもとに整理（確認日: 2026-09）。バンドの使い方（どのエリアでどのバンドを吹いているか）は非公開の部分も多く、実測での確認が確実です。</p>
+
+  <p>下のウィジェットで、「モジュールが対応しているバンド」をオン/オフし、日本の各キャリアでどの程度つながりそうかを見てみましょう。プリセットは典型的なモジュールの例です。</p>
+  <figure class="figure" id="jpcov">
+    <div class="hint">プリセットを選ぶか、バンドのボタンを押して対応/非対応を切り替えてください</div>
+    <div class="btn-row" style="margin-top:0" id="jc-presets">
+      <button class="btn" data-preset="jp">日本向けモジュール例</button>
+      <button class="btn" data-preset="global">グローバル（欧米寄り）例</button>
+      <button class="btn" data-preset="cn">中国向けモジュール例</button>
+      <button class="btn" data-preset="none">全部オフ</button>
+    </div>
+    <div class="chips" id="jc-bands"></div>
+    <div class="w-out" id="jc-out" aria-live="polite"></div>
+    <figcaption>判定は「そのキャリアの代表バンドに対応しているか」による目安です。実際の接続可否は、キャリアの相互接続性試験（IOT）・認定（第9章）やSIM契約にも左右されます。</figcaption>
+  </figure>
+
+  <h2>7. キャリアアグリゲーション（CA）とMIMO</h2>
+  <p>LTEには、速度を上げるための代表的な2つの技術があります。</p>
+  <ul>
+    <li><b>CA（Carrier Aggregation／キャリアアグリゲーション）</b>：複数のバンド（または同じバンド内の複数の周波数ブロック）を<b>束ねて</b>1台の端末が同時に使う技術です。道路にたとえると「隣の道路も同時に使って荷物を分けて運ぶ」イメージ。LTEの1本の電波（コンポーネントキャリア）の最大幅は20MHzですが、CAで2本・3本と束ねれば、その分だけ速くなります。LTE-Advanced（3GPP Release 10以降）の機能です。</li>
+    <li><b>MIMO（Multiple-Input Multiple-Output／マイモ）</b>：基地局と端末の<b>両方に複数のアンテナ</b>を使い、同じ周波数・同じ時間に別々のデータを並行して送る技術です。「同じ道路を2階建てにする」ようなもの。2×2 MIMO（送信2本×受信2本）なら理論上2倍、4×4なら4倍の速度になります。</li>
+  </ul>
+
+  <figure class="figure" data-stepper data-interval="4000">
+    <svg viewBox="0 0 760 270" role="img" aria-label="キャリアアグリゲーションとMIMOの説明図">
+      <!-- 基地局 -->
+      <rect x="40" y="95" width="70" height="80" rx="8" fill="var(--c2)" opacity=".85"/>
+      <text x="75" y="140" text-anchor="middle" font-size="13" fill="var(--surface)" font-weight="700">基地局</text>
+      <!-- 端末 -->
+      <rect x="650" y="95" width="70" height="80" rx="8" fill="var(--c1)" opacity=".85"/>
+      <text x="685" y="132" text-anchor="middle" font-size="13" fill="var(--surface)" font-weight="700">ロボット</text>
+      <text x="685" y="150" text-anchor="middle" font-size="12" fill="var(--surface)">（UE）</text>
+      <!-- step1: single carrier -->
+      <g data-show-at="1">
+        <rect x="130" y="120" width="500" height="30" rx="6" fill="var(--c3)" opacity=".8"/>
+        <text x="380" y="140" text-anchor="middle" font-size="13" fill="var(--surface)" font-weight="700">B1 20MHz × 1本</text>
+        <text x="380" y="210" text-anchor="middle" font-size="14">1キャリア・アンテナ1系統：基本の状態</text>
+      </g>
+      <!-- step2: CA -->
+      <g data-show-at="2">
+        <rect x="130" y="80" width="500" height="30" rx="6" fill="var(--c3)" opacity=".8"/>
+        <text x="380" y="100" text-anchor="middle" font-size="13" fill="var(--surface)" font-weight="700">B1 20MHz</text>
+        <rect x="130" y="160" width="500" height="30" rx="6" fill="var(--c4)" opacity=".85"/>
+        <text x="380" y="180" text-anchor="middle" font-size="13" fill="var(--surface)" font-weight="700">B3 20MHz</text>
+        <text x="380" y="140" text-anchor="middle" font-size="13">＋ 束ねる（CA）</text>
+        <text x="380" y="235" text-anchor="middle" font-size="14">別バンドを同時に使う → 帯域幅40MHz相当で約2倍</text>
+      </g>
+      <!-- step3: MIMO -->
+      <g data-show-at="3">
+        <path d="M110 115 C 300 60, 460 60, 650 115" class="line" stroke="var(--c3)" stroke-width="4"/>
+        <path d="M110 155 C 300 210, 460 210, 650 155" class="line" stroke="var(--c5)" stroke-width="4"/>
+        <text x="380" y="75" text-anchor="middle" font-size="13">ストリーム1（アンテナ1）</text>
+        <text x="380" y="215" text-anchor="middle" font-size="13">ストリーム2（アンテナ2）</text>
+        <text x="380" y="140" text-anchor="middle" font-size="13" class="t-muted">同じ周波数・同じ時間</text>
+        <text x="380" y="250" text-anchor="middle" font-size="14">2×2 MIMO：同じ道路を“2階建て”に → 条件が良ければ約2倍</text>
+      </g>
+      <!-- step4: combined -->
+      <g data-show-at="4">
+        <rect x="130" y="70" width="500" height="22" rx="5" fill="var(--c3)" opacity=".8"/>
+        <rect x="130" y="97" width="500" height="22" rx="5" fill="var(--c3)" opacity=".5"/>
+        <rect x="130" y="152" width="500" height="22" rx="5" fill="var(--c4)" opacity=".85"/>
+        <rect x="130" y="179" width="500" height="22" rx="5" fill="var(--c4)" opacity=".5"/>
+        <text x="380" y="86" text-anchor="middle" font-size="12" fill="var(--surface)">B1 ストリーム1</text>
+        <text x="380" y="113" text-anchor="middle" font-size="12">B1 ストリーム2</text>
+        <text x="380" y="168" text-anchor="middle" font-size="12" fill="var(--surface)">B3 ストリーム1</text>
+        <text x="380" y="195" text-anchor="middle" font-size="12">B3 ストリーム2</text>
+        <text x="380" y="240" text-anchor="middle" font-size="14">CA × MIMO：Cat-6なら下り最大300Mbps（20MHz×2 × 2×2）</text>
+      </g>
+    </svg>
+    <div class="stepper-controls-slot"></div>
+    <div class="step" data-title="基本"><h4>① 基本：1本の電波（1コンポーネントキャリア）</h4><p>LTEの1本の電波の帯域幅は最大20MHz。2×2 MIMOなしの単純な状態では、これが速度の上限を決めます。Cat-1（第5章）はこの“1本だけ”の世界で動く規格です。</p></div>
+    <div class="step" data-title="CA"><h4>② キャリアアグリゲーション（CA）</h4><p>B1とB3のように別バンドを同時に使います。<b>CAの組み合わせ（例：CA_1A-3A）は国・キャリアごとに決まっていて、端末側もその組み合わせに対応している必要があります</b>。上りのCAは下りより対応が限られます。</p></div>
+    <div class="step" data-title="MIMO"><h4>③ MIMO（マルチアンテナ）</h4><p>複数アンテナで並行して送ります。電波の通り道（マルチパス）が複数あるほど効果が出ます。端末側に受信アンテナが2本必要になるため、<b>MIMO対応＝アンテナ2本分の設置スペースと配置設計が必要</b>という意味です（第6章）。</p></div>
+    <div class="step" data-title="組み合わせ"><h4>④ CA × MIMO</h4><p>両方を組み合わせるとさらに高速になります。ただしロボットの遠隔操作で効いてくるのは主に<b>上り</b>です。LTEの上りは多くのモジュールで上りCAや上りMIMOに非対応・または限定対応で、Cat-4〜Cat-12程度でも上り最大は50〜100Mbps程度です。実際の上りはセル端（基地局から遠い場所）で数Mbps以下に落ちることもあります。</p></div>
+  </figure>
+
+  <div class="callout warn"><span class="title">CAは「あればうれしい」、バンド対応は「なければ致命的」</span>
+    CAに対応していなくても通信はできます（速度が伸びないだけ）。しかし<b>必要なバンドに対応していなければ、その場所では圏外</b>になります。優先順位を間違えないようにしましょう。</div>
+
+  <h2>8. 「対応バンドがない」と何が起きるか</h2>
+  <p>モジュールのデータシートには「LTE-FDD: B1/B3/B5/B8/B18/B19/B26/B28、LTE-TDD: B38/B40/B41」のように対応バンドが列挙されています。この一覧が、ロボットが世界のどこでつながるかを決めます。起こりうる事態を3段階で整理しましょう。</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>状況</th><th>起きること</th><th>具体例</th></tr></thead>
+    <tbody>
+      <tr><td><span class="badge bad">全滅</span> キャリアのバンドに1つも対応していない</td><td>その国・キャリアでは<b>まったくつながらない</b>（圏外）</td><td>北米向けモジュール（B2/B4/B12/B13/B66中心）を、B1/B3/B8中心の東南アジアに持ち込む</td></tr>
+      <tr><td><span class="badge warn">部分的</span> 主力バンドは対応、プラチナバンドが非対応</td><td>都市部ではつながるが、<b>屋内・地下・郊外で圏外や不安定</b>になる</td><td>ドコモ網でB1/B3には対応しているがB19に非対応 → 郊外の倉庫でつながらない</td></tr>
+      <tr><td><span class="badge warn">性能低下</span> 容量バンドやCA組み合わせが非対応</td><td>つながるが<b>混雑時に遅い</b>、期待した速度が出ない</td><td>中国でTDDバンド（B39/B40/B41）に非対応 → FDDのみでつながるが混雑しやすい</td></tr>
+    </tbody>
+  </table></div>
+  <p>さらに注意したいのは、<b>バンドに対応していても「使ってよい」とは限らない</b>ことです。その国で販売・使用するには、電波法にあたる各国の認証（中国のSRRC・CCC・NAL、韓国のKC、台湾のNCC、インドのWPC/TEC、東南アジア各国の型式認証など）や、キャリアによる端末認定が必要になる場合があります（第9章・第10章）。また、日本向け認証（技適）を取ったモジュールでも、ソフトウェア設定で特定のバンドを無効化して出荷していることもあります。</p>
+
+  <div class="callout robot"><span class="title">ロボット視点：バンド選定の進め方</span>
+    <ol style="margin:4px 0; padding-left:1.3em">
+      <li>輸出候補国と、その国で契約するキャリア（またはIoT向けのグローバルSIM事業者の提携キャリア）を洗い出す</li>
+      <li>各キャリアのLTEバンド（特に1GHz未満のプラチナバンド）とLTE-M/NB-IoTの提供バンドを調べる</li>
+      <li>全部を1モジュールでカバーできるか、地域別に2〜3種類のモジュールを使い分けるかを検討する（第11章）</li>
+      <li>候補モジュールのデータシートの対応バンド表と照合する → <a href="../tools/band-checker.html">バンド共通化チェッカー</a>で試せます</li>
+      <li>試作機で現地の実測（電波強度RSRP・品質RSRQ/SINR・スループット）を行う</li>
+    </ol>
+    対応バンドが多い「グローバルモジュール」は便利ですが、フィルタ部品が増える分、価格・サイズ・消費電力が増える傾向があり、各国認証の取得状況もモジュールごとに違います。</div>
+
+  <h2>まとめ</h2>
+  <ul>
+    <li><b>バンド</b>は3GPPが周波数範囲に付けた通し番号。LTEは「B1」、5Gは「n1」のように表す。番号が違えば別の区画。</li>
+    <li>多くのバンドは上り（UL）と下り（DL）のペアを持つ<b>FDD</b>。1つの周波数を時間で切り替えるのが<b>TDD</b>。</li>
+    <li><b>低い周波数</b>（B8/B19/B20/B26/B28など）は遠くまで・建物内まで届くが容量が小さい。<b>高い周波数</b>（B3/B7/B41/B42など）は大容量だが届く範囲が狭い。キャリアは両方を重ねて使う。</li>
+    <li>B1/B3/B8は世界的に共通性が高い。中国はTDDバンドが多く、B28はアジア太平洋の共通プラチナバンド。日本はB11/B18/B19/B21など独自色の強いバンドもある。</li>
+    <li><b>CA</b>（バンドを束ねる）と<b>MIMO</b>（複数アンテナで並行送信）で高速化できるが、ロボットで重要な上りはそれほど伸びない。</li>
+    <li>必要なバンドがないと圏外、プラチナバンドがないと屋内・郊外が弱い。バンドは国・キャリア単位で違うので、輸出先ごとに照合が必要（→ <a href="10-asia.html">第10章</a>・<a href="11-commonization.html">第11章</a>・<a href="../tools/band-checker.html">バンド共通化チェッカー</a>）。</li>
+  </ul>
+
+  <h2>用語</h2>
+  <dl class="terms">
+    <dt>3GPP</dt><dd>3rd Generation Partnership Project。LTEや5Gの規格を作る国際的な標準化プロジェクト。</dd>
+    <dt>バンド</dt><dd>3GPPが定義した周波数範囲の区画番号。LTEはB1〜、5G NRはn1〜。</dd>
+    <dt>UL / DL</dt><dd>Uplink（上り：端末→基地局）／Downlink（下り：基地局→端末）。</dd>
+    <dt>FDD</dt><dd>Frequency Division Duplex。上りと下りに別の周波数を使い同時に送受信する方式。</dd>
+    <dt>TDD</dt><dd>Time Division Duplex。1つの周波数を時間で区切って上り・下りを交互に使う方式。LTEではTD-LTEとも。</dd>
+    <dt>デュプレクサ</dt><dd>送信と受信の信号を周波数で分けるフィルタ部品。FDDバンドごとに必要。</dd>
+    <dt>プラチナバンド</dt><dd>日本で700〜900MHz帯を指す俗称。遠くまで届き、屋内にも強い。</dd>
+    <dt>APT700</dt><dd>アジア太平洋電気通信共同体（APT）が策定した700MHz帯の配置。LTEのB28に相当。</dd>
+    <dt>CA</dt><dd>Carrier Aggregation。複数のキャリア（周波数ブロック）を束ねて同時に使い高速化する技術。</dd>
+    <dt>MIMO</dt><dd>Multiple-Input Multiple-Output。複数アンテナで同じ周波数・時間に並行してデータを送る技術。</dd>
+    <dt>MFBI</dt><dd>Multiple Frequency Band Indicator。重なり合うバンドのセルが複数のバンド番号を報知する仕組み。</dd>
+    <dt>RSRP</dt><dd>Reference Signal Received Power。LTEの受信電力の指標。電波の強さの実測でよく使う。</dd>
+  </dl>
+
+  <h2>確認クイズ</h2>
+  <div class="quiz" data-quiz="04"></div>
+
+  <section class="sources"><h2>参考・出典</h2><ul>
+    <li><a href="https://www.3gpp.org/dynareport/36101.htm">3GPP TS 36.101 E-UTRA; User Equipment (UE) radio transmission and reception（バンド定義表 Table 5.5-1）</a></li>
+    <li><a href="https://www.3gpp.org/technologies/carrier-aggregation">3GPP: Carrier Aggregation explained</a></li>
+    <li><a href="https://www.tele.soumu.go.jp/j/adm/freq/search/myuse/index.htm">総務省 電波利用ホームページ（周波数の割当て・電波の利用状況）</a></li>
+    <li><a href="https://corp.mobile.rakuten.co.jp/news/press/2024/0627_02/">楽天モバイル：“プラチナバンド” 700MHz帯での商用サービスを開始（2024-06-27）</a></li>
+    <li><a href="https://www.gsma.com/solutions-and-impact/technologies/internet-of-things/technologies/global-reference-bands/">GSMA: Global Reference Bands（IoT向けの推奨バンド）</a></li>
+    <li><a href="https://www.cellmap.jp/bs/band/">CellMap：携帯電話キャリア バンド一覧（ドコモ/KDDI/ソフトバンク/楽天）</a></li>
+    <li><a href="https://en.wikipedia.org/wiki/LTE_frequency_bands">Wikipedia: LTE frequency bands（各国キャリアの使用バンドの参考）</a></li>
+  </ul><p>確認日: 2026-09</p></section>
+</main>
+</div>
+<script src="../assets/data/quiz/ch04.js"></script>
+<script src="../assets/app.js"></script>
+<script>
+(function () {
+  "use strict";
+  var NS = "http://www.w3.org/2000/svg";
+  function el(tag, attrs, text) {
+    var e = document.createElementNS(NS, tag);
+    for (var k in attrs) e.setAttribute(k, attrs[k]);
+    if (text != null) e.textContent = text;
+    return e;
+  }
+  var esc = (window.LTE && window.LTE.esc) || function (s) { return String(s); };
+
+  /* ---------- FDD / TDD 図 ---------- */
+  (function () {
+    var fig = document.getElementById("fddtdd");
+    if (!fig) return;
+    var grid = document.getElementById("ft-grid");
+    var cursor = document.getElementById("ft-cursor");
+    var title = document.getElementById("ft-title");
+    var now = document.getElementById("ft-now");
+    var playBtn = fig.querySelector('[data-act="play"]');
+    var X0 = 100, W = 64, mode = "fdd", t = 0, timer = null;
+    var TDD = ["D", "S", "U", "U", "D", "D", "S", "U", "U", "D"];
+    function draw() {
+      while (grid.firstChild) grid.removeChild(grid.firstChild);
+      var i;
+      if (mode === "fdd") {
+        title.textContent = "FDD：上りと下りに別の周波数。常に同時通信";
+        grid.appendChild(el("text", { x: 92, y: 95, "text-anchor": "end", "font-size": 12 }, "下り周波数"));
+        grid.appendChild(el("text", { x: 92, y: 205, "text-anchor": "end", "font-size": 12 }, "上り周波数"));
+        for (i = 0; i < 10; i++) {
+          grid.appendChild(el("rect", { x: X0 + i * W + 2, y: 60, width: W - 4, height: 70, rx: 4, fill: "var(--c2)", opacity: ".8" }));
+          grid.appendChild(el("text", { x: X0 + i * W + W / 2, y: 100, "text-anchor": "middle", "font-size": 13, fill: "var(--surface)", "font-weight": 700 }, "D"));
+          grid.appendChild(el("rect", { x: X0 + i * W + 2, y: 170, width: W - 4, height: 70, rx: 4, fill: "var(--c1)", opacity: ".8" }));
+          grid.appendChild(el("text", { x: X0 + i * W + W / 2, y: 210, "text-anchor": "middle", "font-size": 13, fill: "var(--surface)", "font-weight": 700 }, "U"));
+        }
+        grid.appendChild(el("text", { x: 420, y: 155, "text-anchor": "middle", "font-size": 12, "class": "t-muted" }, "↕ デュプレックスギャップ（周波数が離れている）"));
+      } else {
+        title.textContent = "TDD：1つの周波数を時間で交互に使う（構成1の例）";
+        grid.appendChild(el("text", { x: 92, y: 150, "text-anchor": "end", "font-size": 12 }, "共用周波数"));
+        for (i = 0; i < 10; i++) {
+          var k = TDD[i];
+          var fill = k === "D" ? "var(--c2)" : k === "U" ? "var(--c1)" : "var(--c6)";
+          grid.appendChild(el("rect", { x: X0 + i * W + 2, y: 100, width: W - 4, height: 100, rx: 4, fill: fill, opacity: k === "S" ? ".45" : ".8" }));
+          grid.appendChild(el("text", { x: X0 + i * W + W / 2, y: 156, "text-anchor": "middle", "font-size": 14, fill: k === "S" ? "var(--text)" : "var(--surface)", "font-weight": 700 }, k));
+        }
+        grid.appendChild(el("text", { x: 420, y: 80, "text-anchor": "middle", "font-size": 12, "class": "t-muted" }, "D=下り　S=切替（特別サブフレーム）　U=上り"));
+      }
+      update();
+    }
+    function update() {
+      cursor.setAttribute("x", X0 + t * W);
+      var msg;
+      if (mode === "fdd") {
+        msg = "<b>" + (t + 1) + "ms目</b>：下りと上りの<b>両方</b>が同時に動いています。いつでもすぐ送れるので遅延が小さく安定します。";
+      } else {
+        var k = TDD[t];
+        msg = "<b>" + (t + 1) + "ms目（" + k + "）</b>：" + (k === "D" ? "基地局→端末の<b>下り</b>だけ。端末は上りを送れず、次のUを待ちます。" : k === "U" ? "端末→基地局の<b>上り</b>だけ。ロボットがカメラ映像を送れるのはこの時間です。" : "下り→上りの<b>切り替え</b>。遠くの端末の電波が遅れて届いても衝突しないよう、短い空白（ガード期間）を挟みます。");
+        var u = TDD.filter(function (x) { return x === "U"; }).length;
+        msg += "<br><span class=\"small muted\">この構成では10ms中、上りは" + u + "ms・下りは" + TDD.filter(function (x) { return x === "D"; }).length + "ms（＋特別2ms）。</span>";
+      }
+      now.innerHTML = msg;
+    }
+    function tick() { t = (t + 1) % 10; update(); }
+    function play() { if (timer) return; timer = setInterval(tick, 900); playBtn.textContent = "⏸ 停止"; }
+    function stop() { clearInterval(timer); timer = null; playBtn.textContent = "⏵ 再生"; }
+    fig.querySelectorAll("[data-mode]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        mode = b.dataset.mode; t = 0;
+        fig.querySelectorAll("[data-mode]").forEach(function (x) {
+          var on = x === b; x.classList.toggle("primary", on); x.setAttribute("aria-pressed", String(on));
+        });
+        draw();
+      });
+    });
+    playBtn.addEventListener("click", function () { if (timer) stop(); else play(); });
+    draw();
+    if (window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches) stop(); else play();
+  })();
+
+  /* ---------- 周波数スライダー ---------- */
+  (function () {
+    var r = document.getElementById("fs-range");
+    if (!r) return;
+    var REF = 700, N = 3.5, R0 = 130;
+    function set(f) {
+      f = +f; r.value = f;
+      var ratioR = Math.pow(f / REF, -2 / N);
+      var ratioA = ratioR * ratioR;
+      var ratioN = 1 / ratioA;
+      var db = 20 * Math.log10(f / REF);
+      document.getElementById("fs-val").textContent = f >= 1000 ? (f / 1000).toFixed(2).replace(/0$/, "") + " GHz" : f + " MHz";
+      document.getElementById("fs-circle").setAttribute("r", (R0 * ratioR).toFixed(1));
+      document.getElementById("fs-bar-r").setAttribute("width", (220 * ratioR).toFixed(1));
+      document.getElementById("fs-bar-a").setAttribute("width", Math.max(2, 220 * ratioA).toFixed(1));
+      document.getElementById("fs-bar-n").setAttribute("width", Math.min(220, 220 * ratioN / 8).toFixed(1));
+      document.getElementById("fs-db").textContent = "+" + db.toFixed(1) + " dB";
+      document.getElementById("fs-k-r").textContent = ratioR.toFixed(2) + "×";
+      document.getElementById("fs-k-a").textContent = ratioA.toFixed(2) + "×";
+      document.getElementById("fs-k-n").textContent = ratioN.toFixed(1) + "×";
+      document.querySelectorAll("#fs-presets .chip").forEach(function (c) { c.classList.toggle("is-on", +c.dataset.f === f); });
+    }
+    r.addEventListener("input", function () { set(r.value); });
+    document.querySelectorAll("#fs-presets .chip").forEach(function (c) { c.addEventListener("click", function () { set(c.dataset.f); }); });
+    set(700);
+  })();
+
+  /* ---------- バンド帯グラフ ---------- */
+  (function () {
+    var svg = document.getElementById("bm-svg");
+    if (!svg) return;
+    // [name, mode, ulLo, ulHi, dlLo, dlHi, lane, regions[], note]
+    var B = [
+      ["B28", "FDD", 703, 748, 758, 803, 0, ["jp", "tw", "sea", "in"], "APT700。日本は全4キャリア、台湾・東南アジア・豪州・中南米で使用。アジア太平洋の共通プラチナバンド。"],
+      ["B5", "FDD", 824, 849, 869, 894, 0, ["kr", "cn", "sea", "in", "na"], "850MHz。北米・韓国・中国（China Telecom）・東南アジアやインドの一部。"],
+      ["B12", "FDD", 699, 716, 729, 746, 1, ["na"], "米国の700MHz（下A/B/C）。"],
+      ["B20", "FDD", 832, 862, 791, 821, 1, ["eu"], "欧州の800MHz。下りが上りより低い“逆転”配置。"],
+      ["B8", "FDD", 880, 915, 925, 960, 1, ["cn", "kr", "tw", "sea", "in", "eu", "jp"], "900MHz。中国・韓国・台湾・東南アジア・インド・欧州。日本ではソフトバンクのプラチナバンド。"],
+      ["B13", "FDD", 777, 787, 746, 756, 2, ["na"], "米国700MHz上C。VerizonのLTE/LTE-Mで重要。"],
+      ["B26", "FDD", 814, 849, 859, 894, 2, ["jp", "na"], "拡張850MHz。B5/B18/B19を内包。日本ではauが使用。"],
+      ["B18", "FDD", 815, 830, 860, 875, 3, ["jp"], "日本・auのプラチナバンド（800MHz）。"],
+      ["B19", "FDD", 830, 845, 875, 890, 4, ["jp"], "日本・ドコモのプラチナバンド（800MHz）。"],
+      ["B11", "FDD", 1427.9, 1447.9, 1475.9, 1495.9, 0, ["jp"], "日本の1.5GHz帯（au・ソフトバンク）。日本独自色が強い。"],
+      ["B3", "FDD", 1710, 1785, 1805, 1880, 0, ["jp", "cn", "kr", "tw", "sea", "in", "eu"], "1.8GHz。世界で最も普及したLTEバンドの一つ。"],
+      ["B1", "FDD", 1920, 1980, 2110, 2170, 0, ["jp", "cn", "kr", "tw", "sea", "in", "eu"], "2.1GHz。北米以外のほぼ全域で使われる基本バンド。"],
+      ["B40", "TDD", 2300, 2400, null, null, 0, ["cn", "in", "sea"], "2.3GHz TDD。中国・インド・東南アジアの一部。"],
+      ["B7", "FDD", 2500, 2570, 2620, 2690, 0, ["kr", "tw", "sea", "eu"], "2.6GHz FDD。欧州・韓国・台湾・東南アジア・中南米。"],
+      ["B21", "FDD", 1447.9, 1462.9, 1495.9, 1510.9, 1, ["jp"], "日本・ドコモの1.5GHz帯。"],
+      ["B4", "FDD", 1710, 1755, 2110, 2155, 1, ["na"], "AWS-1。北米・中南米。"],
+      ["B38", "TDD", 2570, 2620, null, null, 1, ["cn", "eu", "sea"], "2.6GHz TDD。中国・欧州の一部・東南アジアの一部。"],
+      ["B66", "FDD", 1710, 1780, 2110, 2200, 2, ["na"], "AWS-3拡張。北米。B4を内包。"],
+      ["B41", "TDD", 2496, 2690, null, null, 2, ["cn", "jp", "na", "sea"], "2.5GHz TDD。中国（China Mobile）・日本（ソフトバンク/au系）・米国・タイ/フィリピンの一部。"],
+      ["B2", "FDD", 1850, 1910, 1930, 1990, 3, ["na"], "PCS 1.9GHz。北米・中南米。"],
+      ["B34", "TDD", 2010, 2025, null, null, 3, ["cn"], "2.0GHz TDD。中国（China Mobile）。"],
+      ["B39", "TDD", 1880, 1920, null, null, 4, ["cn"], "1.9GHz TDD。中国（China Mobile）。"],
+      ["B42", "TDD", 3400, 3600, null, null, 0, ["jp", "eu"], "3.5GHz TDD。日本（ドコモ・au・ソフトバンク）・一部欧州。同じ周波数は5Gのn78/n77とも重なる。"]
+    ];
+    var REG = [["all", "すべて"], ["jp", "日本"], ["cn", "中国"], ["kr", "韓国"], ["tw", "台湾"], ["sea", "東南アジア"], ["in", "インド"], ["eu", "欧州"], ["na", "北米"]];
+    var REGNAME = {}; REG.forEach(function (r) { REGNAME[r[0]] = r[1]; });
+    var PANELS = [
+      { lo: 690, hi: 965, y: 30, lanes: 5, title: "1GHz未満（プラチナバンド域）", ticks: [700, 750, 800, 850, 900, 950], match: function (b) { return b[2] < 1000; } },
+      { lo: 1420, hi: 2700, y: 290, lanes: 5, title: "1.4〜2.7GHz（主力・容量域）", ticks: [1500, 1700, 1900, 2100, 2300, 2500, 2700], match: function (b) { return b[2] > 1000 && b[2] < 3000; } },
+      { lo: 3300, hi: 3700, y: 550, lanes: 1, title: "3.3〜3.7GHz", ticks: [3300, 3400, 3500, 3600, 3700], match: function (b) { return b[2] > 3000; } }
+    ];
+    var XL = 20, XR = 780, LANE = 34;
+    var groups = [];
+    PANELS.forEach(function (p) {
+      var sx = function (f) { return XL + (f - p.lo) / (p.hi - p.lo) * (XR - XL); };
+      svg.appendChild(el("text", { x: XL, y: p.y, "font-size": 13, "font-weight": 700 }, p.title));
+      var axisY = p.y + 14 + p.lanes * LANE + 6;
+      svg.appendChild(el("line", { x1: XL, y1: axisY, x2: XR, y2: axisY, "class": "line" }));
+      p.ticks.forEach(function (t) {
+        svg.appendChild(el("line", { x1: sx(t), y1: axisY, x2: sx(t), y2: axisY + 5, "class": "line" }));
+        svg.appendChild(el("text", { x: sx(t), y: axisY + 18, "text-anchor": "middle", "font-size": 12, "class": "t-muted" }, String(t)));
+      });
+      svg.appendChild(el("text", { x: XR, y: axisY + 34, "text-anchor": "end", "font-size": 12, "class": "t-muted" }, "MHz"));
+      B.filter(p.match).forEach(function (b) {
+        var g = el("g", { "class": "band-rect", tabindex: 0, role: "button", "aria-label": b[0] });
+        var y = p.y + 14 + b[6] * LANE, h = LANE - 10;
+        var col = b[1] === "TDD" ? "var(--c3)" : "var(--c1)";
+        var x1 = sx(b[2]), x2 = sx(b[3]);
+        g.appendChild(el("rect", { x: x1, y: y, width: Math.max(3, x2 - x1), height: h, rx: 3, fill: col, opacity: ".9" }));
+        var lx1 = x1, lx2 = x2;
+        if (b[4] != null) {
+          var d1 = sx(b[4]), d2 = sx(b[5]);
+          g.appendChild(el("rect", { x: d1, y: y, width: Math.max(3, d2 - d1), height: h, rx: 3, fill: col, opacity: ".4" }));
+          var gapL = x2, gapR = d1;
+          if (x2 < d1) { gapL = x2; gapR = d1; } else if (d2 < x1) { gapL = d2; gapR = x1; }
+          g.appendChild(el("line", { x1: gapL, y1: y + h / 2, x2: gapR, y2: y + h / 2, stroke: col, "stroke-width": 1.5, "stroke-dasharray": "3 3" }));
+          lx1 = Math.min(x1, d1); lx2 = Math.max(x2, d2);
+        }
+        // hit area & label
+        g.appendChild(el("rect", { x: lx1, y: y - 2, width: Math.max(24, lx2 - lx1), height: h + 4, fill: "transparent" }));
+        var lbl = el("text", { x: (lx1 + lx2) / 2, y: y + h / 2 + 5, "text-anchor": "middle", "font-size": 13, "font-weight": 700, "pointer-events": "none" }, b[0]);
+        g.appendChild(lbl);
+        g.addEventListener("click", function () { select(b, g); });
+        g.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); select(b, g); } });
+        g._b = b;
+        groups.push(g);
+        svg.appendChild(g);
+      });
+    });
+    var info = document.getElementById("bm-info");
+    function select(b, g) {
+      groups.forEach(function (x) { x.classList.toggle("is-sel", x === g); });
+      var freq = b[1] === "TDD" ? "上下共用 " + b[2] + "–" + b[3] + " MHz" : "上り " + b[2] + "–" + b[3] + " MHz ／ 下り " + b[4] + "–" + b[5] + " MHz";
+      info.innerHTML = "<h4>" + esc(b[0]) + "（" + b[1] + "）</h4><p class=\"mono small\" style=\"margin:2px 0\">" + freq + "</p><p style=\"margin:4px 0\">" + esc(b[8]) + "</p><p class=\"small\" style=\"margin:4px 0\">主な地域：" + b[7].map(function (r) { return "<span class=\"badge accent\">" + REGNAME[r] + "</span>"; }).join(" ") + "</p>";
+    }
+    var chips = document.getElementById("bm-regions");
+    REG.forEach(function (r) {
+      var c = document.createElement("button");
+      c.className = "chip" + (r[0] === "all" ? " is-on" : "");
+      c.textContent = r[1];
+      c.setAttribute("aria-pressed", r[0] === "all" ? "true" : "false");
+      c.addEventListener("click", function () {
+        chips.querySelectorAll(".chip").forEach(function (x) { x.classList.remove("is-on"); x.setAttribute("aria-pressed", "false"); });
+        c.classList.add("is-on"); c.setAttribute("aria-pressed", "true");
+        var list = [];
+        groups.forEach(function (g) {
+          var on = r[0] === "all" || g._b[7].indexOf(r[0]) >= 0;
+          g.classList.toggle("is-dim", !on);
+          if (on) list.push(g._b[0]);
+        });
+        if (r[0] !== "all") info.innerHTML = "<h4>" + r[1] + "で主に使われるLTEバンド（代表例）</h4><p>" + list.join(", ") + "</p><p class=\"small muted\">キャリアごとの内訳は第10章・バンド共通化チェッカーで確認してください。</p>";
+      });
+      chips.appendChild(c);
+    });
+  })();
+
+  /* ---------- 日本キャリア × モジュール対応バンド ---------- */
+  (function () {
+    var box = document.getElementById("jpcov");
+    if (!box) return;
+    var ALL = ["B1", "B3", "B8", "B11", "B18", "B19", "B21", "B26", "B28", "B41", "B42"];
+    var CARRIERS = [
+      { name: "ドコモ", plat: ["B19", "B28"], main: ["B1", "B3"], sub: ["B21", "B42"], note: "B19が郊外・屋内の要" },
+      { name: "au", plat: ["B18", "B26", "B28"], main: ["B1"], sub: ["B3", "B11", "B41", "B42"], note: "B18またはB26対応が重要（B26で代替できるかは網側設定次第）" },
+      { name: "ソフトバンク", plat: ["B8", "B28"], main: ["B1", "B3"], sub: ["B11", "B41", "B42"], note: "B8は海外モジュールでも対応が多い" },
+      { name: "楽天", plat: ["B28", "B18"], main: ["B3"], sub: [], note: "自社網はB3主力＋B28。B18はauローミング（縮小傾向）" }
+    ];
+    var PRESETS = {
+      jp: ["B1", "B3", "B8", "B11", "B18", "B19", "B21", "B26", "B28", "B41", "B42"],
+      global: ["B1", "B3", "B8", "B26", "B28"],
+      cn: ["B1", "B3", "B8", "B41"],
+      none: []
+    };
+    var on = {};
+    PRESETS.jp.forEach(function (b) { on[b] = true; });
+    var chipBox = document.getElementById("jc-bands");
+    ALL.forEach(function (b) {
+      var c = document.createElement("button");
+      c.className = "chip"; c.textContent = b; c.dataset.b = b;
+      c.addEventListener("click", function () { on[b] = !on[b]; render(); });
+      chipBox.appendChild(c);
+    });
+    box.querySelectorAll("[data-preset]").forEach(function (btn) {
+      btn.addEventListener("click", function () { on = {}; PRESETS[btn.dataset.preset].forEach(function (b) { on[b] = true; }); render(); });
+    });
+    function has(list) { return list.filter(function (b) { return on[b]; }); }
+    function render() {
+      chipBox.querySelectorAll(".chip").forEach(function (c) { var v = !!on[c.dataset.b]; c.classList.toggle("is-on", v); c.setAttribute("aria-pressed", String(v)); });
+      var html = "";
+      CARRIERS.forEach(function (c) {
+        var p = has(c.plat), m = has(c.main), s = has(c.sub);
+        var badge, msg;
+        if (!p.length && !m.length && !s.length) { badge = "<span class=\"badge bad\">つながらない</span>"; msg = "このキャリアのバンドに1つも対応していません。"; }
+        else if (!p.length) { badge = "<span class=\"badge warn\">屋内・郊外が弱い</span>"; msg = "プラチナバンド（" + c.plat.join("/") + "）に非対応。都市部の屋外はつながっても、建物の奥や郊外で圏外になりやすい。"; }
+        else if (!m.length) { badge = "<span class=\"badge warn\">混雑時に遅い</span>"; msg = "プラチナバンドでつながるが、主力バンド（" + c.main.join("/") + "）に非対応で容量不足になりやすい。"; }
+        else if (s.length < c.sub.length) { badge = "<span class=\"badge ok\">おおむね良好</span>"; msg = "主要バンドは対応。容量用の一部（" + c.sub.filter(function (b) { return !on[b]; }).join("/") + "）は非対応で、混雑エリアでは差が出る可能性。"; }
+        else { badge = "<span class=\"badge ok\">良好</span>"; msg = "代表バンドにすべて対応。"; }
+        html += "<div class=\"cov-row\"><div class=\"name\">" + c.name + "</div><div>" + badge + " " + msg + "<br><span class=\"small muted\">対応：" + (p.concat(m, s).join(", ") || "なし") + "｜" + c.note + "</span></div></div>";
+      });
+      document.getElementById("jc-out").innerHTML = html;
+    }
+    render();
+  })();
+})();
+</script>
+</body>
+</html>
