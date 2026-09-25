@@ -573,7 +573,7 @@
       { id: "cs", label: "cos × (−sin)", x: (t) => Math.cos(TAU * 2 * t), y: (t) => -Math.sin(TAU * 2 * t), msg: "直交。正と負の面積がちょうど打ち消し合って 0。I と Q は混ざりません。" },
       { id: "c45", label: "cos × 45°ずれた cos", x: (t) => Math.cos(TAU * 2 * t), y: (t) => Math.cos(TAU * 2 * t + Math.PI / 4), msg: "角度 45° のベクトルどうし。内積は cos45° ≈ 0.71。位相のずれ＝ベクトルの角度です。" },
       { id: "k23", label: "サブキャリア 2 × 3", x: (t) => Math.cos(TAU * 2 * t), y: (t) => Math.cos(TAU * 3 * t), msg: "周波数が違っても、T の中にちょうど整数周期ずつなら直交（0）。これが OFDM の原理です（§9）。" },
-      { id: "k225", label: "サブキャリア 2 × 2.5", x: (t) => Math.cos(TAU * 2 * t), y: (t) => Math.cos(TAU * 2.5 * t), msg: "周期が半端だと打ち消しきれず 0 になりません。サブキャリア間隔がずれると干渉が起きます。" },
+      { id: "k225", label: "サブキャリア 2 × 2.25", x: (t) => Math.cos(TAU * 2 * t), y: (t) => Math.cos(TAU * 2.25 * t), msg: "周期が中途半端（整数でも半整数でもない）だと打ち消しきれず、内積が 0 になりません。受信側の発振器の周波数がわずかにずれる、または高速移動によるドップラーシフトが起きると、サブキャリア間隔がこのようにずれて干渉（漏れ）が生じます（§9のOFDMの図も参照）。" },
     ];
     let cur = PAIRS[0];
     const btns = $("inn-btns");
